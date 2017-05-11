@@ -1152,7 +1152,7 @@ int File_Ffv1::slice(states &States)
             current_slice->h = h;
         }
         if (alpha_plane)
-            plane(2, 3); // Alpha
+            plane(2, chroma_planes?3:1); // Alpha
     }
     else if (colorspace_type == 1)
         rgb();
@@ -1279,7 +1279,9 @@ void File_Ffv1::plane(int32u pos, int32u plane_idx)
 
     current_slice->run_index = 0;
 
-    int8u* FrameBuffer_Temp=Frame->Planes[plane_idx]->Buffer;
+    size_t Planes_Pos=(bits_per_sample<=8 && !chroma_planes && alpha_plane)?0:plane_idx; //Special case : YA8
+
+    int8u* FrameBuffer_Temp=Frame->Planes[Planes_Pos]->Buffer;
     size_t h_divisor;
     size_t v_divisor;
     switch (plane_idx)
@@ -1293,8 +1295,8 @@ void File_Ffv1::plane(int32u pos, int32u plane_idx)
                 h_divisor=1;
                 v_divisor=1;
     }
-    FrameBuffer_Temp+=current_slice->y/v_divisor*Frame->Planes[plane_idx]->AllBytesPerLine(); // Slice y position
-    FrameBuffer_Temp+=current_slice->x/h_divisor*Frame->Planes[plane_idx]->BytesPerPixel; // Slice x position
+    FrameBuffer_Temp+=current_slice->y/v_divisor*Frame->Planes[Planes_Pos]->AllBytesPerLine(); // Slice y position
+    FrameBuffer_Temp+=current_slice->x/h_divisor*Frame->Planes[Planes_Pos]->BytesPerPixel; // Slice x position
 
     for (size_t y = 0; y < current_slice->h; y++)
     {
@@ -1313,11 +1315,16 @@ void File_Ffv1::plane(int32u pos, int32u plane_idx)
         for (size_t x = 0; x < current_slice->w; ++x)
         {
             if (bits_per_sample <= 8)
-                ((int8u*)FrameBuffer_Temp)[x] = (int8u)sample[1][x];
+            {
+                if (!chroma_planes && alpha_plane) //Special case : YA8
+                    ((int8u*)FrameBuffer_Temp)[2*x+plane_idx] = (int8u)sample[1][x];
+                else
+                    ((int8u*)FrameBuffer_Temp)[x] = (int8u)sample[1][x];
+            }
             else if (bits_per_sample <= 16)
                 ((int16u*)FrameBuffer_Temp)[x] = (int16u)sample[1][x];
         }
-        FrameBuffer_Temp+=Frame->Planes[plane_idx]->AllBytesPerLine();
+        FrameBuffer_Temp+=Frame->Planes[Planes_Pos]->AllBytesPerLine();
 
         #if MEDIAINFO_TRACE_FFV1CONTENT
             Element_End0();
@@ -1893,8 +1900,8 @@ int File_Ffv1::create_frame_buffer()
 
     switch (colorspace_type)
     {
-        case 0 : // YCbCr --> YUV Planar
-                Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample+7)/8)); // Luma
+        case 0 : // YCbCr --> YA Packed if no chroma, alpha and <=8, else YUV Planar
+                Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample+7)/8*((bits_per_sample<=8 && !chroma_planes && alpha_plane)?2:1))); // Luma
                 if (chroma_planes)
                 {
                     size_t h_divisor=(1<<chroma_h_shift);
@@ -1902,7 +1909,7 @@ int File_Ffv1::create_frame_buffer()
                     for (size_t i=0; i<2; i++)
                         Frame->Planes.push_back(new frame::plane((Width+h_divisor-1)/h_divisor, (Height+v_divisor-1)/v_divisor, bits_per_sample/8+((bits_per_sample%8)?1:0))); //Chroma
                 }
-                if (alpha_plane)
+                if (alpha_plane && !(bits_per_sample<=8 && !chroma_planes))
                     Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample+7)/8)); //Alpha
                 break;
         case 1 : // JPEG2000-RCT --> RGB Packed if <=8, else RGB planar
