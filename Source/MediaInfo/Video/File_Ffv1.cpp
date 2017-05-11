@@ -29,6 +29,10 @@
 //---------------------------------------------------------------------------
 #include "MediaInfo/Video/File_Ffv1.h"
 #include "MediaInfo/MediaInfo_Config_MediaInfo.h"
+#include "MediaInfo/HashWrapper.h"
+#if MEDIAINFO_EVENTS
+    #include "MediaInfo/MediaInfo_Events_Internal.h"
+#endif //MEDIAINFO_EVENTS
 #include "ZenLib/BitStream.h"
 //---------------------------------------------------------------------------
 
@@ -484,6 +488,8 @@ File_Ffv1::File_Ffv1()
     sample_aspect_ratio_num = 0;
     sample_aspect_ratio_den = 0;
     KeyFramePassed = false;
+    Frame = NULL;
+    slice_coding_mode = 0;
 }
 
 //---------------------------------------------------------------------------
@@ -507,6 +513,8 @@ File_Ffv1::~File_Ffv1()
         plane_states[i] = NULL;
     }
     delete RC; //RC=NULL
+
+    delete Frame;
 }
 
 //***************************************************************************
@@ -769,7 +777,7 @@ void File_Ffv1::Read_Buffer_Continue()
         }
 
 #if MEDIAINFO_TRACE
-        if (!Frame_Count || Trace_Activated) // Parse slice only if trace feature is activated
+        //if (!Frame_Count || Trace_Activated) // Parse slice only if trace feature is activated
         {
             if (!slice(States))
             {
@@ -816,6 +824,28 @@ void File_Ffv1::Read_Buffer_Continue()
             }
         }
         Element_End0();
+    }
+
+    if (Frame)
+    {
+        /*// fprintf(stderr, "AHHHHHHHHHHHHHH\n");
+         fprintf(stderr, "AHHHHHHHHHHHHHH\n");
+         for (size_t p = 0; p < Frame->Planes.size(); ++p)
+             fprintf(stderr, "%ix%ix%i, ", (int)Frame->Planes[p]->Width, (int)Frame->Planes[p]->Height, (int)Frame->Planes[p]->BytesPerPixel);
+         fprintf(stderr, "\n");
+         for (size_t p = 0; p < Frame->Planes.size(); ++p)
+         {
+             fprintf(stderr, "-- %i --\n", (int)p);
+             for (size_t y = 0; y < (int)Frame->Planes[p]->Height; ++y)
+             {
+                 for (size_t x = 0; x < (int)Frame->Planes[p]->Width*Frame->Planes[p]->BytesPerPixel; ++x)
+                     fprintf(stderr, "%02x", (int8u)Frame->Planes[p]->Buffer[y*Frame->Planes[p]->AllBytesPerLine()+x]);
+                 fprintf(stderr, "\n");
+             }
+         }*/
+
+        std::string md5;
+        Create_Frame_MD5(md5);
     }
 
     FILLING_BEGIN();
@@ -1056,6 +1086,8 @@ void File_Ffv1::FrameHeader()
             }
         }
     FILLING_END();
+
+    create_frame_buffer();
 }
 
 //---------------------------------------------------------------------------
@@ -1100,8 +1132,9 @@ int File_Ffv1::slice(states &States)
 
     if (colorspace_type == 0)
     {
+        pixel_stride = 1;
         // YCbCr
-        plane(0); // Y
+        plane(0, 0); // Y
         if (chroma_planes)
         {
             int32u w = current_slice->w;
@@ -1113,13 +1146,13 @@ int File_Ffv1::slice(states &States)
             current_slice->h = h >> chroma_v_shift;
             if (h & ((1 << chroma_v_shift) - 1))
                 current_slice->h++; //Is ceil
-            plane(1); // Cb
-            plane(1); // Cr
+            plane(1, 1); // Cb
+            plane(1, 2); // Cr
             current_slice->w = w;
             current_slice->h = h;
         }
         if (alpha_plane)
-            plane(2); // Alpha
+            plane(2, 3); // Alpha
     }
     else if (colorspace_type == 1)
         rgb();
@@ -1198,7 +1231,6 @@ int File_Ffv1::slice_header(states &States)
     current_slice->w = slice_x2 * Width  / num_h_slices - current_slice->x;
     current_slice->h = slice_y2 * Height / num_v_slices - current_slice->y;
 
-
     int8u plane_count=1+(alpha_plane?1:0);
     if (version < 4 || chroma_planes) // Warning: chroma is considered as 1 plane
         plane_count += 1;
@@ -1209,7 +1241,13 @@ int File_Ffv1::slice_header(states &States)
     Get_RU (States, sample_aspect_ratio_den,                "sample_aspect_ratio den");
     if (version > 3)
     {
-        //TODO
+        Skip_RC(States,                                     "slice_reset_contexts");
+        slice_coding_mode = RC->get_symbol_s(States);
+        if (slice_coding_mode != 1)
+        {
+            current_slice->slice_rct_by_coef = RC->get_symbol_s(States);
+            current_slice->slice_rct_ry_coef = RC->get_symbol_s(States);
+        }
     }
 
     RC->AssignStateTransitions(state_transitions_table);
@@ -1219,7 +1257,7 @@ int File_Ffv1::slice_header(states &States)
 }
 
 //---------------------------------------------------------------------------
-void File_Ffv1::plane(int32u pos)
+void File_Ffv1::plane(int32u pos, int32u plane_idx)
 {
     #if MEDIAINFO_TRACE_FFV1CONTENT
         Element_Begin1("Plane");
@@ -1241,6 +1279,23 @@ void File_Ffv1::plane(int32u pos)
 
     current_slice->run_index = 0;
 
+    int8u* FrameBuffer_Temp=Frame->Planes[plane_idx]->Buffer;
+    size_t h_divisor;
+    size_t v_divisor;
+    switch (plane_idx)
+    {
+        case 1:
+        case 2:
+                h_divisor=(1<<chroma_h_shift);
+                v_divisor=(1<<chroma_v_shift);
+                break;
+        default:
+                h_divisor=1;
+                v_divisor=1;
+    }
+    FrameBuffer_Temp+=current_slice->y/v_divisor*Frame->Planes[plane_idx]->AllBytesPerLine(); // Slice y position
+    FrameBuffer_Temp+=current_slice->x/h_divisor*Frame->Planes[plane_idx]->BytesPerPixel; // Slice x position
+
     for (size_t y = 0; y < current_slice->h; y++)
     {
         #if MEDIAINFO_TRACE_FFV1CONTENT
@@ -1254,6 +1309,15 @@ void File_Ffv1::plane(int32u pos)
         sample[0][current_slice->w]  = sample[0][current_slice->w - 1];
 
         line(pos, sample);
+
+        for (size_t x = 0; x < current_slice->w; ++x)
+        {
+            if (bits_per_sample <= 8)
+                ((int8u*)FrameBuffer_Temp)[x] = (int8u)sample[1][x];
+            else if (bits_per_sample <= 16)
+                ((int16u*)FrameBuffer_Temp)[x] = (int16u)sample[1][x];
+        }
+        FrameBuffer_Temp+=Frame->Planes[plane_idx]->AllBytesPerLine();
 
         #if MEDIAINFO_TRACE_FFV1CONTENT
             Element_End0();
@@ -1283,11 +1347,23 @@ void File_Ffv1::rgb()
 
     current_slice->run_index = 0;
 
-    for (size_t x = 0; x < c_max; x++) {
-        sample[x][0] = current_slice->sample_buffer +  x * 2      * (current_slice->w + 6) + 3;
+    for (size_t x = 0; x < c_max; x++)
+    {
+        sample[x][0] = current_slice->sample_buffer + x * 2 * (current_slice->w + 6) + 3;
         sample[x][1] = sample[x][0] + current_slice->w + 6;
     }
     memset(current_slice->sample_buffer, 0, 8 * (current_slice->w + 6) * sizeof(*current_slice->sample_buffer));
+
+    int offset = 1 << bits_per_sample;
+
+    int8u* FrameBuffer_Temp[4];
+    size_t FrameBuffer_Temp_Size=Frame->Planes.size();
+    for (size_t p=0; p<FrameBuffer_Temp_Size; p++)
+    {
+        FrameBuffer_Temp[p]=Frame->Planes[p]->Buffer;
+        FrameBuffer_Temp[p]+=current_slice->y*Frame->Planes[p]->AllBytesPerLine(); // Slice y position
+        FrameBuffer_Temp[p]+=current_slice->x*Frame->Planes[p]->BytesPerPixel; // Slice x position
+    }
 
     for (size_t y = 0; y < current_slice->h; y++)
     {
@@ -1307,9 +1383,52 @@ void File_Ffv1::rgb()
             line((c + 1) / 2, sample[c]);
         }
 
-        #if MEDIAINFO_TRACE_FFV1CONTENT
-            Element_End0();
-        #endif //MEDIAINFO_TRACE_FFV1CONTENT
+#if MEDIAINFO_TRACE_FFV1CONTENT
+        Element_End0();
+#endif //MEDIAINFO_TRACE_FFV1CONTENT
+
+	bool lbd = bits_per_sample <= 8;
+        //Copy the line to the frame buffer
+        for (size_t x = 0; x < current_slice->w; ++x)
+        {
+            int g = sample[0][1][x];
+            int b = sample[1][1][x];
+            int r = sample[2][1][x];
+            int a = 0;
+            if (alpha_plane)
+                a = sample[3][1][x];
+
+            if (slice_coding_mode != 1)
+            {
+                b -= offset;
+                r -= offset;
+                g -= (b * current_slice->slice_rct_by_coef + r * current_slice->slice_rct_ry_coef) >> 2;
+                b += g;
+                r += g;
+            }
+
+            // fprintf(stderr, "b per pixel:%lu\n", bits_per_sample);
+            if (bits_per_sample <= 8)
+                ((int32u*)FrameBuffer_Temp[0])[x] = b + (g << 8) + (r << 16) + (a << 24);
+            else if (bits_per_sample >= 16 && !alpha_plane)
+            {
+                ((int16u*)FrameBuffer_Temp[0])[x] = g;
+                ((int16u*)FrameBuffer_Temp[1])[x] = b;
+                ((int16u*)FrameBuffer_Temp[2])[x] = r;
+                if (alpha_plane)
+                    ((int16u*)FrameBuffer_Temp[3])[x] = a;
+            }
+            else
+            {
+                ((int16u*)FrameBuffer_Temp[0])[x] = b;
+                ((int16u*)FrameBuffer_Temp[1])[x] = g;
+                ((int16u*)FrameBuffer_Temp[2])[x] = r;
+                if (alpha_plane)
+                    ((int16u*)FrameBuffer_Temp[3])[x] = a;
+            }
+        }
+        for (size_t p = 0; p<FrameBuffer_Temp_Size; p++)
+            FrameBuffer_Temp[p]+=Frame->Planes[p]->AllBytesPerLine();
     }
 
     #if MEDIAINFO_TRACE_FFV1CONTENT
@@ -1764,6 +1883,80 @@ void File_Ffv1::plane_states_clean(states_context_plane states[MAX_QUANT_TABLES]
         delete[] states[i];
         states[i] = NULL;
     }
+}
+
+//---------------------------------------------------------------------------
+int File_Ffv1::create_frame_buffer()
+{
+    delete Frame;
+    Frame=new frame;
+
+    switch (colorspace_type)
+    {
+        case 0 : // YCbCr --> YUV Planar
+                Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample+7)/8)); // Luma
+                if (chroma_planes)
+                {
+                    size_t h_divisor=(1<<chroma_h_shift);
+                    size_t v_divisor=(1<<chroma_v_shift);
+                    for (size_t i=0; i<2; i++)
+                        Frame->Planes.push_back(new frame::plane((Width+h_divisor-1)/h_divisor, (Height+v_divisor-1)/v_divisor, bits_per_sample/8+((bits_per_sample%8)?1:0))); //Chroma
+                }
+                if (alpha_plane)
+                    Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample+7)/8)); //Alpha
+                break;
+        case 1 : // JPEG2000-RCT --> RGB Packed if <=8, else RGB planar
+                if (bits_per_sample<=8)
+                    Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample + 7) / 8 * 4)); // 4 values are always stored, even if alpha does not exists 
+                else
+                    for (size_t i=0; i<(alpha_plane?4:3); i++)
+                        Frame->Planes.push_back(new frame::plane(Width, Height, (bits_per_sample+7)/8)); // R, G, B, optionnaly A
+                    break;
+        default: 
+                return -1;
+    }
+
+    return 0;
+}
+
+//---------------------------------------------------------------------------
+void File_Ffv1::Create_Frame_MD5(std::string& md5)
+{
+    HashWrapper H(1<<HashWrapper::MD5);
+    for (size_t p=0; p<Frame->Planes.size(); p++)
+    {
+        int8u* FrameBuffer_Temp=Frame->Planes[p]->Buffer;
+        for (size_t h=0; h<Frame->Planes[p]->Height; h++)
+        {
+            H.Update(FrameBuffer_Temp, Frame->Planes[p]->ValidBytesPerLine());
+            FrameBuffer_Temp+=Frame->Planes[p]->AllBytesPerLine();
+        }
+    }
+    md5 = H.Generate(HashWrapper::MD5);
+    fprintf(stderr, "%s\n", md5.c_str());
+    #if MEDIAINFO_EVENTS
+        framehash* FrameHash=new framehash[2];
+        framehash** FrameHashp=new framehash*[2];
+        FrameHash[0].Value=md5.c_str();
+        FrameHash[0].Kind=FrameHashKind_MD5;
+        FrameHash[1].Value=md5.c_str();
+        FrameHash[1].Kind=FrameHashKind_MD5;
+        FrameHashp[0]=&FrameHash[0];
+        FrameHashp[1]=&FrameHash[1];
+        EVENT_BEGIN (Global, FrameHash, 0)
+            Event.Hashes_Size=2;
+            Event.Hashes=FrameHashp;
+        EVENT_END   ()
+        delete[] FrameHashp;
+        delete[] FrameHash;
+#endif //MEDIAINFO_EVENTS
+
+    #if MEDIAINFO_EVENTS
+        EVENT_BEGIN (Global, FrameContent, 0)
+            Event.Planes_Size=Frame->Planes.size();
+            Event.Planes=(framecontentplane**)&Frame->Planes[0];
+        EVENT_END   ()
+    #endif //MEDIAINFO_EVENTS
 }
 
 } //NameSpace

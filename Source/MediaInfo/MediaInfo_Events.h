@@ -351,6 +351,57 @@ struct MediaInfo_Event_Global_AttachedFile_0
 };
 
 /*-------------------------------------------------------------------------*/
+/* FrameHash                                                               */
+#define MediaInfo_Event_Global_FrameHash 0xAF05
+
+enum framehashkind
+{
+    FrameHashKind_MD5,
+};
+struct framehash
+{
+    const char*             Value;
+    MediaInfo_int8u         Kind;
+};
+
+struct MediaInfo_Event_Global_FrameHash_0
+{
+    MEDIAINFO_EVENT_GENERIC
+    size_t                  Hashes_Size;
+    framehash**             Hashes;
+};
+
+/*-------------------------------------------------------------------------*/
+/* FrameHash                                                               */
+#define MediaInfo_Event_Global_FrameContent 0xAF06
+
+struct framecontentplane
+{
+    MediaInfo_int8u  *Buffer;
+    size_t  Buffer_Size;
+    size_t  Width;
+    size_t  Width_Padding;
+    size_t  Height;
+    size_t  BytesPerPixel;
+
+    size_t ValidBytesPerLine()
+    {
+        return Width*BytesPerPixel;
+    }
+
+    size_t AllBytesPerLine()
+    {
+        return (Width + Width_Padding)*BytesPerPixel;
+    }
+};
+struct MediaInfo_Event_Global_FrameContent_0
+{
+    MEDIAINFO_EVENT_GENERIC
+    size_t                  Planes_Size;
+    framecontentplane**     Planes;
+};
+
+/*-------------------------------------------------------------------------*/
 /* MediaInfo_Event_Video_SliceInfo_0                                       */
 #define MediaInfo_Event_Video_SliceInfo 0x7801
 struct MediaInfo_Event_Video_SliceInfo_0

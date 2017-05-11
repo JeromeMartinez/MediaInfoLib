@@ -63,6 +63,9 @@ public:
 
         for (size_t i = 0; i < MAX_PLANES; ++i)
             contexts[i] = NULL;
+
+        slice_rct_by_coef = 1;
+        slice_rct_ry_coef = 1;
     }
 
     ~Slice()
@@ -96,6 +99,8 @@ public:
     int32u  run_index;
     int32u  run_mode;
     int32s  run_segment_length;
+    int     slice_rct_by_coef;
+    int     slice_rct_ry_coef;
     FFV1::pixel_t* sample_buffer;
 
     class Context
@@ -184,6 +189,8 @@ public :
     File_Ffv1();
     ~File_Ffv1();
 
+    virtual void Create_Frame_MD5(std::string& md5);
+
     //Input
     int32u Width;
     int32u Height;
@@ -204,7 +211,7 @@ private :
     int    slice_header(states &States);
     int32s get_symbol_with_bias_correlation(Slice::ContextPtr context);
     void rgb();
-    void plane(int32u pos);
+    void plane(int32u pos, int32u plane_idx);
     void line(int pos, FFV1::pixel_t *sample[2]);
     int32s pixel_GR(int32s context);
     int32s pixel_RC(int32s context);
@@ -264,6 +271,7 @@ private :
     int32u  picture_structure;
     int32u  sample_aspect_ratio_num;
     int32u  sample_aspect_ratio_den;
+    int32u  slice_coding_mode;
     int8u   coder_type;
     int8u   colorspace_type;
     int8u   bits_per_sample;
@@ -272,6 +280,57 @@ private :
     bool    alpha_plane;
     bool    is_overflow_16bit;
     state_transitions state_transitions_table;
+    struct frame
+    {
+        struct plane
+        {
+            int8u  *Buffer;
+            size_t  Buffer_Size;
+            size_t  Width;
+            size_t  Width_Padding;
+            size_t  Height;
+            size_t  BytesPerPixel;
+
+            plane(size_t Width_, size_t Height_, size_t BytesPerPixel_)
+                :
+                Width(Width_),
+                Height(Height_),
+                BytesPerPixel(BytesPerPixel_)
+            {
+                Width_Padding=32; //TODO: option for padding size
+                Width_Padding-=Width%Width_Padding;
+                
+                Buffer_Size=(Width+Width_Padding)*Height*BytesPerPixel;
+                Buffer=new int8u[Buffer_Size];
+                memset(Buffer, 0, Buffer_Size);
+            }
+
+            ~plane()
+            {
+                delete[] Buffer;
+            }
+
+            size_t ValidBytesPerLine()
+            {
+                return Width*BytesPerPixel;
+            }
+
+            size_t AllBytesPerLine()
+            {
+                return (Width+Width_Padding)*BytesPerPixel;
+            }
+        };
+        std::vector<plane*> Planes;
+
+        ~frame()
+        {
+            for (size_t i = 0; i < Planes.size(); i++)
+                delete Planes[i];
+        }
+    };
+    frame* Frame;
+
+    int8u   pixel_stride;
 
     //TEMP
     static const int32u PREFIX_MAX = 12; //limit
@@ -288,6 +347,7 @@ private :
 
     int32s golomb_rice_decode(int k);
     void plane_states_clean(states_context_plane states[MAX_QUANT_TABLES]);
+    int create_frame_buffer();
 };
 
 } //NameSpace
