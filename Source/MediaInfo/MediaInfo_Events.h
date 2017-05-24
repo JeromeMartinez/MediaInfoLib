@@ -372,7 +372,7 @@ struct MediaInfo_Event_Global_FrameHash_0
 };
 
 /*-------------------------------------------------------------------------*/
-/* FrameHash                                                               */
+/* FrameContent                                                            */
 #define MediaInfo_Event_Global_FrameContent 0xAF06
 
 struct framecontentplane
@@ -399,6 +399,14 @@ struct MediaInfo_Event_Global_FrameContent_0
     MEDIAINFO_EVENT_GENERIC
     size_t                  Planes_Size;
     framecontentplane**     Planes;
+};
+
+/*-------------------------------------------------------------------------*/
+/* NewStream                                                               */
+#define MediaInfo_Event_Global_NewStream 0xAF06
+struct MediaInfo_Event_Global_NewStream_0
+{
+    MEDIAINFO_EVENT_GENERIC
 };
 
 /*-------------------------------------------------------------------------*/

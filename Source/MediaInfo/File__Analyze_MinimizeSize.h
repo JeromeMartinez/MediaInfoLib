@@ -1077,6 +1077,9 @@ public :
     void Clear (stream_t StreamKind);
     inline void Clear () {File__Base::Clear();}
 
+    //Stream info
+    void NewStream(int64u         Value, stream_t StreamKind=Stream_Max);
+
     //***************************************************************************
     // Filling
     //***************************************************************************

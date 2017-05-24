@@ -21,6 +21,9 @@
 #include "MediaInfo/MediaInfo_Internal.h"
 #include "MediaInfo/MediaInfo_Config.h"
 #include "MediaInfo/TimeCode.h"
+#if MEDIAINFO_EVENTS
+    #include "MediaInfo/MediaInfo_Events_Internal.h"
+#endif //MEDIAINFO_EVENTS
 #include "ZenLib/File.h"
 #include "ZenLib/FileName.h"
 #include "ZenLib/BitStream_LE.h"
@@ -1253,6 +1256,16 @@ void File__Analyze::Fill_Flush()
     Stream_Prepare(Stream_Max); //clear filling
     for (size_t StreamKind=(size_t)Stream_General; StreamKind<(size_t)Stream_Max+1; StreamKind++) // +1 because Fill_Temp[Stream_Max] is used when StreamKind is unknown
         Fill_Temp[StreamKind].clear();
+}
+
+//---------------------------------------------------------------------------
+void File__Analyze::NewStream(int64u Value, stream_t StreamKind)
+{
+    #if MEDIAINFO_EVENTS
+        EVENT_BEGIN(Global, NewStream, 0)
+            Event.StreamIDs[Event.StreamIDs_Size-1]=Value;
+        EVENT_END()
+    #endif //MEDIAINFO_EVENTS
 }
 
 //---------------------------------------------------------------------------

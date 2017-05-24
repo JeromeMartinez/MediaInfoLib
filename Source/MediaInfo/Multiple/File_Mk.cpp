@@ -3866,6 +3866,7 @@ void File_Mk::Segment_Tracks_TrackEntry_TrackNumber()
         if (Segment_Info_Count>1)
             return; //First element has the priority
         Fill(StreamKind_Last, StreamPos_Last, General_ID, TrackNumber);
+        NewStream(TrackNumber);
         stream& streamItem = Stream[TrackNumber];
         if (StreamKind_Last!=Stream_Max)
         {
