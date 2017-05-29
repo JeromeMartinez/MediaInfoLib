@@ -403,7 +403,7 @@ struct MediaInfo_Event_Global_FrameContent_0
 
 /*-------------------------------------------------------------------------*/
 /* NewStream                                                               */
-#define MediaInfo_Event_Global_NewStream 0xAF06
+#define MediaInfo_Event_Global_NewStream 0xAF07
 struct MediaInfo_Event_Global_NewStream_0
 {
     MEDIAINFO_EVENT_GENERIC
