@@ -23,6 +23,9 @@
 //---------------------------------------------------------------------------
 #include "MediaInfo/Multiple/File_MpegPs.h"
 #include "MediaInfo/Multiple/File_Mpeg_Psi.h"
+#if defined(MEDIAINFO_ANCILLARY_YES)
+    #include <MediaInfo/Multiple/File_Ancillary.h>
+#endif //defined(MEDIAINFO_ANCILLARY_YES)
 #if defined(MEDIAINFO_AVC_YES)
     #include "MediaInfo/Video/File_Avc.h"
 #endif
@@ -594,6 +597,20 @@ void File_MpegPs::Streams_Finish_PerStream(size_t StreamID, ps_stream &Temp, kin
     if (Temp.StreamKind==Stream_Max && !Temp.Parsers.empty() && Temp.Parsers[0])
         Streams_Fill_PerStream(StreamID, Temp, KindOfStream);
 
+    //Hack
+    if (FromTS || Streams[stream_id].program_format_identifier || Streams[stream_id].format_identifier || Streams[stream_id].descriptor_tag)
+    {
+        int32u format_identifier=FromTS?FromTS_format_identifier:Streams[stream_id].format_identifier;
+        switch (format_identifier)
+        {
+            case 0x4C552D41: ; //Ancillary Data
+                            Temp.StreamKind=Stream_Other;
+                            Temp.Count=4;
+                            break;
+            default:;
+        }
+    }
+
     //Init
     if (Temp.StreamKind==Stream_Max)
         return;
@@ -627,6 +644,15 @@ void File_MpegPs::Streams_Finish_PerStream(size_t StreamID, ps_stream &Temp, kin
             Fill(StreamKind_Last, Temp.StreamPos+Pos, General_ID, ID, true);
             Fill(StreamKind_Last, Temp.StreamPos+Pos, General_ID_String, ID_String, true);
         }
+        if (StreamKind_Last==Stream_Other)
+            for (size_t Pos=0; Pos<2; Pos++)
+            {
+                Ztring ID=Retrieve(Stream_Text, Temp.StreamPos+Pos, General_ID);
+                Ztring ID_String=Retrieve(Stream_Text, Temp.StreamPos+Pos, General_ID_String);
+                Merge(*Temp.Parsers[0], Stream_Text, Pos, Temp.StreamPos+Pos);
+                Fill(Stream_Text, Temp.StreamPos+Pos, General_ID, ID, true);
+                Fill(Stream_Text, Temp.StreamPos+Pos, General_ID_String, ID_String, true);
+            }
         if (!IsSub)
         {
             switch (KindOfStream)
@@ -2857,6 +2883,15 @@ void File_MpegPs::private_stream_1()
             StreamIDs_Size++;
         }
     #endif //MEDIAINFO_EVENTS
+    if (FromTS || Streams[stream_id].program_format_identifier || Streams[stream_id].format_identifier || Streams[stream_id].descriptor_tag)
+    {
+        int32u format_identifier=FromTS?FromTS_format_identifier:Streams[stream_id].format_identifier;
+        switch (format_identifier)
+        {
+            case 0x4C552D41: private_stream_1_LU_A(); return; //Ancillary Data
+            default:;
+        }
+    }
     xxx_stream_Parse(Streams_Private1[private_stream_1_ID], private_stream_1_Count);
     #if MEDIAINFO_EVENTS
         if (private_stream_1_Offset)
@@ -3016,9 +3051,11 @@ File__Analyze* File_MpegPs::private_stream_1_ChooseParser()
     if (FromTS || Streams[stream_id].program_format_identifier || Streams[stream_id].format_identifier || Streams[stream_id].descriptor_tag)
     {
         int32u format_identifier=FromTS?FromTS_format_identifier:Streams[stream_id].format_identifier;
-        if (format_identifier==0x42535344) //"BSSD"
+        switch (format_identifier)
         {
-            return ChooseParser_SmpteSt0302(); //AES3 (SMPTE 302M)
+            case 0x42535344 : return ChooseParser_SmpteSt0302(); //AES3 (SMPTE 302M)
+            case 0x4C552D41 : return ChooseParser_Ancillary(); //Ancillary Data
+            default:;
         }
         int32u stream_type=FromTS?FromTS_stream_type:Streams[stream_id].stream_type;
         switch (stream_type)
@@ -3251,6 +3288,65 @@ void File_MpegPs::private_stream_2()
         Streams[0xBF].Searching_Payload=false;
         private_stream_2_Count=0;
     }
+}
+
+//---------------------------------------------------------------------------
+void File_MpegPs::private_stream_1_LU_A()
+{
+    //Parsing
+    int16u Number_of_spaces, Ancillary_payload_size;
+    Element_Begin1("Ancillary_Data_Structure");
+    BS_Begin();
+    Mark_1();
+    Skip_SB(                                                    "Final_packet_flag");
+    Skip_SB(                                                    "Bandwidth_limit_flag");
+    Skip_S1(5,                                                  "Reserved");
+    BS_End();
+    Get_B2 (Number_of_spaces,                                   "Number_of_spaces");
+    Get_B2 (Ancillary_payload_size,                             "Ancillary_payload_size");
+    if (Ancillary_payload_size!=Element_Size-Element_Offset)
+    {
+        Trusted_IsNot("Ancillary_payload_size");
+        Element_End0();
+    }
+    for (int16u i=0; i<Number_of_spaces; i++)
+    {
+        Element_Begin1("Ancillary_space_structure");
+        int16u Number_of_anc_packets;
+        BS_Begin();
+        Mark_1();
+        Skip_S1( 3,                                             "Reserved");
+        Skip_S2(12,                                             "Video_Line_Number");
+        Mark_1();
+        Skip_S1( 3,                                             "Ancillary_space_type");
+        Skip_S1( 2,                                             "Reserved");
+        Get_S2 (10, Number_of_anc_packets,                      "Number_of_anc_packets");
+        for (int16u j=0; j<Number_of_anc_packets; j++)
+        {
+            Element_Begin1("anc_packet");
+            int16u Number_of_words;
+            Mark_1();
+            Skip_S1( 6,                                         "Reserved");
+            Get_S2 ( 9, Number_of_words,                        "Number_of_words");
+            int8u* words=new int8u[Number_of_words*2];
+            for (int16u k=0; k<Number_of_words; k++)
+            {
+                int16u word;
+                Get_S2 (10, word,                               "Ancil_word");
+                words[k*2]=(int8u)word;
+                words[k*2+1]=(int8u)(word>>8);
+            }
+            Skip_S1(Data_BS_Remain()%8,                         "Byte_Realignment_bits");
+            Open_Buffer_Continue(Streams_Private1[private_stream_1_ID].Parsers[0], words, Number_of_words*2);
+            delete[] words;
+            Element_End0();
+        }
+        BS_End();
+        Element_End0();
+    }
+    Element_End0();
+
+    Accept();
 }
 
 //---------------------------------------------------------------------------
@@ -4898,6 +4994,23 @@ File__Analyze* File_MpegPs::ChooseParser_NULL()
     //Filling
     File__Analyze* Parser=new File_Unknown();
     Open_Buffer_Init(Parser);
+    return Parser;
+}
+
+//---------------------------------------------------------------------------
+File__Analyze* File_MpegPs::ChooseParser_Ancillary()
+{
+    //Filling
+    #if defined(MEDIAINFO_ANCILLARY_YES)
+        File_Ancillary* Parser=new File_Ancillary();
+        Parser->InDecodingOrder=true;
+        Parser->WithChecksum=true;
+        Parser->WithTenBit=true;
+    #else
+        //Filling
+        File__Analyze* Parser=new File_Unknown();
+        Open_Buffer_Init(Parser);
+    #endif
     return Parser;
 }
 

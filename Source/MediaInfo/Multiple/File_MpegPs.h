@@ -153,6 +153,7 @@ private :
     int8u          private_stream_1_ID;
     size_t         private_stream_1_Offset;
     bool           private_stream_1_IsDvdVideo;
+    void           private_stream_1_LU_A();
 
     //private_stream_2 specific
     void           private_stream_2_TSHV_A0();
@@ -278,6 +279,7 @@ private :
     File__Analyze* ChooseParser_Teletext();
     File__Analyze* ChooseParser_PS2();
     File__Analyze* ChooseParser_NULL();
+    File__Analyze* ChooseParser_Ancillary();
 
     //File__Analyze helpers
     enum kindofstream

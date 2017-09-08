@@ -52,6 +52,7 @@ namespace Elements
     const int32u HDMV=0x48444D56; //BluRay
     const int32u HEVC=0x48455643; //HEVC
     const int32u KLVA=0x4B4C5641; //KLV Packets
+    const int32u LU_A=0x4C552D41; //Exactly LU-A, Anncillary data
     const int32u Opus=0x4F707573; //Opus
     const int32u S14A=0x53313441; //ATSC - Satellite
     const int32u SCTE=0x53435445; //SCTE
@@ -634,6 +635,7 @@ const char* Mpeg_Descriptors_registration_format_identifier_Format(int32u format
         case Elements::HDMV : return "Blu-ray";
         case Elements::HEVC : return "HEVC";
         case Elements::KLVA : return "KLV";
+        case Elements::LU_A : return "Ancillary data";
         case Elements::S14A : return "ATSC - Satellite";
         case Elements::Opus : return "Opus";
         case Elements::SCTE : return "SCTE 54 2003 - DV Service Multiplex and Transport System for Cable Television";
@@ -688,6 +690,7 @@ const char* Mpeg_Descriptors_stream_Format(int8u descriptor_tag, int32u format_i
                 case Elements::DTS2 : return "DTS";
                 case Elements::DTS3 : return "DTS";
                 case Elements::KLVA : return "KLV";
+                case Elements::LU_A : return "Ancillary Data";
                 case Elements::HEVC : return "HEVC";
                 case Elements::VC_1 : return "VC-1";
                 case Elements::drac : return "Dirac";
@@ -735,6 +738,7 @@ const char* Mpeg_Descriptors_stream_Codec(int8u descriptor_tag, int32u format_id
                 case Elements::DTS2 : return "DTS";
                 case Elements::DTS3 : return "DTS";
                 case Elements::KLVA : return "KLV";
+                case Elements::LU_A : return "Ancillary Data";
                 case Elements::HEVC : return "HEVC";
                 case Elements::VC_1 : return "VC-1";
                 case Elements::drac : return "Dirac";
