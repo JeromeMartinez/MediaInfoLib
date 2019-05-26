@@ -83,6 +83,7 @@ private :
     void RawcookedSegment();
     void RawcookedSegment_LibraryName();
     void RawcookedSegment_LibraryVersion();
+    void RawcookedCompressedFileHashes();
     void RawcookedTrack();
     void RawcookedTrack_BeforeData() { RawcookedBlock_BeforeData(); }
     void RawcookedTrack_AfterData() { RawcookedBlock_AfterData(); }

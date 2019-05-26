@@ -141,6 +141,7 @@ namespace Elements
     const int64u RawcookedBlock_MaskAdditionAfterData=0x04;
     const int64u RawcookedBlock_MaskAdditionBeforeData=0x03;
     const int64u RawcookedBlock_MaskAdditionFileName=0x11;
+    const int64u RawcookedCompressedFileHashes=0x726366;
     const int64u RawcookedSegment=0x7273;
     const int64u RawcookedSegment_LibraryName=0x70;
     const int64u RawcookedSegment_LibraryVersion=0x71;
@@ -1609,6 +1610,7 @@ void File_Mk::Data_Parse()
         ATO2(RawcookedSegment_LibraryName, "LibraryName")
         ATO2(RawcookedSegment_LibraryVersion, "LibraryVersion")
         ATOM_END_MK
+    ATO2(RawcookedCompressedFileHashes, "RawcookedCompressedFileHashes")
     LIS2(RawcookedTrack, "RawcookedTrack")
         ATOM_BEGIN
         ATO2(RawcookedTrack_BeforeData, "BeforeData")
@@ -2331,6 +2333,21 @@ void File_Mk::RawcookedSegment_LibraryName()
 void File_Mk::RawcookedSegment_LibraryVersion()
 {
     Skip_Local(Element_Size,                                    "LibraryVersion");
+}
+
+//---------------------------------------------------------------------------
+void File_Mk::RawcookedCompressedFileHashes()
+{
+    //Parsing
+    int64u Value;
+    Get_EB(Value, "Kind");
+    Get_EB(Value, "Block size");
+    Get_EB(Value, "Count of hashes");
+    for (int64u i = 0; i < Value; i++)
+        Skip_Hexa(16, "Hash");
+    Get_EB(Value, "Count of parity hashes");
+    for (int64u i = 0; i < Value; i++)
+        Skip_Hexa(16, "Hash");
 }
 
 //---------------------------------------------------------------------------
