@@ -661,6 +661,26 @@ void File_Avc::Streams_Fill()
             Fill(Stream_Video, 0, Video_MultiView_Count, (*subset_seq_parameter_set_Item)->num_views_minus1+1);
         }
 
+    if (GOP_Closed+GOP_Open>=4
+     || (GOP_Open && GOP_Closed==0)
+     || (GOP_Closed && GOP_Open==0))
+    {
+        if (GOP_Open>=GOP_Closed*4)
+        {
+            Fill(Stream_Video, 0, "Gop_OpenClosed", "Open");
+            if (GOP_Closed_FirstFrame)
+                Fill(Stream_Video, 0, "Gop_OpenClosed_FirstFrame", "Closed");
+        }
+        else if (GOP_Closed>=GOP_Open*4)
+        {
+            Fill(Stream_Video, 0, "Gop_OpenClosed", "Closed");
+        }
+        else
+        {
+            Fill(Stream_Video, 0, "Gop_OpenClosed", "Mixed");
+        }
+    }
+
     #if MEDIAINFO_ADVANCED2
         for (size_t Pos = 0; Pos<Dump_SPS.size(); Pos++)
             Fill(Stream_Video, 0, "Dump_seq_parameter_set", Dump_SPS[Pos].c_str());
@@ -1494,6 +1514,9 @@ void File_Avc::Synched_Init()
     FrameRate_Divider=1;
     FirstPFrameInGop_IsParsed=false;
     Config_IsRepeated=false;
+    GOP_Closed_FirstFrame=false;
+    GOP_Closed=0;
+    GOP_Open=0;
     tc=0;
     maximum_content_light_level=0;
     maximum_frame_average_light_level=0;
@@ -1991,6 +2014,9 @@ void File_Avc::slice_header()
             switch(Element_Code)
             {
                 case 5 :    // This is an IDR frame
+                            GOP_Closed++;
+                            if (Frame_Count==0)
+                                GOP_Closed_FirstFrame=false;
                             if (Config->Config_PerPackage) // First slice of an IDR frame
                             {
                                 // IDR
@@ -1998,7 +2024,10 @@ void File_Avc::slice_header()
                                 Config->Config_PerPackage->IsClosedGOP(this);
                             }
                             break;
-                default :   ; // This is not an IDR frame
+                case 1:     // This is an non IDR frame
+                            if (slice_type==2)
+                                GOP_Open++;
+                default:; // This is not an IDR frame
             }
 
             EVENT_BEGIN (Video, SliceInfo, 0)
@@ -2057,6 +2086,8 @@ void File_Avc::slice_header()
     num_ref_idx_l0_active_minus1=(*pic_parameter_set_Item)->num_ref_idx_l0_default_active_minus1; //Default
     num_ref_idx_l1_active_minus1=(*pic_parameter_set_Item)->num_ref_idx_l1_default_active_minus1; //Default
     Get_BS ((*seq_parameter_set_Item)->log2_max_frame_num_minus4+4, frame_num, "frame_num");
+    if (!first_mb_in_slice)
+        Fill(Stream_Video, 0, "X", frame_num);
     if (!(*seq_parameter_set_Item)->frame_mbs_only_flag)
     {
         TEST_SB_GET(field_pic_flag,                             "field_pic_flag");

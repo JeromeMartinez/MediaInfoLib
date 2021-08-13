@@ -558,6 +558,9 @@ private :
     int8u                               preferred_transfer_characteristics;
     bool                                FirstPFrameInGop_IsParsed;
     bool                                Config_IsRepeated;
+    bool                                GOP_Closed_FirstFrame;
+    size_t                              GOP_Closed;
+    size_t                              GOP_Open;
     #if MEDIAINFO_ADVANCED2
         std::vector<std::string>        Dump_SPS;
         std::vector<std::string>        Dump_PPS;
