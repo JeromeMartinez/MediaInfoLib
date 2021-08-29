@@ -136,6 +136,7 @@ namespace Elements
     const int64u Ebml_DocTypeReadVersion=0x285;
 
     //RAWcooked
+    const int64u Rawcooked=0x7263;
     const int64u RawcookedBlock=0x7262;
     const int64u RawcookedBlock_AfterData=0x02;
     const int64u RawcookedBlock_BeforeData=0x01;
@@ -155,6 +156,14 @@ namespace Elements
     const int64u RawcookedTrack_MaskBaseAfterData=0x04;
     const int64u RawcookedTrack_MaskBaseBeforeData=0x03;
     const int64u RawcookedTrack_MaskBaseFileName=0x11;
+    const int64u RawcookedAttachment = 0x7261;
+    const int64u RawcookedAttachment_AfterData = 0x02;
+    const int64u RawcookedAttachment_BeforeData = 0x01;
+    const int64u RawcookedAttachment_FileName = 0x10;
+    const int64u RawcookedAttachment_FileHash = 0x20;
+    const int64u RawcookedAttachment_MaskBaseAfterData = 0x04;
+    const int64u RawcookedAttachment_MaskBaseBeforeData = 0x03;
+    const int64u RawcookedAttachment_MaskBaseFileName = 0x11;
 
     //Segment
     const int64u Segment=0x8538067;
@@ -1640,6 +1649,44 @@ void File_Mk::Data_Parse()
         ATO2(Ebml_DocTypeReadVersion, "DocTypeReadVersion")
         ATOM_END_MK
 #if MEDIAINFO_TRACE
+    LIS2(Rawcooked, "Rawcooked")
+        ATOM_BEGIN
+        LIS2(RawcookedBlock, "RawcookedBlock")
+            ATOM_BEGIN
+            ATO2(RawcookedBlock_AfterData, "AfterData")
+            ATO2(RawcookedBlock_BeforeData, "BeforeData")
+            ATO2(RawcookedBlock_FileName, "FileName")
+            ATO2(RawcookedBlock_FileHash, "FileHash")
+            ATO2(RawcookedBlock_MaskAdditionBeforeData, "MaskAdditionBeforeData")
+            ATO2(RawcookedBlock_MaskAdditionAfterData, "MaskAdditionAfterData")
+            ATO2(RawcookedBlock_MaskAdditionFileName, "MaskAdditionFileName")
+            ATOM_END_MK
+        LIS2(RawcookedSegment, "RawcookedSegment")
+            ATOM_BEGIN
+            ATO2(RawcookedSegment_LibraryName, "LibraryName")
+            ATO2(RawcookedSegment_LibraryVersion, "LibraryVersion")
+            ATOM_END_MK
+        LIS2(RawcookedTrack, "RawcookedTrack")
+            ATOM_BEGIN
+            ATO2(RawcookedTrack_BeforeData, "BeforeData")
+            ATO2(RawcookedTrack_AfterData, "AfterData")
+            ATO2(RawcookedTrack_FileName, "FileName")
+            ATO2(RawcookedTrack_FileHash, "FileHash")
+            ATO2(RawcookedTrack_MaskBaseAfterData, "MaskBaseAfterData")
+            ATO2(RawcookedTrack_MaskBaseBeforeData, "MaskBaseBeforeData")
+            ATO2(RawcookedTrack_MaskBaseFileName, "MaskBaseFileName")
+            ATOM_END_MK
+        LIS2(RawcookedAttachment, "RawcookedAttachment")
+            ATOM_BEGIN
+            ATO2(RawcookedTrack_BeforeData, "BeforeData")
+            ATO2(RawcookedTrack_AfterData, "AfterData")
+            ATO2(RawcookedTrack_FileName, "FileName")
+            ATO2(RawcookedTrack_FileHash, "FileHash")
+            ATO2(RawcookedTrack_MaskBaseAfterData, "MaskBaseAfterData")
+            ATO2(RawcookedTrack_MaskBaseBeforeData, "MaskBaseBeforeData")
+            ATO2(RawcookedTrack_MaskBaseFileName, "MaskBaseFileName")
+            ATOM_END_MK
+        ATOM_END_MK
     LIS2(RawcookedBlock, "RawcookedBlock")
         ATOM_BEGIN
         ATO2(RawcookedBlock_AfterData, "AfterData")
@@ -2162,8 +2209,15 @@ void File_Mk::Ebml_DocType()
         }
         else if (Data==__T("rawcooked"))
         {
-            Accept("RAWcooked");
-            Fill(Stream_General, 0, General_Format, "RAWcooked");
+            if (!Status[IsAccepted])
+            {
+                Accept("RAWcooked");
+                Fill(Stream_General, 0, General_Format, "RAWcooked");
+            }
+            else
+            {
+                Fill(Stream_General, 0, "Reversibility", "RAWcooked");
+            }
         }
         else
         {
@@ -2181,7 +2235,10 @@ void File_Mk::Ebml_DocTypeVersion()
 
     //Filling
     FILLING_BEGIN();
-        Fill(Stream_General, 0, General_Format_Version, __T("Version ")+Ztring::ToZtring(Format_Version));
+        if (Retrieve_Const(Stream_General, 0, "Reversibility").empty())
+            Fill(Stream_General, 0, General_Format_Version, __T("Version ")+Ztring::ToZtring(Format_Version));
+        else
+            Fill(Stream_General, 0, "Reversibility", __T("RAWcooked, Version ") + Ztring::ToZtring(Format_Version), true);
     FILLING_END();
 }
 
@@ -2340,6 +2397,7 @@ void File_Mk::Rawcooked_FileName(bool HasMask, bool UseMask)
 
     Rawcooked_Compressed_End(HasMask?&RawcookedTrack_Data.MaskBaseFileName:NULL, UseMask);
 }
+
 //---------------------------------------------------------------------------
 void File_Mk::RawcookedBlock()
 {
@@ -2396,6 +2454,12 @@ void File_Mk::RawcookedTrack()
         Element_Level++;
     }
     RawcookedTrack_Data=rawcookedtrack();
+}
+
+//---------------------------------------------------------------------------
+void File_Mk::RawcookedAttachment()
+{
+    RawcookedTrack_Data = rawcookedtrack();
 }
 #endif //MEDIAINFO_TRACE
 

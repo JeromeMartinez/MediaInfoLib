@@ -66,6 +66,29 @@ private :
     void Ebml_DocType();
     void Ebml_DocTypeVersion();
     void Ebml_DocTypeReadVersion();
+    void Rawcooked() {}
+    void Rawcooked_Rawcooked_BeforeData() { Rawcooked_BeforeData(); }
+    void Rawcooked_Rawcooked_AfterData() { Rawcooked_AfterData(); }
+    void Rawcooked_Rawcooked_FileName() { Rawcooked_FileName(); }
+    void Rawcooked_RawcookedBlock() { RawcookedBlock(); }
+    void Rawcooked_RawcookedBlock_BeforeData() { RawcookedBlock_BeforeData(); }
+    void Rawcooked_RawcookedBlock_AfterData() { RawcookedBlock_AfterData(); }
+    void Rawcooked_RawcookedBlock_FileHash() { RawcookedBlock_FileHash(); }
+    void Rawcooked_RawcookedBlock_FileName() { RawcookedBlock_FileName(); }
+    void Rawcooked_RawcookedBlock_MaskAdditionBeforeData() { RawcookedBlock_MaskAdditionBeforeData(); }
+    void Rawcooked_RawcookedBlock_MaskAdditionAfterData() { RawcookedBlock_MaskAdditionAfterData(); }
+    void Rawcooked_RawcookedBlock_MaskAdditionFileName() { RawcookedBlock_MaskAdditionAfterData(); }
+    void Rawcooked_RawcookedSegment() { RawcookedSegment(); }
+    void Rawcooked_RawcookedSegment_LibraryName() { RawcookedSegment_LibraryName(); }
+    void Rawcooked_RawcookedSegment_LibraryVersion() { RawcookedSegment_LibraryVersion(); }
+    void Rawcooked_RawcookedTrack() { RawcookedTrack(); }
+    void Rawcooked_RawcookedTrack_BeforeData() { RawcookedTrack_BeforeData(); }
+    void Rawcooked_RawcookedTrack_AfterData() { RawcookedTrack_AfterData(); }
+    void Rawcooked_RawcookedTrack_FileHash() { RawcookedTrack_FileHash(); }
+    void Rawcooked_RawcookedTrack_FileName() { RawcookedTrack_FileName(); }
+    void Rawcooked_RawcookedTrack_MaskBaseBeforeData() { RawcookedTrack_MaskBaseBeforeData(); }
+    void Rawcooked_RawcookedTrack_MaskBaseAfterData() { RawcookedTrack_MaskBaseAfterData(); }
+    void Rawcooked_RawcookedTrack_MaskBaseFileName() { RawcookedTrack_MaskBaseFileName(); }
     void Rawcooked_BeforeData();
     void Rawcooked_BeforeData(bool HasMask, bool UseMask=false);
     void Rawcooked_AfterData();
@@ -91,6 +114,14 @@ private :
     void RawcookedTrack_MaskBaseBeforeData() { Rawcooked_BeforeData(true, false); }
     void RawcookedTrack_MaskBaseAfterData() { Rawcooked_AfterData(true, false); }
     void RawcookedTrack_MaskBaseFileName() { Rawcooked_FileName(true, false); }
+    void RawcookedAttachment();
+    void RawcookedAttachment_BeforeData() { RawcookedBlock_BeforeData(); }
+    void RawcookedAttachment_AfterData() { RawcookedBlock_AfterData(); }
+    void RawcookedAttachment_FileHash() { RawcookedBlock_FileHash(); }
+    void RawcookedAttachment_FileName() { RawcookedBlock_FileName(); }
+    void RawcookedAttachment_MaskBaseBeforeData() { Rawcooked_BeforeData(true, false); }
+    void RawcookedAttachment_MaskBaseAfterData() { Rawcooked_AfterData(true, false); }
+    void RawcookedAttachment_MaskBaseFileName() { Rawcooked_FileName(true, false); }
     void Segment();
     void Segment_SeekHead();
     void Segment_SeekHead_Seek();
