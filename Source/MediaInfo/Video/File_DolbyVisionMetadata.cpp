@@ -17,7 +17,7 @@
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
-#if defined(MEDIAINFO_MXF_YES)
+#if defined(MEDIAINFO_MPEG4_YES) || defined(MEDIAINFO_MXF_YES)
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
@@ -53,17 +53,47 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
        return false;
 
     XMLElement* DolbyVisionGlobalData=document.FirstChildElement();
-    if (!DolbyVisionGlobalData || strcmp(DolbyVisionGlobalData->Name(), "DolbyVisionGlobalData"))
+    
+    if (DolbyVisionGlobalData && !strcmp(DolbyVisionGlobalData->Name(), "gsp:DolbyVisionGlobalDataGSP"))
     {
-        Reject("DolbyVisionMetadata");
-        return false;
-    }
+        string Version;
+        for (DolbyVisionGlobalData = DolbyVisionGlobalData->FirstChildElement(); DolbyVisionGlobalData; DolbyVisionGlobalData = DolbyVisionGlobalData->NextSiblingElement())
+        {
+            if (!strcmp(DolbyVisionGlobalData->Name(), "gsp:Version"))
+                Version=DolbyVisionGlobalData->GetText();
+            if (!strcmp(DolbyVisionGlobalData->Name(), "gsp:Track"))
+                break;
+        }
+        if (!DolbyVisionGlobalData)
+        {
+            Reject("DolbyVisionMetadata");
+            return false;
+        }
 
-    Accept("DolbyVisionMetadata");
-    Stream_Prepare(Stream_Video);
-    Fill(Stream_Video, 0, "HDR_Format", "Dolby Vision Metadata");
-    if (const char* Text=DolbyVisionGlobalData->Attribute("version"))
-        Fill(Stream_Video, 0, "HDR_Format_Version", Text);
+        Accept("DolbyVisionGenericStudioMetadata");
+        Stream_Prepare(Stream_Video);
+        Fill(Stream_Video, 0, "HDR_Format", "Dolby Vision Generic Studio Metadata");
+        if (!Version.empty())
+            Fill(Stream_Video, 0, "HDR_Format_Version", Version);
+    }
+    else
+    {
+        if (DolbyVisionGlobalData && !strcmp(DolbyVisionGlobalData->Name(), "DolbyVisionIntegratedWrapper"))
+        {
+            DolbyVisionGlobalData = DolbyVisionGlobalData->FirstChildElement();
+        }
+        if (!DolbyVisionGlobalData || strcmp(DolbyVisionGlobalData->Name(), "DolbyVisionGlobalData"))
+        {
+            Reject("DolbyVisionMetadata");
+            return false;
+        }
+
+        Accept("DolbyVisionMetadata");
+        Stream_Prepare(Stream_Video);
+        Fill(Stream_Video, 0, "HDR_Format", "Dolby Vision Metadata");
+        if (const char* Text = DolbyVisionGlobalData->Attribute("version"))
+            Fill(Stream_Video, 0, "HDR_Format_Version", Text);
+    }
 
     for (XMLElement* DolbyVisionGlobalData_Item=DolbyVisionGlobalData->FirstChildElement(); DolbyVisionGlobalData_Item; DolbyVisionGlobalData_Item=DolbyVisionGlobalData_Item->NextSiblingElement())
     {
@@ -120,8 +150,14 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
                     if (const char* Text=ColorEncoding_Item->GetText())
                     {
                         ZtringList List;
-                        List.Separator_Set(0, __T(","));
+                        List.Separator_Set(0, __T(" "));
                         List.Write(Ztring(Text));
+                        if (List.size()==1)
+                        {
+                            //Trying with space
+                            List.Separator_Set(0, __T(","));
+                            List.Write(Ztring(Text));
+                        }
                         if (List.size()==2)
                         {
                             Mastering.Primaries[6]=float64_int64s(List[0].To_float64()*50000);
@@ -179,8 +215,14 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
                                                     if (const char* Text=Primaries_Item->GetText())
                                                     {
                                                         ZtringList List;
-                                                        List.Separator_Set(0, __T(","));
+                                                        List.Separator_Set(0, __T(" "));
                                                         List.Write(Ztring(Text));
+                                                        if (List.size()==1)
+                                                        {
+                                                            //Trying with space
+                                                            List.Separator_Set(0, __T(","));
+                                                            List.Write(Ztring(Text));
+                                                        }
                                                         if (List.size()==2)
                                                         {
                                                             Mastering.Primaries[i]=float64_int64s(List[0].To_float64()*50000);
@@ -220,6 +262,83 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
                                 }
                             }
                         }
+                        if (!strcmp(DolbyEDR_Item->Name(), "MasteringDisplay"))
+                        {
+                            mastering_metadata_2086 Mastering;
+                            memset(&Mastering, 0xFF, sizeof(Mastering));
+                            for (XMLElement* MasteringDisplay_Item=DolbyEDR_Item->FirstChildElement(); MasteringDisplay_Item; MasteringDisplay_Item=MasteringDisplay_Item->NextSiblingElement())
+                            {
+                                if (!strcmp(MasteringDisplay_Item->Name(), "MinimumBrightness"))
+                                {
+                                    if (const char* Text=MasteringDisplay_Item->GetText())
+                                        Mastering.Luminance[0]=float64_int64s(Ztring(Text).To_float64()*10000);
+                                }
+                                if (!strcmp(MasteringDisplay_Item->Name(), "PeakBrightness"))
+                                {
+                                    if (const char* Text=MasteringDisplay_Item->GetText())
+                                        Mastering.Luminance[1]=float64_int64s(Ztring(Text).To_float64()*10000);
+                                }
+                                if (!strcmp(MasteringDisplay_Item->Name(), "Primaries"))
+                                {
+                                    for (XMLElement* Primaries_Item=MasteringDisplay_Item->FirstChildElement(); Primaries_Item; Primaries_Item=Primaries_Item->NextSiblingElement())
+                                    {
+                                        int8u i=(int8u)-1;
+                                        if (!strcmp(Primaries_Item->Name(), "Green"))
+                                            i=0;
+                                        if (!strcmp(Primaries_Item->Name(), "Blue"))
+                                            i=2;
+                                        if (!strcmp(Primaries_Item->Name(), "Red"))
+                                            i=4;
+                                        if (i!=(int8u)-1)
+                                        {
+                                            if (const char* Text=Primaries_Item->GetText())
+                                            {
+                                                ZtringList List;
+                                                List.Separator_Set(0, __T(" "));
+                                                List.Write(Ztring(Text));
+                                                if (List.size()==1)
+                                                {
+                                                    //Trying with space
+                                                    List.Separator_Set(0, __T(","));
+                                                    List.Write(Ztring(Text));
+                                                }
+                                                if (List.size()==2)
+                                                {
+                                                    Mastering.Primaries[i]=float64_int64s(List[0].To_float64()*50000);
+                                                    Mastering.Primaries[i+1]=float64_int64s(List[1].To_float64()*50000);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if (!strcmp(MasteringDisplay_Item->Name(), "WhitePoint"))
+                                {
+                                    if (const char* Text=MasteringDisplay_Item->GetText())
+                                    {
+                                        ZtringList List;
+                                        List.Separator_Set(0, __T(" "));
+                                        List.Write(Ztring(Text));
+                                        if (List.size()==1)
+                                        {
+                                            //Trying with space
+                                            List.Separator_Set(0, __T(","));
+                                            List.Write(Ztring(Text));
+                                        }
+                                        if (List.size()==2)
+                                        {
+                                            Mastering.Primaries[6]=float64_int64s(List[0].To_float64()*50000);
+                                            Mastering.Primaries[7]=float64_int64s(List[1].To_float64()*50000);
+                                        }
+                                    }
+                                }
+                            }
+                            Ztring colour_primaries, luminance;
+                            Get_MasteringDisplayColorVolume(colour_primaries, luminance, Mastering);
+                            if (!colour_primaries.empty())
+                                Fill(Stream_Video, 0, "MasteringDisplay_ColorPrimaries", colour_primaries);
+                            if (!luminance.empty())
+                                Fill(Stream_Video, 0, "MasteringDisplay_Luminance", luminance);
+                        }
                     }
                 }
             }
@@ -256,5 +375,5 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
 
 } //NameSpace
 
-#endif //MEDIAINFO_DCP_YES
+#endif //defined(MEDIAINFO_MPEG4_YES) || defined(MEDIAINFO_MXF_YES)
 
