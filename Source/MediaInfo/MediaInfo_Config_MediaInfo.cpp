@@ -140,6 +140,7 @@ MediaInfo_Config_MediaInfo::MediaInfo_Config_MediaInfo()
     RequestTerminate=false;
     FileIsSeekable=true;
     FileIsSub=false;
+    FrameIsAlwaysComplete=false;
     FileIsDetectingDuration=false;
     FileIsReferenced=false;
     FileTestContinuousFileNames=true;
@@ -348,6 +349,15 @@ Ztring MediaInfo_Config_MediaInfo::Option (const String &Option, const String &V
     else if (Option_Lower==__T("file_issub_get"))
     {
         return File_IsSub_Get()?"1":"0";
+    }
+    if (Option_Lower==__T("file_frameisalwayscomplete"))
+    {
+        File_FrameIsAlwaysComplete_Set(!(Value==__T("0") || Value.empty()));
+        return __T("");
+    }
+    else if (Option_Lower==__T("file_frameisalwayscomplete_get"))
+    {
+        return File_FrameIsAlwaysComplete_Get()?"1":"0";
     }
     if (Option_Lower==__T("file_parsespeed"))
     {
@@ -1290,6 +1300,21 @@ bool MediaInfo_Config_MediaInfo::File_IsSub_Get ()
 {
     CriticalSectionLocker CSL(CS);
     return FileIsSub;
+}
+
+//***************************************************************************
+// File Frame Is Always Complete
+//***************************************************************************
+
+//---------------------------------------------------------------------------
+void MediaInfo_Config_MediaInfo::File_FrameIsAlwaysComplete_Set (bool NewValue)
+{
+    FrameIsAlwaysComplete=NewValue;
+}
+
+bool MediaInfo_Config_MediaInfo::File_FrameIsAlwaysComplete_Get ()
+{
+    return FrameIsAlwaysComplete;
 }
 
 //***************************************************************************

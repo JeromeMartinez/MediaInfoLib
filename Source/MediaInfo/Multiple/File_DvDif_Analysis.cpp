@@ -81,7 +81,7 @@ void File_DvDif::Read_Buffer_Continue()
                                 if ((Buffer[Buffer_Offset+1]&0x04)==0x04) //FSP=1
                                 {
                                     //Errors stats update
-                                    if (Speed_FrameCount_StartOffset!=(int64u)-1)
+                                    if (Speed_FrameCount_StartOffset!=(int64u)-1 && !Config->File_FrameIsAlwaysComplete_Get())
                                         Errors_Stats_Update();
                                     Speed_FrameCount_StartOffset=File_Offset+Buffer_Offset;
 
@@ -138,7 +138,7 @@ void File_DvDif::Read_Buffer_Continue()
                         //Try to find a suitable and trustable Abst
                         if (Speed_FrameCount_StartOffset==-1)
                             Speed_FrameCount_StartOffset=0;
-                        int32s Abst_First;
+                        int32s Abst_First = 0x3FFFFFFF;
                         int32s Abst_Previous=(AbstBf_Previous>>1)&0x7FFFFF;
                         int32s Abst_Theory_Max=Abst_Previous+(DSF?12:10)*(FSC_WasSet?2:1)*2; //Max 2x the expected gap
                         for (int i=0; i<2; i++)
@@ -162,7 +162,7 @@ void File_DvDif::Read_Buffer_Continue()
                                     Abst_TrustMultiplier*=2;
                                 if (i)
                                 {
-                                    if (Abst==Abst_First) // If same value in the same block
+                                    if (Abst_First!=0x3FFFFFFF && Abst==Abst_First) // If same value in the same block
                                         Abst_TrustMultiplier*=3;
                                 }
                                 else
@@ -671,6 +671,9 @@ void File_DvDif::Read_Buffer_Continue()
     if (!Status[IsAccepted])
         File__Analyze::Buffer_Offset=0;
     Config->State_Set(((float)File_Offset)/File_Size);
+
+    if (Config->File_FrameIsAlwaysComplete_Get())
+        Errors_Stats_Update();
 }
 
 void File_DvDif::Errors_Stats_Update()
@@ -1845,7 +1848,8 @@ void File_DvDif::Errors_Stats_Update_Finnish()
         else
             return;
     }
-    Errors_Stats_Update();
+    if (!Config->File_FrameIsAlwaysComplete_Get())
+        Errors_Stats_Update();
 
     //Preparing next frame
     Ztring Errors_Stats_End_03;

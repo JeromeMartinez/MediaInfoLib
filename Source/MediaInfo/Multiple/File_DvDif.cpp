@@ -654,6 +654,9 @@ bool File_DvDif::Synchronize()
 //---------------------------------------------------------------------------
 bool File_DvDif::Synched_Test()
 {
+    if (Config->File_FrameIsAlwaysComplete_Get())
+        return true;
+
     if (AuxToAnalyze)
         return true;
 
@@ -817,6 +820,10 @@ bool File_DvDif::Demux_UnpacketizeContainer_Test()
             Demux_Offset=Buffer_Offset+1;
         }
 
+        if (Config->File_FrameIsAlwaysComplete_Get())
+            Demux_Offset=Buffer_Size;
+        else
+        {
         while (Demux_Offset+8*80<=Buffer_Size //8 blocks
             && !((Buffer[Demux_Offset]&0xE0)==0x00   //Speed up the parsing
               && (CC3(Buffer+Demux_Offset+0*80)&0xE0FCFF)==0x000400   //Header 0 (with FSC==false and FSP==true)
@@ -833,6 +840,7 @@ bool File_DvDif::Demux_UnpacketizeContainer_Test()
             return false; //No complete frame
         if (Demux_Offset+8*80>Buffer_Size && File_Offset+Buffer_Size==File_Size)
             Demux_Offset=(size_t)(File_Size-File_Offset); //Using the complete buffer (no next sync)
+        }
 
         Element_Code=-1;
         FrameInfo.DTS=FrameInfo.PTS=Speed_FrameCount_system[0]*100100000/3+Speed_FrameCount_system[1]*40000000;
@@ -867,6 +875,35 @@ void File_DvDif::Read_Buffer_Unsynched()
         Frame_Count_NotParsedIncluded=File_GoTo/BytesPerFrame;
         FrameInfo.PTS=FrameInfo.DTS=float64_int64s(Frame_Count_NotParsedIncluded/(DSF?25.000:(30.000*1000/1001))*1000000000);
     }
+
+    #ifdef MEDIAINFO_DVDIF_ANALYZE_YES
+    Analyze_Activated=false;
+    Speed_FrameCount_StartOffset=(int64u)-1;
+    Speed_FrameCount=0;
+    Speed_FrameCount_Video_STA_Errors=0;
+    Speed_FrameCount_Audio_Errors.resize(8);
+    Speed_FrameCount_Timecode_Incoherency=0;
+    Speed_FrameCount_Contains_NULL=0;
+    Speed_Contains_NULL=0;
+    Speed_FrameCount_Arb_Incoherency=0;
+    Speed_FrameCount_Stts_Fluctuation=0;
+    Speed_FrameCount_system[0]=0;
+    Speed_FrameCount_system[1]=0;
+    AbstBf_Current=(0x7FFFFF)<<1;
+    AbstBf_Previous=(0x7FFFFF)<<1;
+    AbstBf_Previous_MaxAbst=0xFFFFFF;
+    SMP=(int8u)-1;
+    QU=(int8u)-1;
+    Speed_TimeCode_IsValid=false;
+    Speed_Arb_IsValid=false;
+    Mpeg4_stts=NULL;
+    Mpeg4_stts_Pos=0;
+    Stats_Total=0;
+    Stats_Total_WithoutArb=0;
+    Stats_Total_AlreadyDetected=false;
+    memset(BlockStatus, 0, BlockStatus_MaxSize);
+    Speed_TimeCode_Last.Clear();
+    #endif //MEDIAINFO_DVDIF_ANALYZE_YES
 }
 
 //---------------------------------------------------------------------------

@@ -1209,7 +1209,12 @@ void File__Analyze::Open_Buffer_Position_Set (int64u File_Offset_)
     if (File_Offset_==(int64u)-1)
         return;
 
-    File_Offset=File_Offset_-Buffer_Temp_Size;
+    int64u File_Offset_New=File_Offset_ - Buffer_Temp_Size;
+    if (File_Offset_New!=File_Offset)
+    {
+        File_Offset=File_Offset_New;
+        Open_Buffer_Unsynch();
+    }
     File_GoTo=(int64u)-1;
 }
 

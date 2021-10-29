@@ -87,6 +87,9 @@ public :
     void          File_IsSub_Set (bool NewValue);
     bool          File_IsSub_Get ();
 
+    void          File_FrameIsAlwaysComplete_Set(bool NewValue);
+    bool          File_FrameIsAlwaysComplete_Get();
+
     void          File_ParseSpeed_Set(float32 NewValue, bool FromGlobal=false);
     float32       File_ParseSpeed_Get();
 
@@ -431,6 +434,7 @@ public :
 private :
     bool                    FileIsSeekable;
     bool                    FileIsSub;
+    bool                    FrameIsAlwaysComplete;
     bool                    FileIsDetectingDuration;
     bool                    FileIsReferenced;
     bool                    FileTestContinuousFileNames;
