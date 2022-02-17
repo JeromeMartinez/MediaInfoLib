@@ -550,6 +550,8 @@ struct MediaInfo_Event_DvDif_Change_0
     MediaInfo_int32u        AudioChannels;
     MediaInfo_int32u        AudioBitDepth;
     MediaInfo_int32u        Captions_Flags; // bit 0 = present
+    MediaInfo_int32u        Flags; // bit 0 = DirectionSpeed valid
+    MediaInfo_int8u         DirectionSpeed;
 };
 
 /***************************************************************************/

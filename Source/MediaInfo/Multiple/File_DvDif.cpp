@@ -1533,8 +1533,11 @@ void File_DvDif::audio_sourcecontrol()
     Skip_SB(                                                    "Reserved");
 
     //PC3
-    Skip_SB(                                                    "DRF - Direction"); //1=Forward
-    Skip_S1(7,                                                  "SPD - Speed");
+    bool Direction;
+    int8u Speed;
+    Get_SB(Direction,                                                   "DRF - Direction"); //1=Forward
+    Get_S1(7, Speed,                                                "SPD - Speed");
+    //Fill(Stream_Video, 0, "A", Ztring::ToZtring((int)Direction) + __T(";") + Ztring::ToZtring((int)Speed));
 
     //PC4
     Skip_SB(                                                    "Reserved");
