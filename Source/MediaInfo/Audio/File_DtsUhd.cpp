@@ -17,7 +17,7 @@
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
-#if defined(MEDIAINFO_DTS_YES)
+#if defined(MEDIAINFO_DTSUHD_YES)
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ static int CountBits(int32u Mask)
     position to increment past the buffer end to prevent subsequent calls
     from returning anything other than zero.
 */
-static int32u ReadBits(const int8u* Buffer, int Size, int* Bit, int Count)
+int32u File_DtsUhd::ReadBits(const int8u* Buffer, int Size, int* Bit, int Count, const char* Name)
 {
     int i;
     int n;
@@ -96,6 +96,8 @@ static int32u ReadBits(const int8u* Buffer, int Size, int* Bit, int Count)
     }
     *Bit+=Count;
 
+    if (Trace_Activated)
+        Param(Name?Name:"?", Value, Count);
     return (int32u)Value;
 }
 
@@ -114,12 +116,13 @@ int32u File_DtsUhd::ReadBitsMD01(MD01* MD01, int Bits)
     is based on code in Table 5-2
 
 */
-static int32u ReadBitsVar(const int8u* Buffer, int Size, int *Bit, const uint8_t Table[])
+int32u File_DtsUhd::ReadBitsVar(const int8u* Buffer, int Size, int *Bit, const uint8_t Table[], const char* Name)
 {
-    static const int BitsUsed[8]   = { 1, 1, 1, 1, 2, 2, 3, 3 };
+    Element_Begin1(Name?Name:"?");
+    static const int BitsUsed[8] = {1, 1, 1, 1, 2, 2, 3, 3};
     static const int IndexTable[8] = { 0, 0, 0, 0, 1, 1, 2, 3 };
 
-    int Code = ReadBits(Buffer, Size, Bit, 3); /* value range is [0, 7] */
+    int Code = ReadBits(Buffer, Size, Bit, 3, "index"); /* value range is [0, 7] */
     *Bit-=3-BitsUsed[Code];
     int Index=IndexTable[Code];
     uint32_t Value=0;
@@ -128,10 +131,35 @@ static int32u ReadBitsVar(const int8u* Buffer, int Size, int *Bit, const uint8_t
     {
         for (int i=0; i<Index; i++)
             Value+=1<<Table[i];
-        Value+=ReadBits(Buffer, Size, Bit, Table[Index]);
+        Value+=ReadBits(Buffer, Size, Bit, Table[Index], "addition");
     }
 
+    Element_Info1(Value);
+    Element_End0();
     return Value;
+}
+
+void File_DtsUhd::Get_VR(const uint8_t Table[], int32u& Value, const char* Name)
+{
+    Element_Begin1(Name?Name:"?");
+    static const uint8_t BitsUsed[8] = {1, 1, 1, 1, 2, 2, 3, 3};
+    static const uint8_t IndexTable[8] = { 0, 0, 0, 0, 1, 1, 2, 3 };
+
+    uint8_t Code;
+    Get_S1 (3, Code,                                            "index"); /* value range is [0, 7] */
+    auto Index=IndexTable[Code];
+    Value=0;
+    if (Table[Index]>0)
+    {
+        for (int i=0; i<Index; i++)
+            Value+=1<<Table[i];
+        uint32_t Add;
+        Get_S4 (Table[Index], Add,                              "addition");
+        Value+=Add;
+    }
+
+    Element_Info1(Value);
+    Element_End0();
 }
 
 /* Implied by Table 6-2, MD01 chunk objects appended in for loop */
@@ -251,29 +279,32 @@ void File_DtsUhd::UpdateDescriptor()
 }
 
 /* Table 6-17 p47 */
-int File_DtsUhd::ParseExplicitObjectLists(int Mask, int Index)
+int File_DtsUhd::ExtractExplicitObjectsLists(int Mask, int Index)
 {
+    Element_Begin1("ExtractExplicitObjectsLists");
     constexpr int8u Table[4] = {4, 8, 16, 32};
 
     for (int i=0; i<Index; i++)
         if ((Mask>>i)&1)
             if (SyncFrameFlag||ReadBits(FrameStart, FrameSize, &FrameBit, 1))
-                ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table);
+                ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table, "Temp");
 
+    Element_End0();
     return 0;
 }
 
 /* Table 6-15 p44, Table 6-16 p45 */
-int File_DtsUhd::ParseAudPresParams()
+int File_DtsUhd::ResolveAudPresParams()
 {
+    Element_Begin1("ResolveAudPresParams");
     constexpr uint8_t Table[4] = {0, 2, 4, 5};
 
     if (SyncFrameFlag)
     {
-        if (FullChannelMixFlag)
+        if (FullChannelBasedMixFlag)
             NumAudioPres=1;
         else
-            NumAudioPres=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table)+1;
+            NumAudioPres=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table, "NumAudioPres") + 1;
         memset(Audio, 0, sizeof(Audio[0])*NumAudioPres);
     }
 
@@ -281,30 +312,31 @@ int File_DtsUhd::ParseAudPresParams()
     {
         if (SyncFrameFlag)
         {
-            if (FullChannelMixFlag)
+            if (FullChannelBasedMixFlag)
                 Audio[AudioIndex].Selectable=1;
             else
-                Audio[AudioIndex].Selectable=ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+                Audio[AudioIndex].Selectable=ReadBits(FrameStart, FrameSize, &FrameBit, 1, "Audio[AudioIndex].Selectable?");
         }
 
         if (Audio[AudioIndex].Selectable)
         {
             if (SyncFrameFlag)
             {
-                int ReadMask = (AudioIndex>0)?ReadBits(FrameStart, FrameSize, &FrameBit, AudioIndex):0;
+                int ReadMask = (AudioIndex>0)?ReadBits(FrameStart, FrameSize, &FrameBit, AudioIndex, "ReadMask?") : 0;
                 Audio[AudioIndex].Mask = 0;
                 for (int i = 0; ReadMask; i++, ReadMask>>=1)
                     if (ReadMask&1)
-                        Audio[AudioIndex].Mask|=ReadBits(FrameStart, FrameSize, &FrameBit, 1)<<i;
+                        Audio[AudioIndex].Mask|=ReadBits(FrameStart, FrameSize, &FrameBit, 1, "Audio[AudioIndex].Mask?") << i;
             }
 
-            if (ParseExplicitObjectLists(Audio[AudioIndex].Mask, AudioIndex))
+            if (ExtractExplicitObjectsLists(Audio[AudioIndex].Mask, AudioIndex))
                 return 1;
         }
         else
             Audio[AudioIndex].Mask=0;
     }
 
+    Element_End0();
     return 0;
 }
 
@@ -364,47 +396,49 @@ void File_DtsUhd::DecodeVersion()
 }
 
 /* Table 6-12 p 40 */
-int File_DtsUhd::ParseStreamParams()
+int File_DtsUhd::ExtractStreamParams()
 {
+    Element_Begin1("ExtractStreamParams");
     static const uint32_t TableBaseDuration[4] = {512, 480, 384, 0};
     static const uint32_t TableClockRate[4] = {32000, 44100, 48000, 0};
 
     if (SyncFrameFlag)
-        FullChannelMixFlag=ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+        FullChannelBasedMixFlag=ReadBits(FrameStart, FrameSize, &FrameBit, 1, "FullChannelMixFlag");
 
-    if (SyncFrameFlag||!FullChannelMixFlag)
+    if (SyncFrameFlag||!FullChannelBasedMixFlag)
         if (CheckCRC(FrameStart, FTOCBytes))
             return 1;
 
     if (SyncFrameFlag)
     {
-        if (FullChannelMixFlag)
+        if (FullChannelBasedMixFlag)
             MajorVersion=2;
         else
             DecodeVersion();
 
-        FrameDuration=TableBaseDuration[ReadBits(FrameStart, FrameSize, &FrameBit, 2)];
-        FrameDurationCode=ReadBits(FrameStart, FrameSize, &FrameBit, 3);
+        FrameDuration=TableBaseDuration[ReadBits(FrameStart, FrameSize, &FrameBit, 2, "FrameDuration")];
+        FrameDurationCode=ReadBits(FrameStart, FrameSize, &FrameBit, 3, "FrameDurationCode");
         FrameDuration*=FrameDurationCode+1;
-        ClockRate=TableClockRate[ReadBits(FrameStart, FrameSize, &FrameBit, 2)];
+        ClockRate=TableClockRate[ReadBits(FrameStart, FrameSize, &FrameBit, 2, "ClockRate")];
         if (FrameDuration==0 || ClockRate==0)
             return 1; /* bitstream error */
 
-        FrameBit+=36*ReadBits(FrameStart, FrameSize, &FrameBit, 1);  /* bTimeStampPresent */
-        SampleRateMod=ReadBits(FrameStart, FrameSize, &FrameBit, 2);
+        FrameBit+=36*ReadBits(FrameStart, FrameSize, &FrameBit, 1, "TimeStampPresent");
+        SampleRateMod=ReadBits(FrameStart, FrameSize, &FrameBit, 2, "SampleRateMod");
         SampleRate=ClockRate*(1<<SampleRateMod);
 
-        if (FullChannelMixFlag)
+        if (FullChannelBasedMixFlag)
         {
-            InteractiveObjLimitsPresent=0;
+            InteractObjLimitsPresent=0;
         }
         else
         {
             FrameBit+=1;  /* reserved flag. */
-            InteractiveObjLimitsPresent = ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+            InteractObjLimitsPresent = ReadBits(FrameStart, FrameSize, &FrameBit, 1, "InteractObjLimitsPresent");
         }
     }
 
+    Element_End0();
     return 0;
 }
 
@@ -453,30 +487,31 @@ int File_DtsUhd::NaviFindIndex(int DesiredIndex, int* ListIndex)
 }
 
 /* Table 6-20 p48 */
-int File_DtsUhd::ParseChunkNavi()
+int File_DtsUhd::ExtractChunkNaviData()
 {
+    Element_Begin1("ExtractChunkNaviData");
     constexpr int8u Table2468[4] = {2, 4, 6, 8};
     constexpr int8u TableAudioChunkSizes[4] = {9, 11, 13, 16};
     constexpr int8u TableChunkSizes[4] = {6, 9, 12, 15};
 
     ChunkBytes = 0;
-    if (FullChannelMixFlag)
+    if (FullChannelBasedMixFlag)
         ChunkList.resize(SyncFrameFlag);
     else
-        ChunkList.resize(ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468));
+        ChunkList.resize(ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468, "Num_MD_Chunks"));
 
     for (auto& Chunk : ChunkList)
     {
-        ChunkBytes+=Chunk.Bytes=ReadBitsVar(FrameStart, FrameSize, &FrameBit, TableChunkSizes);
-        if (FullChannelMixFlag)
+        ChunkBytes+=Chunk.Bytes=ReadBitsVar(FrameStart, FrameSize, &FrameBit, TableChunkSizes, "MDChunkSize");
+        if (FullChannelBasedMixFlag)
             Chunk.CrcFlag=false;
         else
-            Chunk.CrcFlag=ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+            Chunk.CrcFlag=ReadBits(FrameStart, FrameSize, &FrameBit, 1, "MDChunkCRCFlag");
     }
 
     int AudioChunks=1;
-    if (!FullChannelMixFlag)
-        AudioChunks=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468);
+    if (!FullChannelBasedMixFlag)
+        AudioChunks=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468, "Num_Audio_Chunks");
 
     if (!SyncFrameFlag)
     {
@@ -489,8 +524,8 @@ int File_DtsUhd::ParseChunkNavi()
     for (int i=0; i<AudioChunks; i++)
     {
         int Index=0;
-        if (!FullChannelMixFlag)
-            Index=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468);
+        if (!FullChannelBasedMixFlag)
+            Index=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468, "AudioChunkIndex");
 
         if (NaviFindIndex(Index, &Index))
             return 1;
@@ -498,24 +533,26 @@ int File_DtsUhd::ParseChunkNavi()
         bool IdPresent=false;
         if (SyncFrameFlag)
             IdPresent=true;
-        else if (!FullChannelMixFlag)
-            IdPresent=ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+        else if (!FullChannelBasedMixFlag)
+            IdPresent=ReadBits(FrameStart, FrameSize, &FrameBit, 1, "ACIDsPresentFlag");
         if (IdPresent)
-            NaviList[Index].Id=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468);
-        NaviList[Index].Bytes=ReadBitsVar(FrameStart, FrameSize, &FrameBit, TableAudioChunkSizes);
+            NaviList[Index].Id=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2468, "AudioChunkID");
+        NaviList[Index].Bytes=ReadBitsVar(FrameStart, FrameSize, &FrameBit, TableAudioChunkSizes, "AudioChunkSize");
         ChunkBytes+=NaviList[Index].Bytes;
     }
 
     NaviPurge();
 
+    Element_End0();
     return 0;
 }
 
 
 /* Table 6-6 */
-int File_DtsUhd::ParseMDObjectList(MD01* MD01)
+int File_DtsUhd::ExtractMDChunkObjIDList(MD01* MD01)
 {
-    if (FullChannelMixFlag)
+    Element_Begin1("ExtractMDChunkObjIDList");
+    if (FullChannelBasedMixFlag)
     {
         MD01->ObjectListCount=1;
         MD01->ObjectList[0]=256;
@@ -523,25 +560,28 @@ int File_DtsUhd::ParseMDObjectList(MD01* MD01)
     else
     {
         constexpr int8u Table[4] = {3, 4, 6, 8};
-        MD01->ObjectListCount = ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table);
+        MD01->ObjectListCount = ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table, "ObjectListCount?");
         for (int i=0; i<MD01->ObjectListCount; i++)
         {
-            int n = ReadBits(FrameStart, FrameSize, &FrameBit, 1)?8:4;
-            MD01->ObjectList[i]=ReadBits(FrameStart, FrameSize, &FrameBit, n);
+            int n = ReadBits(FrameStart, FrameSize, &FrameBit, 1, "n?") ? 8 : 4;
+            MD01->ObjectList[i]=ReadBits(FrameStart, FrameSize, &FrameBit, n, "ObjectList[i]?");
         }
     }
+    Element_End0();
 
     return 0;
 }
 
 /* Table 7-9 */
-void File_DtsUhd::SkipMPParamSet(MD01* MD01, bool NominalFlag)
+void File_DtsUhd::ExtractLTLMParamSet(MD01* MD01, bool NominalFlag)
 {
+    Element_Begin1("ExtractLTLMParamSet");
     ReadBitsMD01(MD01, 6); /* rLoudness */
     if (!NominalFlag)
         ReadBitsMD01(MD01, 5);
 
     ReadBitsMD01(MD01, NominalFlag?2:4);
+    Element_End0();
 }
 
 /* Table 7-8 */
@@ -550,19 +590,19 @@ int File_DtsUhd::ParseStaticMDParams(MD01* MD01, bool OnlyFirst)
     bool NominalFlag=true;
     int LoudnessSets=1;
 
-    if (FullChannelMixFlag==0)
+    if (FullChannelBasedMixFlag==0)
         NominalFlag=ReadBitsMD01(MD01, 1);
 
     if (NominalFlag)
     {
-        if (!FullChannelMixFlag)
+        if (!FullChannelBasedMixFlag)
             LoudnessSets=ReadBitsMD01(MD01, 1)?3:1;
     }
     else
         LoudnessSets = ReadBitsMD01(MD01, 4)+1;
 
     for (int i=0; i<LoudnessSets; i++)
-        SkipMPParamSet(MD01, NominalFlag);
+        ExtractLTLMParamSet(MD01, NominalFlag);
 
     if (OnlyFirst)
         return 0;
@@ -581,7 +621,7 @@ int File_DtsUhd::ParseStaticMDParams(MD01* MD01, bool OnlyFirst)
             ReadBitsMD01(MD01, 6*6);
     }
 
-    if (!FullChannelMixFlag)
+    if (!FullChannelBasedMixFlag)
         MD01->Bit=MD01->StaticMDPackets*MD01->StaticMDPacketSize;
     MD01->StaticMDExtracted=true;
 
@@ -589,29 +629,30 @@ int File_DtsUhd::ParseStaticMDParams(MD01* MD01, bool OnlyFirst)
 }
 
 /* Table 7-7 */
-int File_DtsUhd::ParseMultiFrameMd(MD01* MD01)
+int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
 {
+    Element_Begin1("ExtractMultiFrameDistribStaticMD");
     static const uint8_t Table1[4] = {0, 6, 9, 12};
     static const uint8_t Table2[4] = {5, 7, 9, 11};
 
     if (SyncFrameFlag)
     {
         MD01->PacketsAcquired=false;
-        if (FullChannelMixFlag)
+        if (FullChannelBasedMixFlag)
         {
             MD01->StaticMDPackets=1;
             MD01->StaticMDPacketSize=0;
         }
         else
         {
-            MD01->StaticMDPackets=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table1)+1;
-            MD01->StaticMDPacketSize=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2)+3;
+            MD01->StaticMDPackets=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table1, "NumStaticMDPackets")+1;
+            MD01->StaticMDPacketSize=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table2, "StaticMDPacketByteSize")+3;
         }
 
         MD01->Buffer.resize(MD01->StaticMDPackets*MD01->StaticMDPacketSize);
         MD01->Bit=0;
         if (MD01->StaticMDPackets>1)
-            MD01->StaticMDUpdateFlag=ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+            MD01->StaticMDUpdateFlag=ReadBits(FrameStart, FrameSize, &FrameBit, 1, "StaticMDUpdateFlag?");
         else
             MD01->StaticMDUpdateFlag=1;
     }
@@ -620,7 +661,7 @@ int File_DtsUhd::ParseMultiFrameMd(MD01* MD01)
     {
         int n=MD01->PacketsAcquired*MD01->StaticMDPacketSize;
         for (int i = 0; i < MD01->StaticMDPacketSize; i++)
-            MD01->Buffer[n+i] = ReadBits(FrameStart, FrameSize, &FrameBit, 8);
+            MD01->Buffer[n+i] = ReadBits(FrameStart, FrameSize, &FrameBit, 8, "Buffer[n+i]?");
         MD01->PacketsAcquired++;
 
         if (MD01->PacketsAcquired==MD01->StaticMDPackets)
@@ -637,13 +678,14 @@ int File_DtsUhd::ParseMultiFrameMd(MD01* MD01)
         }
     }
 
+    Element_End0();
     return 0;
 }
 
 /* Return 1 if suitable, 0 if not.  Table 7-18.  OBJGROUPIDSTART=224 Sec 7.8.7 p75 */
-int File_DtsUhd::IsSuitableForRender(MD01* MD01, int ObjectId)
+int File_DtsUhd::CheckIfMDIsSuitableforImplObjRenderer(MD01* MD01, int ObjectId)
 {
-
+    Element_Begin1("CheckIfMDIsSuitableforImplObjRenderer");
     if (ObjectId >= 224 || ReadBits(FrameStart, FrameSize, &FrameBit, 1))
         return 1;
 
@@ -651,37 +693,40 @@ int File_DtsUhd::IsSuitableForRender(MD01* MD01, int ObjectId)
     constexpr int8u Table[4] = {8, 10, 12, 14};
     FrameBit+=1;
     FrameBit+=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table);
-
+    Element_End0();
     return 0;
 }
 
 /* Table 7-26 */
-void File_DtsUhd::ParseChMaskParams(MD01* MD01, MDObject* Object)
+void File_DtsUhd::ExtractChMaskParams(MD01* MD01, MDObject* Object)
 {
+    Element_Begin1("ExtractChMaskParams");
     constexpr int MaskTable[14] = /* Table 7-27 */
     {
         0x000001, 0x000002, 0x000006, 0x00000F, 0x00001F, 0x00084B, 0x00002F,
         0x00802F, 0x00486B, 0x00886B, 0x03FBFB, 0x000003, 0x000007, 0x000843,
     };
 
-    const int Index=Object->RepType==REP_TYPE_BINAURAL?1:ReadBits(FrameStart, FrameSize, &FrameBit, 4);
+    const int Index=Object->RepType==REP_TYPE_BINAURAL?1:ReadBits(FrameStart, FrameSize, &FrameBit, 4, "Index?");
     if (Index==14)
-        Object->ChActivityMask=ReadBits(FrameStart, FrameSize, &FrameBit, 16);
+        Object->ChActivityMask=ReadBits(FrameStart, FrameSize, &FrameBit, 16, "ChActivityMask?");
     else if (Index==15)
-        Object->ChActivityMask=ReadBits(FrameStart, FrameSize, &FrameBit, 32);
+        Object->ChActivityMask=ReadBits(FrameStart, FrameSize, &FrameBit, 32, "ChActivityMask?");
     else
         Object->ChActivityMask=MaskTable[Index];
+    Element_End0();
 }
 
 /* Table 7-22 */
-int File_DtsUhd::ParseObjectMetadata(MD01* MD01, MDObject* Object,
+int File_DtsUhd::ExtractObjectMetadat(MD01* MD01, MDObject* Object,
                                      bool StartFrameFlag, int ObjectId)
 {
+    Element_Begin1("ExtractObjectMetadat");
     FrameBit+=ObjectId!=256;
     if (StartFrameFlag)
     {
         bool ChMaskObjectFlag=false, Object3DMetadataFlag=false;
-        Object->RepType = ReadBits(FrameStart, FrameSize, &FrameBit, 3);
+        Object->RepType = ReadBits(FrameStart, FrameSize, &FrameBit, 3, "ObjRepresTypeIndex");
         switch (Object->RepType)
         {
             case REP_TYPE_BINAURAL:
@@ -715,16 +760,17 @@ int File_DtsUhd::ParseObjectMetadata(MD01* MD01, MDObject* Object,
                     FrameBit+=8;
 
                 /* Skip optional Object Interactive MD (Table 7-25). */
-                if (ReadBits(FrameStart, FrameSize, &FrameBit, 1) && InteractiveObjLimitsPresent)
+                if (ReadBits(FrameStart, FrameSize, &FrameBit, 1) && InteractObjLimitsPresent)
                     if (ReadBits(FrameStart, FrameSize, &FrameBit, 1))
                         FrameBit+=5+6*Object3DMetadataFlag;
             }
 
-            ParseChMaskParams(MD01, Object);
+            ExtractChMaskParams(MD01, Object);
         }
     }
 
     /* Skip rest of object */
+    Element_End0();
     return 0;
 }
 
@@ -734,22 +780,24 @@ int File_DtsUhd::ParseMD01(MD01 *MD01, int PresIndex)
 
     if (Audio[PresIndex].Selectable)
     {
-        for (int i=0; i<4; i++)  /* Table 7-5.  Scaling data. */
+        Element_Begin1("ExtractPresScalingParams");
+        for (int i = 0; i<4; i++)  /* Table 7-5.  Scaling data. */
             FrameBit+=5*ReadBits(FrameStart, FrameSize, &FrameBit, 1);
+        Element_End0();
 
-        if (ReadBits(FrameStart, FrameSize, &FrameBit, 1) && ParseMultiFrameMd(MD01))
+        if (ReadBits(FrameStart, FrameSize, &FrameBit, 1, "MFDistrStaticMDPresent") && ExtractMultiFrameDistribStaticMD(MD01))
             return 1;
     }
 
     /* Table 7-16: Object metadata. */
     memset(MD01->Object, 0, sizeof(MD01->Object));
-    if (!FullChannelMixFlag)
+    if (!FullChannelBasedMixFlag)
         FrameBit+=11*ReadBits(FrameStart, FrameSize, &FrameBit, 1);
 
     for (int i=0; i<MD01->ObjectListCount; i++)
     {
         int32u Id = MD01->ObjectList[i];
-        if (!IsSuitableForRender(MD01, Id))
+        if (!CheckIfMDIsSuitableforImplObjRenderer(MD01, Id))
             continue;
 
         MD01->Object[Id].PresIndex = PresIndex;
@@ -760,7 +808,7 @@ int File_DtsUhd::ParseMD01(MD01 *MD01, int PresIndex)
             StartFlag=MD01->Object[Id].Started=true;
         }
 
-        if ((Id<224||Id>255) && ParseObjectMetadata(MD01, MD01->Object+Id, StartFlag, Id))
+        if ((Id<224||Id>255) && ExtractObjectMetadat(MD01, MD01->Object+Id, StartFlag, Id))
             return 1;
 
         break;
@@ -770,36 +818,49 @@ int File_DtsUhd::ParseMD01(MD01 *MD01, int PresIndex)
 }
 
 /* Table 6-2 */
-int File_DtsUhd::ParseChunks()
+int File_DtsUhd::UnpackMDFrame()
 {
-
+    Element_Begin1("UnpackMDFrame");
     for (auto& Chunk : ChunkList)
     {
         int BitNext=FrameBit+Chunk.Bytes*8;
         if (Chunk.CrcFlag && CheckCRC(FrameStart+FrameBit/8, Chunk.Bytes))
             return 1;
 
-        int32u Id=ReadBits(FrameStart, FrameSize, &FrameBit, 8);
+        int32u Id=ReadBits(FrameStart, FrameSize, &FrameBit, 8, "MDChunkID");
         if (Id==1)
         {
-            constexpr int8u Table[4]={0, 2, 4, 4};
-            int PresIndex=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table);
+            constexpr int8u Table[4] = { 0, 2, 4, 4 };
+            int PresIndex=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table, "AudPresIndex");
             if (PresIndex>255)
+            {
+                Element_End0();
                 return 1;
+            }
             MD01* MD01=ChunkFindMD01(Id);
             if (MD01==nullptr)
                 MD01=ChunkAppendMD01(Id);
             if (MD01==nullptr)
+            {
+                Element_End0();
                 return 1;
-            if (ParseMDObjectList(MD01))
+            }
+            if (ExtractMDChunkObjIDList(MD01))
+            {
+                Element_End0();
                 return 1;
+            }
             if (ParseMD01(MD01, PresIndex))
+            {
+                Element_End0();
                 return 1;
+            }
         }
 
         FrameBit=BitNext;
     }
 
+    Element_End0();
     return 0;
 }
 
@@ -815,23 +876,25 @@ int File_DtsUhd::DtsUhd_Frame()
 
     FrameBit=0;
 
-    int32u SyncWord=ReadBits(FrameStart, FrameSize, &FrameBit, 32);
+    int32u SyncWord=ReadBits(FrameStart, FrameSize, &FrameBit, 32, "SyncWord");
     SyncFrameFlag=SyncWord==DTSUHD_SYNCWORD;
+    if (SyncFrameFlag)
+        Element_Info1("Key frame");
     if (SyncWord!=DTSUHD_SYNCWORD)
         return DTSUHD_NOSYNC;  //Invalid frame.
 
     constexpr int8u Table[4]={5, 8, 10, 12};
-    FTOCBytes=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table)+1;
+    FTOCBytes=ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table, "FTOCPayloadinBytes") + 1;
     if (FTOCBytes<5||FTOCBytes>=FrameSize)
         return DTSUHD_INCOMPLETE;  //Data buffer does not contain entire FTOC
 
-    if (ParseStreamParams())
+    if (ExtractStreamParams())
         return DTSUHD_INVALID_FRAME;
 
-    if (ParseAudPresParams())
+    if (ResolveAudPresParams())
         return DTSUHD_INVALID_FRAME;
 
-    if (ParseChunkNavi())  //AudioChunkTypes and payload sizes.
+    if (ExtractChunkNaviData())  //AudioChunkTypes and payload sizes.
         return DTSUHD_INVALID_FRAME;
 
     //At this point in the parsing, we can calculate the size of the frame.
@@ -841,7 +904,7 @@ int File_DtsUhd::DtsUhd_Frame()
 
     //Skip PBRSmoothParams (Table 6-26) and align to the chunks immediatelyfollowing the FTOC CRC.
     FrameBit=FTOCBytes*8;
-    if (ParseChunks())
+    if (UnpackMDFrame())
         return DTSUHD_INVALID_FRAME;
     UpdateDescriptor();
 
@@ -1153,13 +1216,35 @@ struct DTSUHD_ChannelMaskInfo DTSUHD_DecodeChannelMask(int32u ChannelMask)
 bool File_DtsUhd::CheckCurrentFrame(bool SyncFrame)
 {
     //Read length of CRC'd frame data and perform CRC check
+    auto Trace_Activated_Sav=Trace_Activated;
+    Trace_Activated=false; // Do not show trace while trying to sync
     constexpr int8u VbitsPayload[4]={5, 8, 10, 12}; //varbits decode table
     int Bit=Buffer_Offset*8+32;
     int32u FtocSize=ReadBitsVar(Buffer, Buffer_Size, &Bit, VbitsPayload)+1;
     if (SyncFrame)
-        FullChannelMixFlag=ReadBits(Buffer, Buffer_Size, &Bit, 1);
-    bool HasCRC=SyncFrame||FullChannelMixFlag;
-    return HasCRC && CheckCRC(Buffer+Buffer_Offset, FtocSize)==0;
+        FullChannelBasedMixFlag=ReadBits(Buffer, Buffer_Size, &Bit, 1);
+    Trace_Activated=Trace_Activated_Sav;
+    bool HasCRC=SyncFrame||FullChannelBasedMixFlag;
+    return !HasCRC || CheckCRC(Buffer+Buffer_Offset, FtocSize)==0;
+    /*
+    auto Trace_Activated_Sav = Trace_Activated;
+    Trace_Activated=false; // Do not show trace while trying to sync
+    constexpr int8u VbitsPayload[4]={5, 8, 10, 12}; //varbits decode table
+    auto Buffer_Offset_Sav=Buffer_Offset;
+    Buffer_Offset+=4; // SyncWord
+    BS_Begin();
+    int32u FtocSize;
+    Get_VR(VbitsPayload, FtocSize,                              "FTOCPayloadinBytes");
+    FtocSize++;
+    if (SyncFrame)
+        Get_SB(FullChannelBasedMixFlag,                         "FullChannelBasedMixFlag");
+    BS_End();
+    Trace_Activated=Trace_Activated_Sav;
+    Buffer_Offset=Buffer_Offset_Sav;
+    bool HasCRC=SyncFrame||FullChannelBasedMixFlag;
+    return !HasCRC || CheckCRC(Buffer+Buffer_Offset, FtocSize)==0;
+    */
+
 }
 
 //***************************************************************************
@@ -1290,32 +1375,21 @@ bool File_DtsUhd::Synchronize()
 {
     while (Buffer_Offset+4<=Buffer_Size)
     {
-        if (!FrameSynchPoint_Test())
+        if (!FrameSynchPoint_Test(false))
             return false; //Need more data
         if (Synched)
             break;
         Buffer_Offset++;
     }
 
-    FrameStart=Buffer+Buffer_Offset;
-    FrameSize=4;
-    while (Buffer_Offset+FrameSize+4<=Buffer_Size)
-    {
-        int32u SyncWord=CC4(FrameStart+FrameSize);
-        if (SyncWord==DTSUHD_SYNCWORD||SyncWord==DTSUHD_NONSYNCWORD)
-            if (CheckCurrentFrame(SyncWord==DTSUHD_SYNCWORD))
-                return true;
-        FrameSize++;
-    }
-
-    return false;
+    return true;
 }
 
 //---------------------------------------------------------------------------
 bool File_DtsUhd::Synched_Test()
 {
      //Quick test of synchro
-    if (!FrameSynchPoint_Test())
+    if (!FrameSynchPoint_Test(true))
         return false; //Need more data
     if (!Synched)
         return true;
@@ -1341,32 +1415,66 @@ void File_DtsUhd::Data_Parse()
 {
     FILLING_BEGIN();
         Element_Name("Frame");
+        Element_Info1(Frame_Count);
         if (DtsUhd_Frame()==DTSUHD_OK)
             Skip_XX(FrameSize, "data");
-        Accept("DTS-UHD");
-        Fill("DTS-UHD");
-        Finish("DTS-UHD");
+        if (!Status[IsAccepted])
+            Accept("DTS-UHD");
+        Frame_Count++;
+        if (Frame_Count>=Frame_Count_Valid)
+        {
+            Fill("DTS-UHD");
+            Finish("DTS-UHD");
+        }
     FILLING_END();
 }
 
 //---------------------------------------------------------------------------
-bool File_DtsUhd::FrameSynchPoint_Test()
+bool File_DtsUhd::FrameSynchPoint_Test(bool AcceptNonSync)
 {
+    FrameStart=nullptr;
+    FrameStart=0;
+
     if (Buffer_Offset+16>Buffer_Size)
         return false; //Must wait for more data
 
     int32u SyncWord=CC4(Buffer+Buffer_Offset);
-    if (SyncWord!=DTSUHD_SYNCWORD)
+    if (SyncWord!=DTSUHD_SYNCWORD && (!AcceptNonSync || SyncWord!=DTSUHD_NONSYNCWORD))
     {
         Synched=false;
         return true; //Not a syncpoint, done
     }
 
-    Synched=CheckCurrentFrame(true);
+    Synched=CheckCurrentFrame(SyncWord==DTSUHD_SYNCWORD);
+
+    if (Synched)
+    {
+        FrameStart=Buffer+Buffer_Offset;
+        if (IsSub)
+        {
+            FrameSize=Element_Size;
+            return true; // We trust the container enough
+        }
+        FrameSize=4;
+        while (Buffer_Offset+FrameSize+4<=Buffer_Size)
+        {
+            int32u SyncWord=CC4(FrameStart+FrameSize);
+            if (SyncWord==DTSUHD_SYNCWORD||SyncWord==DTSUHD_NONSYNCWORD)
+            {
+                Buffer_Offset+=FrameSize;
+                bool IsOk=CheckCurrentFrame(SyncWord==DTSUHD_SYNCWORD);
+                Buffer_Offset-=FrameSize;
+                if (IsOk)
+                    return true;
+            }
+            FrameSize++;
+        }
+    }
+
     return true;
 }
 
 //---------------------------------------------------------------------------
 } //NameSpace
 
-#endif //MEDIAINFO_DTS_YES
+#endif //MEDIAINFO_DTSUHD_YES

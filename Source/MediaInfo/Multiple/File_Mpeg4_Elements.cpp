@@ -8078,6 +8078,16 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_udts()
             Fill(Stream_Audio, StreamPos_Last, Audio_ChannelPositions_String2, ChannelMaskInfo.ChannelPositions2Text);
         }
         #endif
+        #ifdef MEDIAINFO_DTSUHD_YES
+            if (Streams[moov_trak_tkhd_TrackID].Parsers.empty())
+            {
+                auto Parser=new File_DtsUhd;
+                Open_Buffer_Init(Parser);
+                Parser->Frame_Count_Valid=2;
+                Streams[moov_trak_tkhd_TrackID].Parsers.push_back(Parser);
+                mdat_MustParse=true; //Data is in MDAT
+            }
+        #endif
     FILLING_END();
 }
 

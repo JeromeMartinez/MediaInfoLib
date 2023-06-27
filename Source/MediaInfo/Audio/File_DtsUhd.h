@@ -60,7 +60,7 @@ protected :
     void Header_Parse();
     void Data_Parse();
 
-    bool FrameSynchPoint_Test();
+    bool FrameSynchPoint_Test(bool AcceptNonSync);
 
     struct MDObject
     {
@@ -123,29 +123,29 @@ protected :
     MDObject* FindDefaultAudio();
     void ExtractObjectInfo(MDObject*);
     void UpdateDescriptor();
-    int ParseExplicitObjectLists(int Mask, int Index);
-    int ParseAudPresParams();
+    int ExtractExplicitObjectsLists(int Mask, int Index);
+    int ResolveAudPresParams();
     void DecodeVersion();
-    int ParseStreamParams();
+    int ExtractStreamParams();
     void NaviPurge();
     int NaviFindIndex(int DesiredIndex, int* ListIndex);
-    int ParseChunkNavi();
-    int ParseMDObjectList(MD01*);
-    void SkipMPParamSet(MD01*, bool NominalFlag);
+    int ExtractChunkNaviData();
+    int ExtractMDChunkObjIDList(MD01*);
+    void ExtractLTLMParamSet(MD01*, bool NominalFlag);
     int ParseStaticMDParams(MD01*, bool OnlyFirst);
-    int ParseMultiFrameMd(MD01*);
-    int IsSuitableForRender(MD01*, int ObjectId);
-    void ParseChMaskParams(MD01*, MDObject*);
-    int ParseObjectMetadata(MD01*, MDObject*, bool, int);
+    int ExtractMultiFrameDistribStaticMD(MD01*);
+    int CheckIfMDIsSuitableforImplObjRenderer(MD01*, int ObjectId);
+    void ExtractChMaskParams(MD01*, MDObject*);
+    int ExtractObjectMetadat(MD01*, MDObject*, bool, int);
     int ParseMD01(MD01*, int PresIndex);
-    int ParseChunks();
+    int UnpackMDFrame();
     bool CheckCurrentFrame(bool SyncFrame);
     int DtsUhd_Frame();
 
     UHDAudio Audio[256];
     UHDFrameDescriptor FrameDescriptor;
-    bool FullChannelMixFlag;
-    bool InteractiveObjLimitsPresent;
+    bool FullChannelBasedMixFlag;
+    bool InteractObjLimitsPresent;
     bool SyncFrameFlag;
     const int8u* FrameStart;
     int ChunkBytes;
@@ -156,7 +156,7 @@ protected :
     int FrameDurationCode;
     int FrameRate;
     int MajorVersion;
-    int NumAudioPres;
+    int32u NumAudioPres;
     int SampleRate;
     int SampleRateMod;
     int32u FrameSize;
@@ -164,6 +164,11 @@ protected :
     std::vector<MD01> MD01List;
     std::vector<NAVI> NaviList;
     std::vector<UHDChunk> ChunkList;
+
+    //Helpers
+    int32u ReadBits(const int8u* Buffer, int Size, int* Bit, int Count, const char* Name =nullptr);
+    int32u ReadBitsVar(const int8u* Buffer, int Size, int* Bit, const uint8_t Table[], const char* Name =nullptr);
+    void Get_VR(const uint8_t Table[], int32u& Info, const char* Name);
 };
 
 } //NameSpace
