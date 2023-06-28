@@ -36,11 +36,8 @@ using namespace std;
 namespace MediaInfoLib
 {
 
-#define CHUNK_AUPR_HDR 0x415550522D484452LL
-#define CHUNK_DTSHDHDR 0x4454534844484452LL
-#define CHUNK_STRMDATA 0x5354524D44415441LL
-#define DTSUHD_NONSYNCWORD 0x71C442E8
-#define DTSUHD_SYNCWORD    0x40411BF2
+static constexpr int32u DTSUHD_NONSYNCWORD=0x71C442E8;
+static constexpr int32u DTSUHD_SYNCWORD=0x40411BF2;
 
 /* Return codes from dtsuhd_frame */
 enum DTSUHDStatus {
@@ -960,18 +957,6 @@ int File_DtsUhd::Frame()
     return DTSUHD_OK;
 }
 
-//---------------------------------------------------------------------------
-const char* FrameRateTable[8]=
-{
-    "Not Indicated",
-    "23.97",
-    "24.00",
-    "25.00",
-    "29.97 DROP",
-    "29.97",
-    "30.00 DROP",
-    "30.00",
-};
 const int32u FrequencyCodeTable[2]={44100, 48000};
 const char* RepresentationTypeTable[8]=
 {
@@ -1297,7 +1282,7 @@ bool File_DtsUhd::CheckCurrentFrame()
 
 //---------------------------------------------------------------------------
 File_DtsUhd::File_DtsUhd()
-:File__Analyze()
+:File_Dts_Common()
 {
     //Configuration
     ParserName="DtsUhd";
@@ -1312,75 +1297,18 @@ File_DtsUhd::File_DtsUhd()
     Buffer_TotalBytes_FirstSynched_Max=32*1024;
     PTS_DTS_Needed=true;
     StreamSource=IsStream;
-
-    //In
-    Frame_Count_Valid=0;
-}
-
-//---------------------------------------------------------------------------
-bool File_DtsUhd::FileHeader_Begin()
-{
-    //Must have enough buffer for having header
-    if (Buffer_Size<8)
-        return false; //Must wait for more data
-
-    //False positives detection: Detect WAV files, the parser can't detect it easily, there is only 70 bytes of beginning for saying WAV
-    switch (CC4(Buffer))
-    {
-        case 0x52494646 : //"RIFF"
-        case 0x000001FD : //MPEG-PS private
-                            Finish("DTSUHD");
-                            return false;
-        default         :   ;
-    }
-
-    //DTSHDHDR AUPR-HDR has number of audio frames, needed to compute duration
-    if (CC8(Buffer)==CHUNK_DTSHDHDR)
-    {
-        bool Done=false;
-        while (Buffer_Offset+16 < Buffer_Size)
-        {
-            int64u name = CC8(Buffer+Buffer_Offset);
-            int64u size = CC8(Buffer+Buffer_Offset+8);
-            Buffer_Offset+=16;
-            if (Buffer_Offset+10>=Buffer_Size)
-                return false;
-            if (name==CHUNK_DTSHDHDR)
-                FrameRate=CC1(Buffer+Buffer_Offset+9);
-            else if (name==CHUNK_AUPR_HDR)
-                FramesTotal=CC4(Buffer+Buffer_Offset+6);
-            else if (name==CHUNK_STRMDATA)
-                Done=true;
-            if (Done)
-                break;
-            Buffer_Offset+=size;
-        }
-        if (!Done)
-            return false;
-    }
-    else
-    {
-        FrameRate=0;
-        FramesTotal=0;
-    }
-
-    //All should be OK...
-    if (!Frame_Count_Valid)
-        Frame_Count_Valid=Config->ParseSpeed>=0.3?32:(IsSub?1:2);
-    return true;
 }
 
 //---------------------------------------------------------------------------
 void File_DtsUhd::Streams_Fill()
 {
-    if (SampleRate==0||FrameDuration==0)
-        return;
-
     DTSUHD_ChannelMaskInfo ChannelMaskInfo = DTSUHD_DecodeChannelMask(FrameDescriptor.ChannelMask);
-    int32u FrameDuration=512<<FrameDurationCode;
-    int32u MaxPayload=2048<<FrameDescriptor.MaxPayloadCode;
-    float32 AudioDuration = 1000.0f * FramesTotal * FrameDescriptor.SampleCount / SampleRate;
-    float32 BitRate_Max = 8.0f * MaxPayload * SampleRate / FrameDuration;
+    float32 BitRate_Max=0;
+    if (FrameDuration && Retrieve_Const(Stream_Audio, 0, Audio_BitRate_Maximum).empty()) // Only if not provided by header
+    {
+        int32u MaxPayload=2048<<FrameDescriptor.MaxPayloadCode;
+        BitRate_Max = 8.0f * MaxPayload * SampleRate / FrameDuration;
+    }
     std::string AudioCodec="dtsx", ProfileString="DTS:X P2";
     AudioCodec.back()+=FrameDescriptor.DecoderProfileCode > 0;
     ProfileString.back()+=FrameDescriptor.DecoderProfileCode;
@@ -1389,21 +1317,17 @@ void File_DtsUhd::Streams_Fill()
     Fill(Stream_General, 0, General_OverallBitRate_Mode, "VBR");
 
     Stream_Prepare(Stream_Audio);
-    Fill(Stream_Audio, 0, Audio_BitRate_Maximum, BitRate_Max, 0, true);
+    if (BitRate_Max)
+        Fill(Stream_Audio, 0, Audio_BitRate_Maximum, BitRate_Max, 0, true);
     Fill(Stream_Audio, 0, Audio_BitRate_Mode, "VBR", Unlimited, true, true);
     Fill(Stream_Audio, 0, Audio_Codec, AudioCodec);
-    if (AudioDuration>0.0f)
-        Fill(Stream_Audio, 0, Audio_Duration, AudioDuration);
     Fill(Stream_Audio, 0, Audio_Format, "DTS-UHD");
     Fill(Stream_Audio, 0, Audio_Format_Commercial_IfAny, ProfileString);
     Fill(Stream_Audio, 0, Audio_Format_Profile, FrameDescriptor.DecoderProfileCode + 2);
     Fill(Stream_Audio, 0, Audio_Format_Settings, RepresentationTypeTable[FrameDescriptor.RepType]);
-    if (FramesTotal)
-        Fill(Stream_Audio, 0, Audio_FrameCount, FramesTotal);
-    if (FrameRate<sizeof(FrameRateTable)/sizeof(FrameRateTable[0]))
-        Fill(Stream_Audio, 0, Audio_FrameRate, FrameRateTable[FrameRate]);
-    Fill(Stream_Audio, 0, Audio_SamplesPerFrame, FrameDuration);
-    Fill(Stream_Audio, 0, Audio_SamplingRate, SampleRate);
+    Fill(Stream_Audio, 0, Audio_SamplesPerFrame, FrameDescriptor.SampleCount, 10, true);
+    if (SampleRate)
+        Fill(Stream_Audio, 0, Audio_SamplingRate, SampleRate);
 
     if (FrameDescriptor.ChannelMask)
     {
@@ -1436,7 +1360,11 @@ bool File_DtsUhd::Synched_Test()
     if (!FrameSynchPoint_Test(true))
         return false; //Need more data
     if (!Synched)
+    {
+        if (Stream_Offset_Max!=-1 && File_Offset+Buffer_Offset==Stream_Offset_Max && File_Size!=-1)
+            Synched=true; // It is the file footer
         return true;
+    }
 
     //We continue
     return true;
@@ -1472,7 +1400,15 @@ void File_DtsUhd::Data_Parse()
         if (Frame_Count>=Frame_Count_Valid)
         {
             Fill("DTS-UHD");
-            Finish("DTS-UHD");
+
+            //No more need data
+            if (!IsSub && Config->ParseSpeed<1.0)
+            {
+                if (Stream_Offset_Max!=-1)
+                    GoTo(Stream_Offset_Max);
+                else
+                    Finish("DTS");
+            }
         }
     FILLING_END();
 }
@@ -1480,9 +1416,6 @@ void File_DtsUhd::Data_Parse()
 //---------------------------------------------------------------------------
 bool File_DtsUhd::FrameSynchPoint_Test(bool AcceptNonSync)
 {
-    FrameStart=nullptr;
-    FrameStart=0;
-
     if (Buffer_Offset+16>Buffer_Size)
         return false; //Must wait for more data
 
@@ -1497,7 +1430,6 @@ bool File_DtsUhd::FrameSynchPoint_Test(bool AcceptNonSync)
 
     if (Synched)
     {
-        FrameStart=Buffer+Buffer_Offset;
         FrameSize=4;
         if (IsSub)
         {
@@ -1506,7 +1438,7 @@ bool File_DtsUhd::FrameSynchPoint_Test(bool AcceptNonSync)
         }
         while (Buffer_Offset+FrameSize+4<=Buffer_Size)
         {
-            int32u SyncWord=CC4(FrameStart+FrameSize);
+            int32u SyncWord=CC4(Buffer+Buffer_Offset+FrameSize);
             if (SyncWord==DTSUHD_SYNCWORD||SyncWord==DTSUHD_NONSYNCWORD)
             {
                 Buffer_Offset+=FrameSize;

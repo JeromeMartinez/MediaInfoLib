@@ -8048,8 +8048,6 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_udts()
     else if (Element_Offset<Element_Size)
         Skip_XX(Element_Size-Element_Size,                      "Unknown");
 
-    if (RepresentationType==3) //Binarual is always two channels
-        ChannelMask=2;
     int16u FrameDuration = 512 << FrameDurationCode;
     int32u MaxPayload = 2048 << MaxPayloadCode;
     #if defined(MEDIAINFO_DTSUHD_YES)

@@ -10,10 +10,7 @@
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
-#include "MediaInfo/File__Analyze.h"
-#ifdef ES
-   #undef ES //Solaris defines this somewhere
-#endif
+#include "MediaInfo/Audio/File_Dts.h" // Should be File__Analyze.h but we need DTSHDHDR parsing
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
@@ -35,21 +32,15 @@ struct DTSUHD_ChannelMaskInfo
 
 struct DTSUHD_ChannelMaskInfo DTSUHD_DecodeChannelMask(int32u ChannelMask);
 
-class File_DtsUhd : public File__Analyze
+class File_DtsUhd : public File_Dts_Common
 {
 public :
-    //In
-    int64u Frame_Count_Valid;
-
     //Constructor/Destructor
     File_DtsUhd();
 
 protected :
     //Streams management
     void Streams_Fill();
-
-    //Buffer - File header
-    bool FileHeader_Begin();
 
     //Buffer - Synchro
     bool Synchronize();
@@ -148,20 +139,14 @@ protected :
     bool FullChannelBasedMixFlag;
     bool InteractObjLimitsPresent;
     bool SyncFrameFlag;
-    const int8u* FrameStart;
     int32u ChunkBytes;
     int ClockRateInHz;
     int32u FTOCPayloadinBytes;
-    int FrameBit;
     int FrameDuration;
-    int FrameDurationCode;
-    int FrameRate;
     int8u StreamMajorVerNum;
     int32u NumAudioPres;
     int SampleRate;
-    int SampleRateMod;
     int32u FrameSize;
-    int32u FramesTotal;
     std::vector<MD01> MD01List;
     std::vector<audio_chunk> Audio_Chunks;
     std::vector<md_chunk> MD_Chunks;
