@@ -357,7 +357,7 @@ int File_DtsUhd::ResolveAudPresParams()
                     if (DepAuPresMask&1)
                     {
                         bool DepAuPresMask;
-                        Get_SB (DepAuPresMask,                  "DepAuPresMask");
+                        Get_SB (DepAuPresMask,                  "DepAuPresExplObjListPresMask");
                         AudPresParam[AuPresInd].DepAuPresMask|=DepAuPresMask<<i;
                     }
             }
@@ -781,8 +781,8 @@ void File_DtsUhd::ExtractChMaskParams(MD01* MD01, MDObject* Object)
         ChLayoutIndex=1;
     else
         Get_S1 (4, ChLayoutIndex,                               "ChLayoutIndex");
-    if (ChLayoutIndex>=14)
-        Get_S4 (11<<(ChLayoutIndex-14), Object->ChActivityMask, "ChActivityMask");
+    if (ChLayoutIndex>=14) // Index=14->read 16 bits, Index=15->read 32 bits
+        Get_S4 (16<<(ChLayoutIndex-14), Object->ChActivityMask, "ChActivityMask");
     else
         Object->ChActivityMask=MaskTable[ChLayoutIndex];
     Element_End0();
@@ -934,7 +934,7 @@ int File_DtsUhd::UnpackMDFrame()
             case 1 : UnpackMDFrame_1(MDChunkID); break;
         }
         if (End>Element_Offset)
-            Skip_XX(MDChunk.MDChunkSize,                        "(Unknown)");
+            Skip_XX(End-Element_Offset,                        "(Unknown)");
         Element_End0();
     }
 
@@ -1014,6 +1014,8 @@ int File_DtsUhd::Frame()
     FrameSize=FTOCPayloadinBytes+ChunkBytes;
 
     //Skip PBRSmoothParams (Table 6-26) and align to the chunks immediatelyfollowing the FTOC CRC.
+    if (Element_Offset<FTOCPayloadinBytes)
+        Skip_XX(FTOCPayloadinBytes-Element_Offset,              "PBRSmoothParams");
     if (UnpackMDFrame())
         return DTSUHD_INVALID_FRAME;
     UpdateDescriptor();
@@ -1346,6 +1348,8 @@ bool File_DtsUhd::CheckCurrentFrame()
     #endif
     Buffer_Offset-=4; // SyncWord
     Element_Offset=0; // Reset BitStream parser
+    if (FtocSize>Buffer_Size-Buffer_Offset)
+        return false;
     bool HasCRC=SyncFrame||!FullChannelBasedMixFlag;
     return !HasCRC || CheckCRC(Buffer+Buffer_Offset, FtocSize)==0;
 }
