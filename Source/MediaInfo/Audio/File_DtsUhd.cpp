@@ -70,39 +70,6 @@ static int CountBits(int32u Mask)
     return Count;
 }
 
-/** Read the indicated number (count) of bits, advancing 'bit' the number of
-    bits read.  On an end of buffer condition, return 0 and allow the bit
-    position to increment past the buffer end to prevent subsequent calls
-    from returning anything other than zero.
-*/
-int32u File_DtsUhd::ReadBits(const int8u* Buffer, int Size, int* Bit, int Count, const char* Name)
-{
-    int i;
-    int n;
-    int64u Value=0;
-
-    if (*Bit+Count<=Size*8)
-    {
-        /* Read the bytes containing the wanted bits into the result. */
-        Buffer+=*Bit>>3;
-        for (i=0, n=Count+(*Bit&7); i<n; i+=8)
-            Value=(Value<<8)|*Buffer++;
-
-        /* Left shift the unwanted high bits out of the result. */
-        Value<<=64-i+(*Bit&7);
-
-        /* Right align result, which now has no unwanted high bits. */
-        Value>>=64-Count;
-    }
-    *Bit+=Count;
-
-    #if MEDIAINFO_TRACE
-    if (Trace_Activated)
-        Param(Name?Name:"?", Value, Count);
-    #endif
-    return (int32u)Value;
-}
-
 /* Read from the MD01 buffer (if present), falling back to the frame buffer */
 int32u File_DtsUhd::ReadBitsMD01(MD01* MD01, int Bits, const char* Name)
 {
@@ -125,38 +92,6 @@ int32u File_DtsUhd::ReadBitsMD01(MD01* MD01, int Bits, const char* Name)
     is based on code in Table 5-2
 
 */
-int32u File_DtsUhd::ReadBitsVar(const int8u* Buffer, int Size, int *Bit, const uint8_t Table[], const char* Name)
-{
-    Element_Begin1(Name?Name:"?");
-    static const int BitsUsed[8] = {1, 1, 1, 1, 2, 2, 3, 3};
-    static const int IndexTable[8] = { 0, 0, 0, 0, 1, 1, 2, 3 };
-
-    int Code = ReadBits(Buffer, Size, Bit, 3, "index"); /* value range is [0, 7] */
-    *Bit-=3-BitsUsed[Code];
-    int Index=IndexTable[Code];
-    uint32_t Value=0;
-
-    if (Table[Index]>0)
-    {
-        for (int i=0; i<Index; i++)
-            Value+=1<<Table[i];
-        Value+=ReadBits(Buffer, Size, Bit, Table[Index], "addition");
-    }
-
-    Element_Info1(Value);
-    Element_End0();
-    return Value;
-}
-
-void File_DtsUhd::SkipBits(int* Bit, int Count, const char* Name)
-{
-    *Bit+=Count;
-    #if MEDIAINFO_TRACE
-    if (Trace_Activated && Count>0)
-        Param(Name, Ztring("(")+Ztring::ToZtring(Count)+Ztring(" bits)"));
-    #endif
-}
-
 void File_DtsUhd::Get_VR(const uint8_t Table[], int32u& Value, const char* Name)
 {
     Element_Begin1(Name?Name:"?");
@@ -614,11 +549,13 @@ int File_DtsUhd::ExtractMDChunkObjIDList(MD01* MD01)
     else
     {
         constexpr int8u Table[4] = {3, 4, 6, 8};
-        MD01->NumObjects = ReadBitsVar(FrameStart, FrameSize, &FrameBit, Table, "NumObjects");
+        Get_VR (Table, MD01->NumObjects,                        "NumObjects");
         for (int i=0; i<MD01->NumObjects; i++)
         {
-            int n = ReadBits(FrameStart, FrameSize, &FrameBit, 1, "NumBitsforObjID") ? 8 : 4;
-            MD01->ObjectList[i]=ReadBits(FrameStart, FrameSize, &FrameBit, n, "ObjectIDList[Obj]");
+            bool NumBitsforObjID_b;
+            Get_SB (NumBitsforObjID_b,                          "NumBitsforObjID");
+            int8u NumBitsforObjID=4<<((unsigned)NumBitsforObjID_b);
+            Get_S2 (NumBitsforObjID, MD01->ObjectList[i],       "ObjectIDList");
         }
     }
     Element_End0();

@@ -77,8 +77,8 @@ protected :
         bool StaticMetadataUpdtFlag=false;
         int Bit=0;
         int ChunkId=0;
-        int ObjectList[256]={0};
-        int NumObjects=0; /* Valid entries in 'ObjectList' array */
+        int16u ObjectList[256]={0};
+        int32u NumObjects=0; /* Valid entries in 'ObjectList' array */
         int32u NumStaticMDPackets=0;
         int PacketsAcquired=0;
         int32u StaticMDPacketByteSize=0;
@@ -167,9 +167,6 @@ protected :
     std::vector<md_chunk> MD_Chunks;
 
     //Helpers
-    int32u ReadBits(const int8u* Buffer, int Size, int* Bit, int Count, const char* Name =nullptr);
-    int32u ReadBitsVar(const int8u* Buffer, int Size, int* Bit, const uint8_t Table[], const char* Name =nullptr);
-    void SkipBits(int* Bit, int Count, const char* Name =nullptr);
     void Get_VR(const uint8_t Table[], int32u& Info, const char* Name);
     void Skip_VR(const uint8_t Table[], const char* Name) { int32u Info; Get_VR(Table, Info, Name); }
 };
