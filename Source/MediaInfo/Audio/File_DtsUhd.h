@@ -66,8 +66,8 @@ protected :
     {
         bool Started=false;  /* Object seen since last reset. */
         int PresIndex=0;
-        int RepType=0;
-        int ChActivityMask=0;
+        int8u RepType=0;
+        int32u ChActivityMask=0;
     };
 
     struct MD01
@@ -79,18 +79,18 @@ protected :
         int ChunkId=0;
         int ObjectList[256]={0};
         int NumObjects=0; /* Valid entries in 'ObjectList' array */
-        int NumStaticMDPackets=0;
+        int32u NumStaticMDPackets=0;
         int PacketsAcquired=0;
-        int StaticMDPacketByteSize=0;
+        int32u StaticMDPacketByteSize=0;
         std::vector<int8u> Buffer;
     };
 
-    struct NAVI
+    struct audio_chunk
     {
         bool Present=false;
-        int Bytes=0;
-        int Id=0;
-        int Index=0;
+        int32u AudioChunkSize=0;
+        int32u AudioChunkID=0;
+        int32u Index=0;
     };
 
     struct UHDAudPresParam
@@ -99,10 +99,10 @@ protected :
         int DepAuPresMask=0;
     };
 
-    struct UHDChunk
+    struct md_chunk
     {
-        bool CrcFlag=false;
-        int Bytes=0;
+        bool MDChunkCRCFlag=false;
+        int32u MDChunkSize=0;
     };
 
     struct UHDFrameDescriptor
@@ -128,7 +128,7 @@ protected :
     void DecodeVersion();
     int ExtractStreamParams();
     void NaviPurge();
-    int NaviFindIndex(int DesiredIndex, int* ListIndex);
+    int NaviFindIndex(int DesiredIndex, int32u* ListIndex);
     int ExtractChunkNaviData();
     int ExtractMDChunkObjIDList(MD01*);
     void ExtractLTLMParamSet(MD01*, bool NominalLD_DescriptionFlag);
@@ -139,8 +139,9 @@ protected :
     int ExtractObjectMetadata(MD01*, MDObject*, bool, int);
     int ParseMD01(MD01*, int PresIndex);
     int UnpackMDFrame();
-    bool CheckCurrentFrame(const int8u* FrameBegin, int32u FrameSize);
-    int DtsUhd_Frame();
+    void UnpackMDFrame_1(int8u MDChunkID);
+    bool CheckCurrentFrame();
+    int Frame();
 
     UHDAudPresParam AudPresParam[256];
     UHDFrameDescriptor FrameDescriptor;
@@ -148,28 +149,29 @@ protected :
     bool InteractObjLimitsPresent;
     bool SyncFrameFlag;
     const int8u* FrameStart;
-    int ChunkBytes;
+    int32u ChunkBytes;
     int ClockRateInHz;
-    int FTOCPayloadinBytes;
+    int32u FTOCPayloadinBytes;
     int FrameBit;
     int FrameDuration;
     int FrameDurationCode;
     int FrameRate;
-    int StreamMajorVerNum;
+    int8u StreamMajorVerNum;
     int32u NumAudioPres;
     int SampleRate;
     int SampleRateMod;
     int32u FrameSize;
     int32u FramesTotal;
     std::vector<MD01> MD01List;
-    std::vector<NAVI> NaviList;
-    std::vector<UHDChunk> ChunkList;
+    std::vector<audio_chunk> Audio_Chunks;
+    std::vector<md_chunk> MD_Chunks;
 
     //Helpers
     int32u ReadBits(const int8u* Buffer, int Size, int* Bit, int Count, const char* Name =nullptr);
     int32u ReadBitsVar(const int8u* Buffer, int Size, int* Bit, const uint8_t Table[], const char* Name =nullptr);
     void SkipBits(int* Bit, int Count, const char* Name =nullptr);
     void Get_VR(const uint8_t Table[], int32u& Info, const char* Name);
+    void Skip_VR(const uint8_t Table[], const char* Name) { int32u Info; Get_VR(Table, Info, Name); }
 };
 
 } //NameSpace
