@@ -96,8 +96,10 @@ int32u File_DtsUhd::ReadBits(const int8u* Buffer, int Size, int* Bit, int Count,
     }
     *Bit+=Count;
 
+    #if MEDIAINFO_TRACE
     if (Trace_Activated)
         Param(Name?Name:"?", Value, Count);
+    #endif
     return (int32u)Value;
 }
 
@@ -142,8 +144,10 @@ int32u File_DtsUhd::ReadBitsVar(const int8u* Buffer, int Size, int *Bit, const u
 void File_DtsUhd::SkipBits(int* Bit, int Count, const char* Name)
 {
     *Bit+=Count;
+    #if MEDIAINFO_TRACE
     if (Trace_Activated && Count>0)
         Param(Name, Ztring("(")+Ztring::ToZtring(Count)+Ztring(" bits)"));
+    #endif
 }
 
 void File_DtsUhd::Get_VR(const uint8_t Table[], int32u& Value, const char* Name)
@@ -1241,15 +1245,19 @@ struct DTSUHD_ChannelMaskInfo DTSUHD_DecodeChannelMask(int32u ChannelMask)
 bool File_DtsUhd::CheckCurrentFrame(const int8u* FrameBegin, int32u FrameSize)
 {
     //Read length of CRC'd frame data and perform CRC check
+    #if MEDIAINFO_TRACE
     auto Trace_Activated_Sav=Trace_Activated;
     Trace_Activated=false; // Do not show trace while trying to sync
+    #endif
     constexpr int8u VbitsPayload[4]={5, 8, 10, 12}; //varbits decode table
     int Bit=32;
     int32u FtocSize=ReadBitsVar(FrameBegin, FrameSize, &Bit, VbitsPayload)+1;
     bool SyncFrame=CC4(FrameBegin)==DTSUHD_SYNCWORD;
     if (SyncFrame)
         FullChannelBasedMixFlag=ReadBits(FrameBegin, FrameSize, &Bit, 1);
+    #if MEDIAINFO_TRACE
     Trace_Activated=Trace_Activated_Sav;
+    #endif
     bool HasCRC=SyncFrame||!FullChannelBasedMixFlag;
     return !HasCRC || CheckCRC(FrameBegin, FtocSize)==0;
     /*
