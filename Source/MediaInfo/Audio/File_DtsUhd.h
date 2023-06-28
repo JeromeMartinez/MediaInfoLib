@@ -73,15 +73,15 @@ protected :
     struct MD01
     {
         MDObject Object[257]; /* object id max value is 256 */
-        bool StaticMDUpdateFlag=false;
+        bool StaticMDParamsExtracted=false;
+        bool StaticMetadataUpdtFlag=false;
         int Bit=0;
         int ChunkId=0;
         int ObjectList[256]={0};
-        int ObjectListCount=0;
+        int NumObjects=0; /* Valid entries in 'ObjectList' array */
+        int NumStaticMDPackets=0;
         int PacketsAcquired=0;
-        int StaticMDExtracted=0;
-        int StaticMDPackets=0;
-        int StaticMDPacketSize=0;
+        int StaticMDPacketByteSize=0;
         std::vector<int8u> Buffer;
     };
 
@@ -93,10 +93,10 @@ protected :
         int Index=0;
     };
 
-    struct UHDAudio
+    struct UHDAudPresParam
     {
-        int Mask=0;
-        int Selectable=0;
+        bool Selectable=false;
+        int DepAuPresMask=0;
     };
 
     struct UHDChunk
@@ -117,7 +117,7 @@ protected :
         int RepType;
     };
 
-    int32u ReadBitsMD01(MD01* MD01, int Bits);
+    int32u ReadBitsMD01(MD01* MD01, int Bits, const char* Name =nullptr);
     MD01* ChunkAppendMD01(int Id);
     MD01* ChunkFindMD01(int Id);
     MDObject* FindDefaultAudio();
@@ -131,31 +131,31 @@ protected :
     int NaviFindIndex(int DesiredIndex, int* ListIndex);
     int ExtractChunkNaviData();
     int ExtractMDChunkObjIDList(MD01*);
-    void ExtractLTLMParamSet(MD01*, bool NominalFlag);
+    void ExtractLTLMParamSet(MD01*, bool NominalLD_DescriptionFlag);
     int ParseStaticMDParams(MD01*, bool OnlyFirst);
     int ExtractMultiFrameDistribStaticMD(MD01*);
-    int CheckIfMDIsSuitableforImplObjRenderer(MD01*, int ObjectId);
+    bool CheckIfMDIsSuitableforImplObjRenderer(MD01*, int ObjectId);
     void ExtractChMaskParams(MD01*, MDObject*);
-    int ExtractObjectMetadat(MD01*, MDObject*, bool, int);
+    int ExtractObjectMetadata(MD01*, MDObject*, bool, int);
     int ParseMD01(MD01*, int PresIndex);
     int UnpackMDFrame();
-    bool CheckCurrentFrame(bool SyncFrame);
+    bool CheckCurrentFrame(const int8u* FrameBegin, int32u FrameSize);
     int DtsUhd_Frame();
 
-    UHDAudio Audio[256];
+    UHDAudPresParam AudPresParam[256];
     UHDFrameDescriptor FrameDescriptor;
     bool FullChannelBasedMixFlag;
     bool InteractObjLimitsPresent;
     bool SyncFrameFlag;
     const int8u* FrameStart;
     int ChunkBytes;
-    int ClockRate;
-    int FTOCBytes;
+    int ClockRateInHz;
+    int FTOCPayloadinBytes;
     int FrameBit;
     int FrameDuration;
     int FrameDurationCode;
     int FrameRate;
-    int MajorVersion;
+    int StreamMajorVerNum;
     int32u NumAudioPres;
     int SampleRate;
     int SampleRateMod;
@@ -168,6 +168,7 @@ protected :
     //Helpers
     int32u ReadBits(const int8u* Buffer, int Size, int* Bit, int Count, const char* Name =nullptr);
     int32u ReadBitsVar(const int8u* Buffer, int Size, int* Bit, const uint8_t Table[], const char* Name =nullptr);
+    void SkipBits(int* Bit, int Count, const char* Name =nullptr);
     void Get_VR(const uint8_t Table[], int32u& Info, const char* Name);
 };
 
