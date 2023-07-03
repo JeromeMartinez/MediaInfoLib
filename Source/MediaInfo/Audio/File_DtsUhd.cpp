@@ -67,21 +67,6 @@ static int CountBits(int32u Mask)
     return Count;
 }
 
-/* Read from the MD01 buffer (if present), falling back to the frame buffer */
-int32u File_DtsUhd::ReadBitsMD01(MD01* MD01, int Bits, const char* Name)
-{
-    if (!MD01->Buffer.empty())
-    {
-        // Not yet supported
-        Trusted_IsNot("(Not supported)");
-        return 0;
-        //return ReadBits(MD01->Buffer.data(), MD01->Buffer.size(), &MD01->Bit, Bits, Name);
-    }
-    int32u Value;
-    Get_S4(Bits, Value, Name);
-    return Value;
-}
-
 /** Read a variable number of bits from a buffer.
     In the ETSI TS 103 491 V1.2.1 specification, the pseudo code defaults
     the 'add' parameter to true.  Table 7-30 shows passing an explicit false,
@@ -565,11 +550,11 @@ int File_DtsUhd::ExtractMDChunkObjIDList(MD01* MD01)
 void File_DtsUhd::ExtractLTLMParamSet(MD01* MD01, bool NominalLD_DescriptionFlag)
 {
     Element_Begin1("ExtractLTLMParamSet");
-    ReadBitsMD01(MD01, 6, "LoudnessMeasureTableIndex"); /* rLoudness */
+    Skip_S1(6,                                                  "LongTermLoudnessMeasureIndex"); /* rLoudness */
     if (!NominalLD_DescriptionFlag)
-        ReadBitsMD01(MD01, 5, "AssociatedAssetType");
+        Skip_S1(5,                                              "AssociatedAssetType");
 
-    int32u BitWidth=ReadBitsMD01(MD01, NominalLD_DescriptionFlag?2:4, "BitWidth"); Param_Info2(BitWidth, " bits");
+    Skip_S1(NominalLD_DescriptionFlag?2:4,                      "BitWidth");
     Element_End0();
 }
 
@@ -577,21 +562,26 @@ void File_DtsUhd::ExtractLTLMParamSet(MD01* MD01, bool NominalLD_DescriptionFlag
 int File_DtsUhd::ParseStaticMDParams(MD01* MD01, bool OnlyFirst)
 {
     bool NominalLD_DescriptionFlag=true;
-    int NumLongTermLoudnessMsrmSets=1;
+    int8u NumLongTermLoudnessMsrmSets=1;
 
     if (FullChannelBasedMixFlag==false)
-        NominalLD_DescriptionFlag=ReadBitsMD01(MD01, 1, "NominalLD_DescriptionFlag");
+        Get_SB (NominalLD_DescriptionFlag,                      "NominalLD_DescriptionFlag");
 
     if (NominalLD_DescriptionFlag)
     {
         if (!FullChannelBasedMixFlag)
         {
-            NumLongTermLoudnessMsrmSets=ReadBitsMD01(MD01, 1, "NumLongTermLoudnessMsrmSets")?3:1;
+            Get_S1 (1, NumLongTermLoudnessMsrmSets,            "NumLongTermLoudnessMsrmSets");
+            NumLongTermLoudnessMsrmSets=1+(NumLongTermLoudnessMsrmSets<<1); //?3:1
             Param_Info2(NumLongTermLoudnessMsrmSets, " sets");
         }
     }
     else
-        NumLongTermLoudnessMsrmSets=ReadBitsMD01(MD01, 4, "NumLongTermLoudnessMsrmSets")+1;
+    {
+        Get_S1 (4, NumLongTermLoudnessMsrmSets,                 "NumLongTermLoudnessMsrmSets");
+        NumLongTermLoudnessMsrmSets++;
+        Param_Info2(NumLongTermLoudnessMsrmSets, " sets");
+    }
 
     for (int i=0; i<NumLongTermLoudnessMsrmSets; i++)
         ExtractLTLMParamSet(MD01, NominalLD_DescriptionFlag);
@@ -600,22 +590,37 @@ int File_DtsUhd::ParseStaticMDParams(MD01* MD01, bool OnlyFirst)
         return 0;
 
     if (!NominalLD_DescriptionFlag)
-        ReadBitsMD01(MD01, 1, "IsLTLoudnMsrsmOffLine");
+        Skip_SB(                                                "IsLTLoudnMsrsmOffLine");
 
     const int NUMDRCOMPRTYPES=3;
     for (int i=0; i<NUMDRCOMPRTYPES; i++) /* Table 7-12 suggest 3 types */
     {
-        if (ReadBitsMD01(MD01, 1, "CustomDRCCurveMDPresent"))
+        bool CustomDRCCurveMDPresent;
+        Get_SB (CustomDRCCurveMDPresent,                        "CustomDRCCurveMDPresent");
+        if (CustomDRCCurveMDPresent)
         {
-            if (ReadBitsMD01(MD01, 4)==15) /* Table 7-14 */
-                ReadBitsMD01(MD01, 15);
+            Element_Begin1("ExtractCustomDRCCurves");
+            int8u DRCCurveIndex;
+            Get_S1 (4, DRCCurveIndex,                           "DRCCurveIndex"); /* Table 7-14 */
+            if (DRCCurveIndex==15)
+                Skip_S2(15,                                     "DRCCurveCode");
+            Element_End0();
         }
-        if (ReadBitsMD01(MD01, 1, "CustomDRCSmoothMDPresent"))
-            ReadBitsMD01(MD01, 6*6, "DRCData");
+        bool CustomDRCSmoothMDPresent;
+        Get_SB (CustomDRCSmoothMDPresent,                       "CustomDRCSmoothMDPresent");
+        if (CustomDRCSmoothMDPresent)
+            Skip_BS(6*6,                                        "CDRCProfiles");
+        if (CustomDRCSmoothMDPresent)
+        {
+            Skip_S1(6,                                          "FastAttack");
+            Skip_S1(6,                                          "SlowAttack");
+            Skip_S1(6,                                          "FastRelease");
+            Skip_S1(6,                                          "SlowRelease");
+            Skip_S1(6,                                          "AttackThreshld");
+            Skip_S1(6,                                          "ReleaseThreshld");
+        }
     }
 
-    if (!FullChannelBasedMixFlag)
-        MD01->Bit=MD01->NumStaticMDPackets*MD01->StaticMDPacketByteSize;
     MD01->StaticMDParamsExtracted=true;
 
     return 0;
@@ -630,7 +635,7 @@ int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
 
     if (SyncFrameFlag)
     {
-        MD01->PacketsAcquired=false;
+        MD01->PacketsAcquired=0;
         if (FullChannelBasedMixFlag)
         {
             MD01->NumStaticMDPackets=1;
@@ -640,12 +645,11 @@ int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
         {
             Get_VR (Table1, MD01->NumStaticMDPackets,           "NumStaticMDPackets");
             MD01->NumStaticMDPackets++;
-            Get_VR (Table2, MD01->StaticMDPacketByteSize,       "NumStaticMDPackets");
-            MD01->StaticMDPacketByteSize+=3;;
+            Get_VR (Table2, MD01->StaticMDPacketByteSize,       "StaticMDPacketByteSize");
+            MD01->StaticMDPacketByteSize+=3;
         }
 
         MD01->Buffer.resize(MD01->NumStaticMDPackets*MD01->StaticMDPacketByteSize);
-        MD01->Bit=0;
         if (MD01->NumStaticMDPackets>1)
             Get_SB (MD01->StaticMetadataUpdtFlag,               "StaticMetadataUpdtFlag");
         else
@@ -659,17 +663,63 @@ int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
             Get_S1 (8, MD01->Buffer[n+i],                       ("MetadataPacketPayload[" + std::to_string(n+i) + "]").c_str());
         MD01->PacketsAcquired++;
 
-        if (MD01->PacketsAcquired==MD01->NumStaticMDPackets)
+        if (MD01->PacketsAcquired==MD01->NumStaticMDPackets || MD01->PacketsAcquired==1)
         {
             if (MD01->StaticMetadataUpdtFlag||!MD01->StaticMDParamsExtracted)
-                if (ParseStaticMDParams(MD01, 0))
+            {
+                const int8u* Save_Buffer=nullptr;
+                size_t Save_Buffer_Offset=0;
+                size_t Save_Buffer_Size=0;
+                int64u Save_Element_Offset=0;
+                int64u Save_Element_Size=0;
+                BitStream_Fast Save_BS;
+                #if MEDIAINFO_TRACE
+                    size_t Save_BS_Size=0;
+                #endif
+                if (!MD01->Buffer.empty())
+                {
+                    //Use the buffered content
+                    Save_Buffer=Buffer;
+                    Save_Buffer_Offset=Buffer_Offset;
+                    Save_Buffer_Size=Buffer_Size;
+                    Save_Element_Offset=Element_Offset;
+                    Save_Element_Size=Element_Size;
+                    Save_BS=*BS;
+                    #if MEDIAINFO_TRACE
+                        Save_BS_Size=BS_Size;
+                    #endif
+                    File_Offset+=Buffer_Offset+Element_Size-(Data_BS_Remain()+7)/8-MD01->StaticMDPacketByteSize;
+                    Buffer=MD01->Buffer.data();
+                    Buffer_Offset=0;
+                    Buffer_Size=MD01->Buffer.size();
+                    Element_Offset=0;
+                    Element_Size=Buffer_Size;
+                    BS_Begin();
+                }
+                auto Result=ParseStaticMDParams(MD01, MD01->PacketsAcquired!=MD01->NumStaticMDPackets);
+                if (!MD01->Buffer.empty())
+                {
+                    //Back to normal buffer
+                    if (Data_BS_Remain())
+                        Skip_BS(Data_BS_Remain(),               "Padding");
+                    BS_End();
+                    Buffer=Save_Buffer;
+                    Buffer_Offset=Save_Buffer_Offset;
+                    Buffer_Size=Save_Buffer_Size;
+                    Element_Offset=Save_Element_Offset;
+                    Element_Size=Save_Element_Size;
+                    *BS=Save_BS;
+                    #if MEDIAINFO_TRACE
+                        BS_Size=Save_BS_Size;
+                    #endif
+                    File_Offset-=Buffer_Offset+Element_Size-(Data_BS_Remain()+7)/8-MD01->StaticMDPacketByteSize;
+                }
+                if (Result)
+                {
+                    Element_End0();
                     return 1;
-        }
-        else if (MD01->PacketsAcquired==1)
-        {
-            if (MD01->StaticMetadataUpdtFlag||!MD01->StaticMDParamsExtracted)
-                if (ParseStaticMDParams(MD01, 1))
-                    return 1;
+                }
+            }
         }
     }
 

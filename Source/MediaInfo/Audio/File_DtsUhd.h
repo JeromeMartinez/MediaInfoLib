@@ -66,7 +66,6 @@ protected :
         MDObject Object[257]; /* object id max value is 256 */
         bool StaticMDParamsExtracted=false;
         bool StaticMetadataUpdtFlag=false;
-        int Bit=0;
         int ChunkId=0;
         int16u ObjectList[256]={0};
         int32u NumObjects=0; /* Valid entries in 'ObjectList' array */
