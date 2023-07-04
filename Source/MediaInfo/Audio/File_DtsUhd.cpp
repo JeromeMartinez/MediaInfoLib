@@ -639,7 +639,7 @@ int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
         if (FullChannelBasedMixFlag)
         {
             MD01->NumStaticMDPackets=1;
-            MD01->StaticMDPacketByteSize=0;
+            MD01->StaticMDPacketByteSize=0/*2*/; //TEMP, only with p2.mp4
         }
         else
         {
@@ -660,7 +660,9 @@ int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
     {
         int n=MD01->PacketsAcquired*MD01->StaticMDPacketByteSize;
         for (int32u i = 0; i < MD01->StaticMDPacketByteSize; i++)
-            Get_S1 (8, MD01->Buffer[n+i],                       ("MetadataPacketPayload[" + std::to_string(n+i) + "]").c_str());
+            Get_S1 (8/*i==1?6:8*/, MD01->Buffer[n+i],                       ("MetadataPacketPayload[" + std::to_string(n+i) + "]").c_str()); //TEMP, only with p2.mp4
+        //MD01->Buffer[1]<<=2; //TEMP, only with p2.mp4
+        //MD01->Buffer.resize(3); //TEMP, only with p2.mp4
         MD01->PacketsAcquired++;
 
         if (MD01->PacketsAcquired==MD01->NumStaticMDPackets || MD01->PacketsAcquired==1)
