@@ -2071,11 +2071,11 @@ void File_Riff::AVI__hdlr_strl_strh()
             }
         }
 
-        //Duration
+        //Container_Duration
         if (FrameRate)
         {
             int64u Duration=float32_int64s((1000*(float32)Length)/FrameRate);
-            if (avih_TotalFrame>0 //avih_TotalFrame is here because some files have a wrong Audio Duration if TotalFrame==0 (which is a bug, of course!)
+            if (avih_TotalFrame>0 //avih_TotalFrame is here because some files have a wrong Audio Container_Duration if TotalFrame==0 (which is a bug, of course!)
             && (avih_FrameRate==0 || Duration<((float32)avih_TotalFrame)/avih_FrameRate*1000*1.10)  //Some file have a nearly perfect header, except that the value is false, trying to detect it (false if 10% more than 1st video)
             && (avih_FrameRate==0 || Duration>((float32)avih_TotalFrame)/avih_FrameRate*1000*0.90)) //Some file have a nearly perfect header, except that the value is false, trying to detect it (false if 10% less than 1st video)
             {
@@ -3655,6 +3655,8 @@ struct profile_info
 
 void File_Riff::WAVE_axml()
 {
+
+
     //Preparing
     delete Adm;
     Adm=new File_Adm;
@@ -3664,6 +3666,7 @@ void File_Riff::WAVE_axml()
         Adm->chna_Move(Adm_chna);
         delete Adm_chna; Adm_chna=NULL;
     }
+    Adm->Container_Duration = Retrieve_Const(Stream_Audio, 0, Audio_Duration).To_float32()/1000;
     Adm->MuxingMode=(Element_Code==Elements::WAVE_bxml)?'b':'a';
     Adm->MuxingMode+="xml";
     Kind=Kind_Axml;
@@ -3740,6 +3743,7 @@ void File_Riff::WAVE_axml()
         Element_Name("AXML");
 
         //Parsing
+        Adm->TotalSize = Element_TotalSize_Get();
         WAVE_axml_Continue();
     }
 }
@@ -3748,7 +3752,7 @@ void File_Riff::WAVE_axml_Continue()
 {
     //Parsing
     Open_Buffer_Continue(Adm, Buffer+Buffer_Offset, (size_t)Element_Size);
-    Skip_UTF8(Element_Size, "XML data");
+    Element_Offset=Adm->NeedToJumpToEnd?(File_Size-(File_Offset+Buffer_Offset)):Element_Size;
 }
 
 //---------------------------------------------------------------------------
