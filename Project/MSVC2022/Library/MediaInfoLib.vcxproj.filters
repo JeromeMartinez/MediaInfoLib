@@ -1594,5 +1594,8 @@
     <ClInclude Include="..\..\..\Source\MediaInfo\Audio\File_Dat.h">
       <Filter>Header Files\Audio</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\Source\MediaInfo\Multiple\File_Mxf_Automated.h">
+      <Filter>Header Files\Multiple</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
