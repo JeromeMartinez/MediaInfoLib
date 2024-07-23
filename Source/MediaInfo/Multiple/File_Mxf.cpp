@@ -6787,12 +6787,12 @@ void File_Mxf::UnknownGroupItem()
     }
     static const char* Name = "Value";
     switch (ItemType) {
-    case Type_UI16:             { Get_B2 (Value_UI16,           Name); Element_Info(Value_UI16); } break;
-    case Type_Bool:             { Get_B1 (Value_Bool,           Name); Element_Info(Value_Bool?Value_Bool>1?to_string(Value_Bool).c_str():"true":"false"); } break;
+    case Type_UI16:             { Get_B2 (Value_UI16,           Name); Element_Info1(Value_UI16); } break;
+    case Type_Bool:             { Get_B1 (Value_Bool,           Name); Element_Info1(Value_Bool?Value_Bool>1?to_string(Value_Bool).c_str():"true":"false"); } break;
     case Type_AUID:             { Get_UUID(Value_UUID,          Name); Element_Info1(Ztring().From_UUID(Value_UUID)); } break; // TODO: implement 16-bit Little Endian UL
     case Type_UUID:             { Get_UL(Value_UUID,            Name, nullptr); Element_Info1(int32u(Value_UUID.hi>>32)==0x060E2B34?Mxf_Param_Info((int32u)Value_UUID.hi, Value_UUID.lo):Ztring().From_UUID(Value_UUID).To_UTF8().c_str()); } break;
-    case Type_UTF16:            { Get_UTF16B(Length2, Value_String, Name); Element_Info(Value_String); } break;
-    case Type_ISO7:             { Get_UTF8(Length2, Value_String, Name); Element_Info(Value_String); } break;
+    case Type_UTF16:            { Get_UTF16B(Length2, Value_String, Name); Element_Info1(Value_String); } break;
+    case Type_ISO7:             { Get_UTF8(Length2, Value_String, Name); Element_Info1(Value_String); } break;
     case Type_Ref:              { Get_UUID(Value_UUID,          Name); Element_Info1(Ztring().From_UUID(Value_UUID)); } break;
     case Type_Refs: { VECTOR(16); Value_UUIDVector.resize(Count); for (int32u i = 0; i < Count; i++) { Get_UUID(Value_UUIDVector[i], Name); Element_Info1(Ztring().From_UUID(Value_UUIDVector[i])); } } break;
     default: Skip_XX(Length2,                                   Name);
@@ -13641,7 +13641,9 @@ void File_Mxf::Get_UL(int128u &Value, const char* Name, const char* (*Param) (in
     //Parsing
     Element_Begin1(Name);
     int128u V;
-    Peek_B8(V.hi);
+    int64u Temp;
+    Peek_B8(Temp);
+    V.hi = Temp;
     bool IsSmpte = (V.hi >> 32) == 0x060E2B34;
     #if MEDIAINFO_TRACE
     if (Trace_Activated && IsSmpte) {
@@ -13660,7 +13662,8 @@ void File_Mxf::Get_UL(int128u &Value, const char* Name, const char* (*Param) (in
         Element_Offset+=8;
     else
         Element_Offset=Element_Size;
-    Peek_B8(V.lo);
+    Peek_B8(Temp);
+    V.lo = Temp;
     #if MEDIAINFO_TRACE
     if (Trace_Activated && IsSmpte) {
         vector<string> Param_Extra;
