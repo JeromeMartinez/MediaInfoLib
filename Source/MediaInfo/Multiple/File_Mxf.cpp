@@ -429,6 +429,7 @@ static const char* Mxf_EssenceContainer_Mapping(int64u Code_lo)
     //case Labels::MXFGCDMCVTData:
     //case Labels::MXFGCVC5EssenceContainerLabel:
     //case Labels::MXFGCJPEGXSPictures:
+    case 0x0e09060701010000: return (int16u)(Code_lo)==0x0103 ? "Frame" : "";
     default:
         WrappingStyle = Wrapping_None;
     }
@@ -2629,7 +2630,7 @@ void File_Mxf::Streams_Finish_Essence(int32u EssenceUID, int128u TrackUID)
     }
     Finish(*Parser);
     StreamKind_Last=Stream_Max;
-    if ((*Parser)->Count_Get(Stream_Video))
+    if ((*Parser)->Count_Get(Stream_Video) && (*Parser)->Get(Stream_General, 0, General_Format)!=__T("Dolby Vision Metadata"))
     {
         Stream_Prepare(Stream_Video);
         if (IsSub)
@@ -3011,6 +3012,12 @@ void File_Mxf::Streams_Finish_Essence(int32u EssenceUID, int128u TrackUID)
 
     //Done
     Essence->second.Stream_Finish_Done=true;
+
+    if ((*Parser)->Get(Stream_General, 0, General_Format) == __T("Dolby Vision Metadata")) // TODO: avoid this hack
+    {
+        DolbyVisionMetadata=(File_DolbyVisionMetadata*)*Parser;
+        *Parser=nullptr;
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -3386,6 +3393,9 @@ void File_Mxf::Streams_Finish_Descriptor(descriptors::iterator Descriptor)
              && Info!=MasteringDisplay_Luminance_Max
              && Info!=MasteringDisplay_Luminance_Min)
             {
+                if (Info->first == "CodecID")
+                    int A = 0;
+
                 //Special case
                 if (Info->first=="BitRate" && Retrieve(StreamKind_Last, StreamPos_Last, General_ID).find(__T(" / "))!=string::npos)
                 {
@@ -3719,6 +3729,14 @@ void File_Mxf::Streams_Finish_Descriptor(descriptors::iterator Descriptor)
         }
         if (!ChannelAssignment.empty())
             Fill(Stream_Audio, StreamPos_Last, Audio_ChannelLayoutID, ChannelAssignment);
+
+        auto CodecID_Addition = Descriptor->second.Infos.find("CodecID");
+        if (CodecID_Addition != Descriptor->second.Infos.end()) {
+            Ztring CodecID = Retrieve_Const(StreamKind_Last, StreamPos_Last, CodecID_Addition->first.c_str());
+            if (CodecID != CodecID_Addition->second) {
+                Fill(StreamKind_Last, StreamPos_Last, CodecID_Addition->first.c_str(), CodecID+__T('-')+CodecID_Addition->second, true);
+            }
+        }
     }
 
     //Fallback on partition data if classic methods failed
@@ -13545,7 +13563,10 @@ void File_Mxf::UKDPP_Contact_Telephone_Number()
 void File_Mxf::DolbyNamespaceURI()
 {
     //Parsing
-    Skip_UTF8(Length2,                                          "Content");
+    Ztring Data;
+    Get_UTF8 (Length2, Data,                                    "Data"); Element_Info1(Data);
+
+    Descriptor_Fill("CodecID", Data);
 }
 
 //---------------------------------------------------------------------------
@@ -15021,8 +15042,9 @@ void File_Mxf::ChooseParser_DolbyVisionFrameData(const essences::iterator &Essen
     Essence->second.StreamKind=Stream_Other;
 
     //Filling
-    #if 0 // TODO
+    #if 1 // TODO
         File_DolbyVisionMetadata* Parser=new File_DolbyVisionMetadata;
+        Parser->IsISXD=true;
     #else
         //Filling
         File__Analyze* Parser=new File_Unknown();

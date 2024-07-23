@@ -126,6 +126,14 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
     Accept("DolbyVisionMetadata");
     Stream_Prepare(Stream_Video);
     Fill(Stream_Video, 0, Video_HDR_Format, "Dolby Vision Metadata");
+    if (IsISXD)
+    {
+        Fill(Stream_General, 0, General_Format, "Dolby Vision Metadata");
+        Stream_Prepare(Stream_Other);
+        Fill(Stream_Other, 0, Other_Format, "Dolby Vision Metadata");
+        Fill(Stream_Other, 0, Other_MuxingMode, "ISXD");
+        Fill(Stream_Other, 0, "MuxingMode_MoreInfo", "Contains additional metadata for other tracks");
+    }
     if (!Version.empty())
         Fill(Stream_Video, 0, Video_HDR_Format_Version, Version);
     if (AspectRatio)
@@ -152,7 +160,7 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
                         if (float32 TextF = Ztring().From_UTF8(Text).To_float32())
                             Fill(Stream_Video, 0, Video_DisplayAspectRatio, TextF);
                 }
-                if (!strcmp(ColorEncoding_Item->Name(), "ColorSpace"))
+                if (false) // !strcmp(ColorEncoding_Item->Name(), "ColorSpace"))
                 {
                     if (const char* Text = ColorEncoding_Item->GetText())
                     {
@@ -465,7 +473,12 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
         if (!strcmp(DolbyVisionGlobalData_Item->Name(), "TrackName"))
         {
             if (const char* Text = DolbyVisionGlobalData_Item->GetText())
-                Fill(Stream_Video, 0, Video_Title, Text);
+            {
+                if (IsISXD)
+                    Fill(Stream_Other, 0, Other_Title, Text);
+                else
+                    Fill(Stream_Video, 0, Video_Title, Text);
+            }
         }
         if (!strcmp(DolbyVisionGlobalData_Item->Name(), "UniqueID"))
         {

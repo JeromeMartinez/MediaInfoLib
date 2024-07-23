@@ -664,6 +664,11 @@ void File__Analyze::Get_LightLevel(Ztring &MaxCLL, Ztring &MaxFALL, int32u Divis
 //---------------------------------------------------------------------------
 size_t File__Analyze::Stream_Prepare (stream_t KindOfStream, size_t StreamPos)
 {
+    if (KindOfStream == Stream_Video && Count_Get(Stream_Video) == 1)
+        int A = 0;
+    if (KindOfStream == Stream_Other)
+        int A = 0;
+
     //Integrity
     if (KindOfStream>Stream_Max)
         return Error;
@@ -871,6 +876,9 @@ bool ShowSource_IsInList(video Value)
 //---------------------------------------------------------------------------
 void File__Analyze::Fill (stream_t StreamKind, size_t StreamPos, size_t Parameter, const Ztring &Value, bool Replace)
 {
+    if (Value.find(L"4.0.2")!=string::npos)
+        int A = 0;
+
     // Sanitize
     if (!Value.empty())
     {
@@ -1712,6 +1720,9 @@ void File__Analyze::Fill_Measure(stream_t StreamKind, size_t StreamPos, const ch
 //---------------------------------------------------------------------------
 void File__Analyze::Fill (stream_t StreamKind, size_t StreamPos, const char* Parameter, const Ztring &Value, bool Replace)
 {
+    if (string(Parameter) == "CodecIDx")
+        int A = 0;
+
     //Integrity
     if (StreamKind>Stream_Max || Parameter==NULL || Parameter[0]=='\0')
         return;
