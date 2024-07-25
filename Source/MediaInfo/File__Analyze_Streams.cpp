@@ -1720,7 +1720,7 @@ void File__Analyze::Fill_Measure(stream_t StreamKind, size_t StreamPos, const ch
 //---------------------------------------------------------------------------
 void File__Analyze::Fill (stream_t StreamKind, size_t StreamPos, const char* Parameter, const Ztring &Value, bool Replace)
 {
-    if (string(Parameter) == "CodecIDx")
+    if (string(Parameter) == "ovn_creation")
         int A = 0;
 
     //Integrity

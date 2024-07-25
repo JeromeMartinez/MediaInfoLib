@@ -2630,7 +2630,14 @@ void File_Mxf::Streams_Finish_Essence(int32u EssenceUID, int128u TrackUID)
     }
     Finish(*Parser);
     StreamKind_Last=Stream_Max;
-    if ((*Parser)->Count_Get(Stream_Video) && (*Parser)->Get(Stream_General, 0, General_Format)!=__T("Dolby Vision Metadata"))
+    if ((*Parser)->Get(Stream_General, 0, General_Format) == __T("Dolby Vision Metadata")) // TODO: TEMP
+    {
+        DolbyVisionMetadata = (File_DolbyVisionMetadata*)*Parser;
+        *Parser = nullptr;
+        return;
+    }
+    else
+    if ((*Parser)->Count_Get(Stream_Video))
     {
         Stream_Prepare(Stream_Video);
         if (IsSub)
@@ -10757,7 +10764,7 @@ void File_Mxf::ItemValue_ISO7()
 
     //Filling
     DMOmneons[InstanceUID].Name=Data;
-    Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
+    // TODO Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
     Name.clear();
 }
 
@@ -10770,7 +10777,7 @@ void File_Mxf::ItemValue()
 
     //Filling
     DMOmneons[InstanceUID].Name=Data;
-    Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
+    // TODO Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
     Name.clear();
 }
 
