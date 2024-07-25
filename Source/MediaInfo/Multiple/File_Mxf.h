@@ -1269,6 +1269,8 @@ protected :
     void           ChooseParser_Jpeg2000(const essences::iterator &Essence, const descriptors::iterator &Descriptor);
     void           ChooseParser_ProRes(const essences::iterator &Essence, const descriptors::iterator &Descriptor);
     void           ChooseParser_Ffv1(const essences::iterator& Essence, const descriptors::iterator& Descriptor);
+    void           ChooseParser_Isxd(const essences::iterator& Essence, const descriptors::iterator& Descriptor);
+    void           ChooseParser_Phdr(const essences::iterator& Essence, const descriptors::iterator& Descriptor);
     void           ChooseParser_DolbyVisionFrameData(const essences::iterator& Essence, const descriptors::iterator& Descriptor);
     void           ChooseParser_Iab(const essences::iterator& Essence, const descriptors::iterator& Descriptor);
     void           ChooseParser_Mga(const essences::iterator& Essence, const descriptors::iterator& Descriptor);
@@ -1430,7 +1432,8 @@ protected :
     // Extra metadata
     int64u ExtraMetadata_Offset;
     std::set<int32u> ExtraMetadata_SID;
-    File_DolbyVisionMetadata* DolbyVisionMetadata;
+    std::vector<File_DolbyVisionMetadata*> DolbyVisionMetadatas;
+    std::set<int64u> MXFGenericStreamDataElementKey_Offsets;
     File_DolbyAudioMetadata* DolbyAudioMetadata;
     #if defined(MEDIAINFO_ADM_YES)
     File_Adm* Adm;

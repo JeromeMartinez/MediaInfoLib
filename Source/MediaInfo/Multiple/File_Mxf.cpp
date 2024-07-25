@@ -1942,7 +1942,6 @@ File_Mxf::File_Mxf()
     #endif //defined(MEDIAINFO_ANCILLARY_YES)
 
     ExtraMetadata_Offset=(int64u)-1;
-    DolbyVisionMetadata=NULL;
     DolbyAudioMetadata=NULL;
     #if defined(MEDIAINFO_ADM_YES)
         Adm=NULL;
@@ -1997,7 +1996,8 @@ File_Mxf::~File_Mxf()
         delete AcquisitionMetadata_Sony_E201_Lists[ i ];
 	
     AcquisitionMetadata_Sony_E201_Lists.clear();
-    delete DolbyVisionMetadata;
+    for (auto DolbyVisionMetadata : DolbyVisionMetadatas)
+        delete DolbyVisionMetadata;
     delete DolbyAudioMetadata;
     #if defined(MEDIAINFO_ADM_YES)
         delete Adm;
@@ -2371,8 +2371,18 @@ void File_Mxf::Streams_Finish()
     }
 
     //Metadata
-    if (DolbyVisionMetadata)
-        Merge(*DolbyVisionMetadata, Stream_Video, 0, 0);
+    for (const auto DolbyVisionMetadata : DolbyVisionMetadatas)
+    {
+        if (Retrieve_Const(Stream_Video, 0, "HDR_Format").find(__T("Dolby Vision")) == string::npos) // TODO: better check when more than 1 content with Dolby Vision
+            Merge(*DolbyVisionMetadata, Stream_Video, 0, 0);
+        if (DolbyVisionMetadata->IsStreamData)
+        {
+            Stream_Prepare(Stream_Other);
+            Fill(Stream_Other, StreamPos_Last, Other_MuxingMode, "Generic Stream Data");
+            Fill(Stream_Other, StreamPos_Last, "MuxingMode_MoreInfo", "Contains additional metadata for other tracks");
+            Merge(*DolbyVisionMetadata, Stream_Other, 0, StreamPos_Last);
+        }
+    }
     if (DolbyAudioMetadata) //Before ADM for having content before all ADM stuff
         Merge(*DolbyAudioMetadata, Stream_Audio, 0, 0);
     if (Adm)
@@ -3002,7 +3012,7 @@ void File_Mxf::Streams_Finish_Essence(int32u EssenceUID, int128u TrackUID)
 
     if ((*Parser)->Get(Stream_General, 0, General_Format) == __T("Dolby Vision Metadata")) // TODO: avoid this hack
     {
-        DolbyVisionMetadata=(File_DolbyVisionMetadata*)*Parser;
+        DolbyVisionMetadatas.push_back((File_DolbyVisionMetadata*)*Parser);
         *Parser=nullptr;
     }
 }
@@ -7866,14 +7876,24 @@ void File_Mxf::GenericStreamID()
 //---------------------------------------------------------------------------
 void File_Mxf::MXFGenericStreamDataElementKey_09_01()
 {
+    // Check if already parsed
+    auto Offset=File_Offset+Buffer_Offset+Element_Offset;
+    auto Found=MXFGenericStreamDataElementKey_Offsets.find(Offset);
+    if (Found!=MXFGenericStreamDataElementKey_Offsets.end())
+    {
+        Skip_XX(Element_Size,                                   "(Already parsed)");
+        return;
+    }
+    MXFGenericStreamDataElementKey_Offsets.insert(Offset);
+
     //Parsing - Dolby Vision Metadata
     File_DolbyVisionMetadata* DolbyVisionMetadata_New=new File_DolbyVisionMetadata;
+    DolbyVisionMetadata_New->IsStreamData=true;
     Open_Buffer_Init(DolbyVisionMetadata_New);
     Open_Buffer_Continue(DolbyVisionMetadata_New);
     if (DolbyVisionMetadata_New->Status[IsAccepted])
     {
-        delete DolbyVisionMetadata;
-        DolbyVisionMetadata=DolbyVisionMetadata_New;
+        DolbyVisionMetadatas.push_back(DolbyVisionMetadata_New);
     }
     Element_Offset=0;
 
@@ -8905,6 +8925,7 @@ void File_Mxf::PHDRMetadataTrackSubDescriptor()
     ELEM____UUID_(PHDRSourceTrackID)
     ELEM____UUID_(PHDRSimplePayloadSID)
     ELEMENT_END()
+    GenerationInterchangeObject();
 
     if (Descriptors[InstanceUID].StreamKind==Stream_Max)
     {
@@ -14377,8 +14398,8 @@ void File_Mxf::ChooseParser__FromEssence(const essences::iterator &Essence, cons
     case Essences::TimedText: ChooseParser_TimedText(Essence, Descriptor); break;
     case Essences::DVDIF_Frame:
     case Essences::DVDIF_Clip: ChooseParser_DV(Essence, Descriptor); break;
-    case Essences::FrameWrappedISXDData: ChooseParser_DolbyVisionFrameData(Essence, Descriptor); break;
-    case Essences::PHDRImageMetadataItem: ChooseParser_DolbyVisionFrameData(Essence, Descriptor); break;
+    case Essences::FrameWrappedISXDData: ChooseParser_Isxd(Essence, Descriptor); break;
+    case Essences::PHDRImageMetadataItem: ChooseParser_Phdr(Essence, Descriptor); break;
     }
 }
 
@@ -15027,10 +15048,30 @@ void File_Mxf::ChooseParser_Ffv1(const essences::iterator &Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_DolbyVisionFrameData(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Isxd(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
 {
     Essence->second.StreamKind=Stream_Other;
+    Essence->second.Infos["MuxingMode"]="ISXD";
+    Essence->second.Infos["MuxingMode_MoreInfo"]="Contains additional metadata for other tracks";
 
+    //Filling
+    ChooseParser_DolbyVisionFrameData(Essence, Descriptor);
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::ChooseParser_Phdr(const essences::iterator& Essence, const descriptors::iterator& Descriptor)
+{
+    Essence->second.StreamKind = Stream_Other;
+    Essence->second.Infos["MuxingMode"] = "PHDR";
+    Essence->second.Infos["MuxingMode_MoreInfo"] = "Contains additional metadata for other tracks";
+
+    //Filling
+    ChooseParser_DolbyVisionFrameData(Essence, Descriptor);
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::ChooseParser_DolbyVisionFrameData(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+{
     //Filling
     #if 1 // TODO
         File_DolbyVisionMetadata* Parser=new File_DolbyVisionMetadata;
