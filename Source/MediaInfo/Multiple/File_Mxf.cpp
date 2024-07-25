@@ -381,8 +381,7 @@ static const char* Mxf_EssenceContainer_Mapping(int64u Code_lo)
     case Labels::MXFGCSMPTED11Mappings:
     case Labels::MXFGCGenericVBIDataMappingUndefinedPayload:
     case Labels::MXFGCGenericANCDataMappingUndefinedPayload:
-    case Labels::SonyCorporationRAWSQ: //TODO: move to MXFGCALawAudioMappings
-        return "Frame (D-10)";
+        return "Frame";
     case Labels::MXFGCDVDIFMappings:
         switch ((int8u)Code_lo) {
         case 0x01: return "Frame";
@@ -417,7 +416,6 @@ static const char* Mxf_EssenceContainer_Mapping(int64u Code_lo)
         }
         break;
     case Labels::MXFGCAESBWFAudio:
-    case Labels::AvidTechnologyIncVC3Pictures: //TODO: move to MXFGCEssenceContainerDNxPacked
         switch ((int8u)(Code_lo >> 8)) {
         case 0x01: return "Frame (BWF)";
         case 0x02: return "Clip (BWF)";
@@ -437,6 +435,8 @@ static const char* Mxf_EssenceContainer_Mapping(int64u Code_lo)
     case Labels::MXFGCACESPictures:
     case Labels::MXFGCEssenceContainerDNxPacked:
     case Labels::MXFGCFFV1Pictures:
+    case Labels::AvidTechnologyIncVC3Pictures:
+    case Labels::SonyCorporationRAWSQ:
         switch ((int8u)(Code_lo >> 8)) {
         case 0x01: return "Frame";
         case 0x02: return "Clip";
