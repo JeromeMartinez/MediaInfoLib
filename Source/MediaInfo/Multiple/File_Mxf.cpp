@@ -374,107 +374,31 @@ static const char* Mxf_EssenceContainer(const int128u EssenceContainer)
 }
 
 //---------------------------------------------------------------------------
-enum wrapping_style {
-    Wrapping_None,
-    Wrapping_D10,
-    Wrapping_Frame,
-    Wrapping_FrameClip,
-    Wrapping_FrameClipLine,
-    Wrapping_FrameClipCustom,
-    Wrapping_FrameClipCustom_AES,
-    Wrapping_MPEG,
-    Wrapping_GCGenericData,
-    Wrapping_ImmersiveAudio,
-};
 static const char* Mxf_EssenceContainer_Mapping(int64u Code_lo)
 {
-    wrapping_style WrappingStyle;
-    int Pos;
     switch (Code_lo & 0xFFFFFFFFFFFF0000) {
+    case Labels::MXFGCSMPTED10Mappings:
+    case Labels::MXFGCSMPTED11Mappings:
+    case Labels::MXFGCGenericVBIDataMappingUndefinedPayload:
+    case Labels::MXFGCGenericANCDataMappingUndefinedPayload:
     case Labels::SonyCorporationRAWSQ: //TODO: move to MXFGCALawAudioMappings
-    case Labels::MXFGCSMPTED10Mappings: WrappingStyle = Wrapping_D10; Pos = 0;  break;
-    case Labels::MXFGCDVDIFMappings: WrappingStyle = Wrapping_FrameClip; Pos = 0;  break;
+        return "Frame (D-10)";
+    case Labels::MXFGCDVDIFMappings:
+        switch ((int8u)Code_lo) {
+        case 0x01: return "Frame";
+        case 0x02: return "Clip";
+        case 0x03: return "?";
+        }
+        break;
     case Labels::MXFGCMPEGES:
+    case Labels::MXFGCMPEGPES:
     case Labels::MXFGCMPEGPS:
     case Labels::MXFGCMPEGTS:
     case Labels::MXFGCAVCNALUnitStream:
     case Labels::MXFGCAVCByteStream:
     case Labels::MXFGCHEVCNALUnitStream:
     case Labels::MXFGCHEVCByteStream:
-    case Labels::MXFGCMPEGPES: WrappingStyle = Wrapping_MPEG; Pos = 0; break;
-    case Labels::MXFGCUncompressedPictures: WrappingStyle = Wrapping_FrameClipLine; Pos = 0;  break;
-    case Labels::AvidTechnologyIncVC3Pictures: //TODO: move to MXFGCEssenceContainerDNxPacked
-    case Labels::MXFGCAESBWFAudio: WrappingStyle = Wrapping_FrameClipCustom_AES; Pos = 8; break;
-    case Labels::MXFGCJPEG2000PictureMappings:
-    case Labels::MXFGCVC3Pictures:
-    case Labels::MXFGCFFV1Pictures:
-    case Labels::MXFGCEssenceContainerDNxPacked:
-    case Labels::MXFGCALawAudioMappings: WrappingStyle = Wrapping_FrameClip; Pos=8; break;
-    case Labels::MXF_GC_AAC_ADIF:
-    case Labels::MXF_GC_AAC_ADTS:
-    case Labels::MXF_GC_AAC_LATM_LOAS: WrappingStyle = Wrapping_FrameClipCustom; Pos = 8; break;
-    case Labels::MXFGCMGAAudioMappings:
-    case Labels::MXFGCEssenceContainerProResPicture: WrappingStyle = Wrapping_Frame; Pos=8; break;
-    case Labels::MXFGCGenericData: WrappingStyle = Wrapping_GCGenericData; break;
-    case Labels::MXFGCImmersiveAudio: WrappingStyle = Wrapping_ImmersiveAudio; break;
-    //case Labels::MXFGCSMPTED11Mappings:
-    //case Labels::MXFGCEncryptedDataMappings:
-    //case Labels::MXFGCGenericVBIDataMappingUndefinedPayload:
-    //case Labels::MXFGCGenericANCDataMappingUndefinedPayload:
-    //case Labels::MXFGCVC1Pictures:
-    //case Labels::MXFGCGenericData:
-    //case Labels::MXFGCTIFFEP:
-    //case Labels::MXFGCVC2Pictures:
-    //case Labels::MXFGCACESPictures:
-    //case Labels::MXFGCDMCVTData:
-    //case Labels::MXFGCVC5EssenceContainerLabel:
-    //case Labels::MXFGCJPEGXSPictures:
-    case 0x0e09060701010000: return (int16u)(Code_lo)==0x0103 ? "Frame" : "";
-    default:
-        WrappingStyle = Wrapping_None;
-    }
-
-    switch (WrappingStyle) {
-    case Wrapping_D10:
-        return "Frame (D-10)";
-    case Wrapping_Frame:
-        switch ((int8u)(Code_lo >> Pos)) {
-        case 0x01: return "Frame";
-        }
-        break;
-    case Wrapping_FrameClip:
-        switch ((int8u)(Code_lo >> Pos)) {
-        case 0x01: return "Frame";
-        case 0x02: return "Clip";
-        case 0x03: return "?";
-        }
-        break;
-    case Wrapping_FrameClipLine:
-        switch ((int8u)(Code_lo >> Pos)) {
-        case 0x01: return "Frame";
-        case 0x02: return "Clip";
-        case 0x03: return "Line";
-        }
-        break;
-    case Wrapping_FrameClipCustom:
-        switch ((int8u)(Code_lo >> Pos)) {
-        case 0x01: return "Frame";
-        case 0x02: return "Clip";
-        case 0x03: return "Custom";
-        }
-        break;
-    case Wrapping_FrameClipCustom_AES:
-        switch ((int8u)(Code_lo >> Pos)) {
-        case 0x01: return "Frame (BWF)";
-        case 0x02: return "Clip (BWF)";
-        case 0x03: return "Frame (AES)";
-        case 0x04: return "Clip (AES)";
-        case 0x08: return "Custom (BWF)";
-        case 0x09: return "Custom (AES)";
-        }
-        break;
-    case Wrapping_MPEG:
-        switch ((int8u)(Code_lo >> Pos)) {
+        switch ((int8u)Code_lo) {
         case 0x01: return "Frame";
         case 0x02: return "Clip";
         case 0x03: return "Custom: Stripe";
@@ -485,13 +409,76 @@ static const char* Mxf_EssenceContainer_Mapping(int64u Code_lo)
         case 0x08: return "Custom: Slave";
         }
         break;
-    case Wrapping_GCGenericData:
-    case Wrapping_ImmersiveAudio:
-        switch ((int16u)(Code_lo)) {
+    case Labels::MXFGCUncompressedPictures:
+        switch ((int8u)Code_lo) {
+        case 0x01: return "Frame";
+        case 0x02: return "Clip";
+        case 0x03: return "Line";
+        }
+        break;
+    case Labels::MXFGCAESBWFAudio:
+    case Labels::AvidTechnologyIncVC3Pictures: //TODO: move to MXFGCEssenceContainerDNxPacked
+        switch ((int8u)(Code_lo >> 8)) {
+        case 0x01: return "Frame (BWF)";
+        case 0x02: return "Clip (BWF)";
+        case 0x03: return "Frame (AES)";
+        case 0x04: return "Clip (AES)";
+        case 0x08: return "Custom (BWF)";
+        case 0x09: return "Custom (AES)";
+        }
+        break;
+    case Labels::MXFGCALawAudioMappings:
+    case Labels::MXFGCEncryptedDataMappings:
+    case Labels::MXFGCJPEG2000PictureMappings:
+    case Labels::MXFGCVC3Pictures:
+    case Labels::MXFGCVC1Pictures:
+    case Labels::MXFGCTIFFEP:
+    case Labels::MXFGCVC2Pictures:
+    case Labels::MXFGCACESPictures:
+    case Labels::MXFGCEssenceContainerDNxPacked:
+    case Labels::MXFGCFFV1Pictures:
+        switch ((int8u)(Code_lo >> 8)) {
+        case 0x01: return "Frame";
+        case 0x02: return "Clip";
+        }
+        break;
+    case Labels::MXF_GC_AAC_ADIF:
+    case Labels::MXF_GC_AAC_ADTS:
+    case Labels::MXF_GC_AAC_LATM_LOAS:
+    case Labels::MXFGCVC5EssenceContainerLabel:
+        switch ((int8u)(Code_lo >> 8)) {
+        case 0x01: return "Frame";
+        case 0x02: return "Clip";
+        case 0x03: return "Custom";
+        }
+        break;
+    case Labels::MXFGCDMCVTData:
+    case Labels::MXFGCEssenceContainerProResPicture:
+    case Labels::MXFGCMGAAudioMappings:
+        switch ((int8u)(Code_lo >> 8)) {
+        case 0x01: return "Frame";
+        }
+        break;
+    case Labels::MXFGCGenericData:
+    case Labels::MXFGCImmersiveAudio:
+        switch ((int16u)Code_lo) {
         case 0x0101: return "Clip";
         }
         break;
+    case Labels::MXFGCJPEGXSPictures:
+        switch ((int8u)(Code_lo >> 8)) {
+        case 0x01: return "Frame";
+        case 0x02: return "Clip";
+        case 0x03: return "Custom";
+        }
+        break;
+    case 0x0e09060701010000:
+        switch ((int16u)Code_lo) {
+        case 0x0103: return "Frame";
+        }
+        break;
     }
+
     return "";
 }
 
@@ -2630,14 +2617,7 @@ void File_Mxf::Streams_Finish_Essence(int32u EssenceUID, int128u TrackUID)
     }
     Finish(*Parser);
     StreamKind_Last=Stream_Max;
-    if ((*Parser)->Get(Stream_General, 0, General_Format) == __T("Dolby Vision Metadata")) // TODO: TEMP
-    {
-        DolbyVisionMetadata = (File_DolbyVisionMetadata*)*Parser;
-        *Parser = nullptr;
-        return;
-    }
-    else
-    if ((*Parser)->Count_Get(Stream_Video))
+    if ((*Parser)->Count_Get(Stream_Video) && (*Parser)->Get(Stream_General, 0, General_Format)!=__T("Dolby Vision Metadata"))
     {
         Stream_Prepare(Stream_Video);
         if (IsSub)
@@ -10764,7 +10744,7 @@ void File_Mxf::ItemValue_ISO7()
 
     //Filling
     DMOmneons[InstanceUID].Name=Data;
-    // TODO Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
+    Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
     Name.clear();
 }
 
@@ -10777,7 +10757,7 @@ void File_Mxf::ItemValue()
 
     //Filling
     DMOmneons[InstanceUID].Name=Data;
-    // TODO Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
+    Fill(Stream_General, 0, Name.To_UTF8().c_str(), Data);
     Name.clear();
 }
 
