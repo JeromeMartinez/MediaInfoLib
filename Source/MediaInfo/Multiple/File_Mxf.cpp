@@ -2371,6 +2371,7 @@ void File_Mxf::Streams_Finish()
     }
 
     //Metadata
+    size_t DolbyVisionMetadata_i = 0;
     for (const auto DolbyVisionMetadata : DolbyVisionMetadatas)
     {
         if (Retrieve_Const(Stream_Video, 0, "HDR_Format").find(__T("Dolby Vision")) == string::npos) // TODO: better check when more than 1 content with Dolby Vision
@@ -2381,7 +2382,21 @@ void File_Mxf::Streams_Finish()
             Fill(Stream_Other, StreamPos_Last, Other_MuxingMode, "Generic Stream Data");
             Fill(Stream_Other, StreamPos_Last, "MuxingMode_MoreInfo", "Contains additional metadata for other tracks");
             Merge(*DolbyVisionMetadata, Stream_Other, 0, StreamPos_Last);
+
+            if (DolbyVisionMetadata_i < DolbyVisionMetadatas_SID.size()) {
+                auto SID = DolbyVisionMetadatas_SID[DolbyVisionMetadata_i];
+                if (SID) {
+                    for (const auto& Descriptor : Descriptors) {
+                        if (Descriptor.second.SID == SID) {
+                            for (const auto& Info : Descriptor.second.Infos) {
+                                Fill(Stream_Other, StreamPos_Last, Info.first.c_str(), Info.second);
+                            }
+                        }
+                    }
+                }
+            }
         }
+        DolbyVisionMetadata_i++;
     }
     if (DolbyAudioMetadata) //Before ADM for having content before all ADM stuff
         Merge(*DolbyAudioMetadata, Stream_Audio, 0, 0);
@@ -7877,7 +7892,8 @@ void File_Mxf::GenericStreamID()
     Get_B4 (Data,                                               "Data"); Element_Info1(Data);
 
     FILLING_BEGIN();
-         ExtraMetadata_SID.insert(Data);
+        ExtraMetadata_SID.insert(Data);
+        Descriptors[InstanceUID].SID=Data;
     FILLING_END();
 }
 
@@ -7901,7 +7917,10 @@ void File_Mxf::MXFGenericStreamDataElementKey_09_01()
     Open_Buffer_Continue(DolbyVisionMetadata_New);
     if (DolbyVisionMetadata_New->Status[IsAccepted])
     {
+        DolbyVisionMetadatas_SID.resize(DolbyVisionMetadatas.size());
         DolbyVisionMetadatas.push_back(DolbyVisionMetadata_New);
+        if (!Partitions.empty() && Partitions.back().BodySID)
+            DolbyVisionMetadatas_SID.push_back(Partitions.back().BodySID);
     }
     Element_Offset=0;
 
@@ -8418,7 +8437,11 @@ void File_Mxf::MCAAudioElementKind()
 void File_Mxf::TextDataDescription()
 {
     //Parsing
-    Skip_UTF16B(Length2,                                        "Data");
+    Ztring Value;
+    Get_UTF16B (Length2, Value,                                 "Value"); Element_Info1(Value);
+
+    if (Value.find(__T(".dolby.com/"))!=string::npos && Value.find(__T(' '))==string::npos) // found in some Dolby Vision files
+        Descriptors[InstanceUID].Infos["CodecID"]=Value;
 }
 
 //---------------------------------------------------------------------------
@@ -11124,7 +11147,7 @@ void File_Mxf::PartitionMetadata()
 {
     //Parsing
     int64u PreviousPartition, FooterPartition, HeaderByteCount, IndexByteCount, BodyOffset;
-    int32u IndexSID;
+    int32u IndexSID, BodySID;
     int32u KAGSize;
     int16u MajorVersion, MinorVersion;
     Get_B2 (MajorVersion,                                       "MajorVersion");
@@ -11137,7 +11160,7 @@ void File_Mxf::PartitionMetadata()
     Get_B8 (IndexByteCount,                                     "IndexByteCount");
     Get_B4 (IndexSID,                                           "IndexSID");
     Get_B8 (BodyOffset,                                         "BodyOffset");
-    Skip_B4(                                                    "BodySID");
+    Get_B4 (BodySID,                                            "BodySID");
     Get_UL (OperationalPattern,                                 "OperationalPattern", Mxf_OperationalPattern);
 
     Element_Begin1("EssenceContainers"); //Vector
@@ -11179,6 +11202,7 @@ void File_Mxf::PartitionMetadata()
         Partition.HeaderByteCount=HeaderByteCount;
         Partition.IndexByteCount=IndexByteCount;
         Partition.BodyOffset=BodyOffset;
+        Partition.BodySID=BodySID;
         Partitions_Pos=0;
         while (Partitions_Pos<Partitions.size() && Partitions[Partitions_Pos].StreamOffset<Partition.StreamOffset)
             Partitions_Pos++;

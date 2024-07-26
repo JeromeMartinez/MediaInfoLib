@@ -946,6 +946,9 @@ protected :
         //AudioChannelLabelSubDescriptor specific
         int128u     SoundfieldGroupLinkID;
 
+        //DescriptiveMarker
+        int32u      SID;
+
         descriptor()
         {
             StreamKind=Stream_Max;
@@ -999,6 +1002,9 @@ protected :
             //AudioChannelLabelSubDescriptor specific
             SoundfieldGroupLinkID.hi=(int64u)-1;
             SoundfieldGroupLinkID.lo=(int64u)-1;
+
+            //DescriptiveMarker
+            SID=0;
         }
         descriptor(const descriptor&) = delete;
         descriptor(descriptor& b)
@@ -1350,6 +1356,7 @@ protected :
         int64u HeaderByteCount;
         int64u IndexByteCount;
         int64u BodyOffset;
+        int32u BodySID;
 
         partition()
         {
@@ -1359,6 +1366,7 @@ protected :
             HeaderByteCount=0;
             IndexByteCount=0;
             BodyOffset=0;
+            BodySID=0;
         }
 
         bool operator < (const partition& lhs) const
@@ -1433,6 +1441,7 @@ protected :
     int64u ExtraMetadata_Offset;
     std::set<int32u> ExtraMetadata_SID;
     std::vector<File_DolbyVisionMetadata*> DolbyVisionMetadatas;
+    std::vector<int32u> DolbyVisionMetadatas_SID;
     std::set<int64u> MXFGenericStreamDataElementKey_Offsets;
     File_DolbyAudioMetadata* DolbyAudioMetadata;
     #if defined(MEDIAINFO_ADM_YES)
