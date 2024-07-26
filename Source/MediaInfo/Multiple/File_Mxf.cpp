@@ -3629,8 +3629,16 @@ void File_Mxf::Streams_Finish_Descriptor(descriptors::iterator Descriptor)
             for (size_t Pos=0; Pos<Descriptor->second.SubDescriptors.size(); Pos++)
             {
                 descriptors::iterator SubDescriptor=Descriptors.find(Descriptor->second.SubDescriptors[Pos]);
-                if (SubDescriptor!=Descriptors.end() && SubDescriptor->second.LinkedTrackID==(int32u)-1)
+                if (SubDescriptor!=Descriptors.end())
                 {
+                    if (SubDescriptor->second.LinkedTrackID!=(int32u)-1)
+                    {
+                        //This is not a real subdescriptor, rather a descriptor for another track. Seen in a PHDR track
+                        if (SubDescriptor->second.LinkedTrackID!=Descriptor->second.LinkedTrackID) // TODO: better method for avoiding loop
+                            Streams_Finish_Descriptor(SubDescriptor->first, int128u());
+                        continue;
+                    }
+
                     switch (SubDescriptor->second.Type)
                     {
                         case descriptor::Type_AudioChannelLabelSubDescriptor:
@@ -5855,7 +5863,7 @@ void File_Mxf::Data_Parse()
                     std::map<int16u, int128u>::iterator Primer_Value = Primer_Values.find(Code2);
                     if (Primer_Value != Primer_Values.end()) {
                         auto Name = Mxf_Param_Info((int32u)Primer_Value->second.hi, Primer_Value->second.lo);
-                        Element_Name(Name ? Name : Ztring().From_UUID(Code).To_UTF8().c_str());
+                        Element_Name(Name ? Name : Ztring().From_UUID(Primer_Value->second).To_UTF8().c_str());
                     }
                     else {
                         Element_Name(Ztring().From_CC2(Code2).To_UTF8().c_str());
