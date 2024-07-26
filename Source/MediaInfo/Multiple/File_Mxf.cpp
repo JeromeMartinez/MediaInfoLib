@@ -3629,7 +3629,7 @@ void File_Mxf::Streams_Finish_Descriptor(descriptors::iterator Descriptor)
             for (size_t Pos=0; Pos<Descriptor->second.SubDescriptors.size(); Pos++)
             {
                 descriptors::iterator SubDescriptor=Descriptors.find(Descriptor->second.SubDescriptors[Pos]);
-                if (SubDescriptor!=Descriptors.end())
+                if (SubDescriptor!=Descriptors.end() && SubDescriptor->second.LinkedTrackID==(int32u)-1)
                 {
                     switch (SubDescriptor->second.Type)
                     {
@@ -13581,7 +13581,15 @@ void File_Mxf::DolbyNamespaceURI()
 void File_Mxf::PHDRDataDefinition()
 {
     //Parsing
-    Skip_UUID(                                                  "Value");
+    int128u Value;
+    Get_UUID (Value,                                            "Value"); Element_Info1(Ztring().From_UUID(Value));
+
+    Ztring CodecID;
+    CodecID.From_Number(Value.lo, 16);
+    if (CodecID.size()<16) {
+        CodecID.insert(0, 16-CodecID.size(), __T('0'));
+    }
+    Descriptor_Fill("CodecID", CodecID);
 }
 
 //---------------------------------------------------------------------------
@@ -15602,6 +15610,8 @@ bool File_Mxf::BookMark_Needed()
 //---------------------------------------------------------------------------
 void File_Mxf::Descriptor_Fill(const char* Name, const Ztring& Value)
 {
+    if (Value == L"0E09060701010101")
+        int A = 0;
     descriptor& Descriptor = Descriptors[InstanceUID];
     std::map<std::string, Ztring>::iterator Info = Descriptor.Infos.find(Name);
 

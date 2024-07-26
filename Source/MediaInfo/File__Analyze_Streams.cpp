@@ -876,7 +876,7 @@ bool ShowSource_IsInList(video Value)
 //---------------------------------------------------------------------------
 void File__Analyze::Fill (stream_t StreamKind, size_t StreamPos, size_t Parameter, const Ztring &Value, bool Replace)
 {
-    if (Value.find(L"PHDR Metadata Track")!=string::npos)
+    if (Value.find(L"0E09060701010101")!=string::npos)
         int A = 0;
 
     // Sanitize
