@@ -14338,6 +14338,7 @@ void File_Mxf::ChooseParser__FromEssenceContainer(const essences::iterator &Esse
         {
         case Stream_Video: ChooseParser_Mpegv(Essence, Descriptor); break;
         case Stream_Audio: ChooseParser_SmpteSt0331(Essence, Descriptor); break;
+        default:;
         }
         break;
     case Labels::MXFGCDVDIFMappings: ChooseParser_DV(Essence, Descriptor); break;
@@ -15600,6 +15601,7 @@ bool File_Mxf::BookMark_Needed()
             case config_probe_percent:
                 ProbeCaptionBytePos=HeaderSize+ContentSize/100*Probe.Start;
                 break;
+            default:;
         }
         switch (Probe.Duration_Type) {
             case config_probe_size:
@@ -15642,8 +15644,6 @@ bool File_Mxf::BookMark_Needed()
 //---------------------------------------------------------------------------
 void File_Mxf::Descriptor_Fill(const char* Name, const Ztring& Value)
 {
-    if (Value == L"0E09060701010101")
-        int A = 0;
     descriptor& Descriptor = Descriptors[InstanceUID];
     std::map<std::string, Ztring>::iterator Info = Descriptor.Infos.find(Name);
 
