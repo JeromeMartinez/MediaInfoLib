@@ -93,10 +93,10 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
             sudo apt-get update -y
-            sudo apt-get install -y ccache libxml2-utils zlib1g-dev libcurl4-gnutls-dev libmms-dev ${{ matrix.environement == 'cmake-dll' && 'g++-mingw-w64-x86-64' || '' }} ${{ env.LINK_CURL_GRAPHVIZ && 'libgraphviz-dev' || '' }}
+            sudo apt-get install -y ccache libbrotli-dev libxml2-utils zlib1g-dev libcurl4-gnutls-dev libmms-dev ${{ matrix.environement == 'cmake-dll' && 'g++-mingw-w64-x86-64' || '' }} ${{ env.LINK_CURL_GRAPHVIZ && 'libgraphviz-dev' || '' }}
           fi
           if [ "$RUNNER_OS" == "macOS" ]; then
-            brew install ccache libtool automake ${{ env.LINK_CURL_GRAPHVIZ && 'graphviz' || '' }}
+            brew install brotli ccache libtool automake ${{ env.LINK_CURL_GRAPHVIZ && 'graphviz' || '' }}
           fi
           # compiler cache (same objects for most of the runs)
           if [[ "${{ matrix.environement }}" == cmake* ]]; then
@@ -120,6 +120,10 @@ jobs:
           python3 -m venv "${RUNNER_TEMP}/venv"
           "${RUNNER_TEMP}/venv/bin/pip" install pymediainfo
           echo "${RUNNER_TEMP}/venv/bin" >> "${GITHUB_PATH}"
+      - name: brotli
+        if: ${{ (runner.os == 'Windows') || matrix.environement == 'cmake-dll' }}
+        run: |
+          git -C .. clone --depth=1 https://github.com/MediaArea/brotli.git
       - name: zlib
         if: ${{ (runner.os == 'Windows') || matrix.environement == 'cmake-dll' }}
         run: |
@@ -202,7 +206,7 @@ jobs:
       CXX: ccache c++
     steps:
       - name: OS packets
-        run: apk add --no-cache autoconf automake bash build-base ccache git libtool pkgconf python3 tar zlib-dev zstd # tar and zstd for the cache
+        run: apk add --no-cache autoconf automake bash brotli-dev build-base ccache git libtool pkgconf python3 tar zlib-dev zstd # tar and zstd for the cache
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -246,7 +250,7 @@ jobs:
         with:
           envs: BRANCH_OWNER BRANCH_NAME
           usesh: true
-          prepare: pkg install -y autoconf automake bash ccache git gmake libtool pkgconf python3
+          prepare: pkg install -y autoconf automake bash brotli ccache git gmake libtool pkgconf python3
           run: |
             set -e
             # compiler cache in the directory synchronized with the runner
@@ -283,6 +287,11 @@ jobs:
     steps:
       - name: Line endings
         run: git config --global core.autocrlf false # Test scripts with LF line endings
+      - name: Checkout brotli
+        uses: actions/checkout@v6
+        with:
+          repository: MediaArea/brotli
+          path: brotli
       - name: Checkout zlib
         uses: actions/checkout@v6
         with:
