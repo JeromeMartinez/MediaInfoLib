@@ -19,6 +19,7 @@
 //---------------------------------------------------------------------------
 //Needed in the whole library
 #include "ZenLib/Conf.h"
+#include <cstdint>
 
 //***************************************************************************
 // General configuration
@@ -594,6 +595,9 @@
 #if !defined(MEDIAINFO_MULTI_NO) && !defined(MEDIAINFO_SWF_NO) && !defined(MEDIAINFO_SWF_YES)
     #define MEDIAINFO_SWF_YES
 #endif
+#if !defined(MEDIAINFO_MULTI_NO) && !defined(MEDIAINFO_T35_NO) && !defined(MEDIAINFO_T35_YES)
+    #define MEDIAINFO_T35_YES
+#endif
 #if !defined(MEDIAINFO_MULTI_NO) && !defined(MEDIAINFO_TSP_NO) && !defined(MEDIAINFO_TSP_YES)
     #define MEDIAINFO_TSP_YES
 #endif
@@ -1062,5 +1066,160 @@
 #if !defined(MEDIAINFO_JNI_NO)
     #define MEDIAINFO_JNI_YES
 #endif
+
+//***************************************************************************
+// Custom structs used everywhere
+//***************************************************************************
+
+typedef const char* const info_list;
+struct info_list_size
+{
+    uint8_t ContentSize;
+    uint8_t GapSize;
+};
+struct info_map
+{
+    uint32_t Value;
+    const char* const Meaning;
+};
+
+//***************************************************************************
+// Support of old compilers with more recent C++ features
+//***************************************************************************
+
+// C++ Standard Version Detection
+#if defined(_MSC_VER)
+    #define CPP_LANG _MSVC_LANG
+#else
+    #define CPP_LANG __cplusplus
+#endif
+#define CPP11 (CPP_LANG >= 201103L)
+#define CPP14 (CPP_LANG >= 201402L)
+#define CPP17 (CPP_LANG >= 201703L)
+#define CPP20 (CPP_LANG >= 202002L)
+#define CPP23 (CPP_LANG >  202002L)
+
+// constexpr by standard
+#if CPP14
+    #define constexpr14 constexpr
+#else
+    #define constexpr14 inline
+#endif
+#if CPP20
+    #define constexpr20 constexpr
+#else
+    #define constexpr20 inline
+#endif
+#if CPP23
+    #define constexpr23 constexpr
+#else
+    #define constexpr23 inline
+#endif
+#if !CPP20
+    #define consteval constexpr
+#endif
+
+// [[nodiscard]], [[maybe_unused]], [[fallthrough]], [[no_unique_address]], [[likely]]
+#if CPP17
+    #define NODISCARD          [[nodiscard]]
+    #define NODISCARD_MSG(msg) [[nodiscard(msg)]]  // msg version requires C++20 but degrades gracefully
+    #define MAYBE_UNUSED       [[maybe_unused]]
+    #define FALLTHROUGH        [[fallthrough]]
+#else
+    #define NODISCARD
+    #define NODISCARD_MSG(msg)
+    #define MAYBE_UNUSED
+    #if defined(__GNUC__) || defined(__clang__)
+        #define FALLTHROUGH __attribute__((fallthrough))
+    #else
+        #define FALLTHROUGH
+    #endif
+#endif
+#if CPP20
+    #define LIKELY(x)   (x) [[likely]]
+    #define UNLIKELY(x) (x) [[unlikely]]
+#elif defined(__GNUC__) || defined(__clang__)
+    #define LIKELY(x)   (__builtin_expect(!!(x), 1))
+    #define UNLIKELY(x) (__builtin_expect(!!(x), 0))
+#else
+    #define LIKELY(x)   (x)
+    #define UNLIKELY(x) (x)
+#endif
+#if CPP20
+    #if defined(_MSC_VER)
+        #define NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+    #else
+        #define NO_UNIQUE_ADDRESS [[no_unique_address]]
+    #endif
+#else
+    #define NO_UNIQUE_ADDRESS
+#endif
+#if CPP23
+    #define ASSUME(expr) [[assume(expr)]]
+#elif defined(__clang__)
+    #define ASSUME(expr) __builtin_assume(expr)
+#elif defined(_MSC_VER)
+    #define ASSUME(expr) __assume(expr)
+#elif defined(__GNUC__) && __GNUC__ >= 13
+    #define ASSUME(expr) __attribute__((assume(expr)))
+#else
+    #define ASSUME(expr)
+#endif
+
+// if constexpr
+#if CPP17
+    #define IF_CONSTEXPR if constexpr
+#else
+    #define IF_CONSTEXPR if
+#endif
+
+// std::size / std::data / std::empty backports
+#if !CPP17
+    #include <cstddef>
+    template <typename C>
+    inline constexpr auto size(const C& c) noexcept -> decltype(c.size()) {
+        return c.size();
+    }
+    template <typename T, std::size_t N>
+    inline constexpr std::size_t size(const T(&)[N]) noexcept { return N; }
+    template <typename C>
+    inline constexpr auto data(C& c) noexcept -> decltype(c.data()) {
+        return c.data();
+    }
+    template <typename T, std::size_t N>
+    inline constexpr T* data(T(&arr)[N]) noexcept { return arr; }
+    template <typename C>
+    inline constexpr auto empty(const C& c) noexcept -> decltype(c.empty()) {
+        return c.empty();
+    }
+    template <typename T, std::size_t N>
+    inline constexpr bool empty(const T(&)[N]) noexcept { return false; }
+#endif
+
+// std::to_underlying
+#if !CPP23
+    #include <type_traits>
+    namespace std {
+        template <typename E>
+        constexpr auto to_underlying(E e) noexcept {
+            return static_cast<typename std::underlying_type<E>::type>(e);
+        }
+    }
+#endif
+
+// Debug trap / breakpoint
+#if !defined(NDEBUG)
+    #define DEBUG_BREAK()
+#elif defined(_MSC_VER)
+    #define DEBUG_BREAK() __debugbreak()
+#elif defined(__clang__)
+    #define DEBUG_BREAK() __builtin_debugtrap()
+#elif defined(__GNUC__)
+    #define DEBUG_BREAK() __builtin_trap()
+#else
+    #include <csignal>
+    #define DEBUG_BREAK() std::raise(SIGTRAP)
+#endif
+
 
 #endif

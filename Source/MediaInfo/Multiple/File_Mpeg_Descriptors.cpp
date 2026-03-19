@@ -1899,10 +1899,7 @@ void File_Mpeg_Descriptors::Data_Parse()
             ELEMENT_CASE(FC, "ARIB - Emergency Information");
             ELEMENT_CASE(FD, "ARIB - Data Component");
 
-            default: if (Element_Code>=0x40)
-                        Element_Info1("user private");
-                     else
-                        Element_Info1("unknown");
+            default: Element_Info1C(Element_Code >= 0x40, "user private");
                      Skip_XX(Element_Size,                          "Data");
                      break;
         }
@@ -1975,10 +1972,7 @@ void File_Mpeg_Descriptors::Data_Parse()
             ELEMENT_CASE(7D, "DVB - XAIT_location_descriptor");
             ELEMENT_CASE(7E, "DVB - FTA_content_management_descriptor");
             ELEMENT_CASE(7F, "DVB - extension descriptor");
-            default: if (Element_Code>=0x40)
-                        Element_Info1("user private");
-                     else
-                        Element_Info1("unknown");
+            default: Element_Info1C(Element_Code >= 0x40, "user private");
                      Skip_XX(Element_Size,                          "Data");
                      break;
         }
@@ -1999,10 +1993,7 @@ void File_Mpeg_Descriptors::Data_Parse()
             ELEMENT_CASE(A9, "ATSC - DCC Arriving Request");
             ELEMENT_CASE(AA, "ATSC - Redistribution Control");
             ELEMENT_CASE(AB, "ATSC - DCC Location Code");
-            default: if (Element_Code>=0x40)
-                        Element_Info1("user private");
-                     else
-                        Element_Info1("unknown");
+            default: Element_Info1C(Element_Code >= 0x40, "user private");
                      Skip_XX(Element_Size,                          "Data");
                      break;
         }
@@ -2025,10 +2016,7 @@ void File_Mpeg_Descriptors::Data_Parse()
     }
     else
     {
-        if (Element_Code>=0x40)
-        Element_Info1("user private");
-        else
-        Element_Info1("unknown");
+        Element_Info1C(Element_Code >= 0x40, "user private");
         Skip_XX(Element_Size,                                   "Data");
     }
 }

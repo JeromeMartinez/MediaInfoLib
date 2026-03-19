@@ -4251,7 +4251,7 @@ bool File_MpegPs::Header_Parser_QuickSearch()
 
         //Trace config
         #if MEDIAINFO_TRACE
-            if (Config_Trace_Level)
+            if (Trace_Activated)
             {
                 if (stream_id==0xC0 || stream_id==0xE0)
                 {

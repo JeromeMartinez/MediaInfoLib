@@ -388,7 +388,7 @@ void File_Iso9660::File()
 
     //Details
     #if MEDIAINFO_TRACE
-    if (Config_Trace_Level)
+    if (Trace_Activated)
     {
         if (!MI_Current->Inform().empty())
             Element_Show_Add(MI_Current->Info);

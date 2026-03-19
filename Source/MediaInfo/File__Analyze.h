@@ -23,11 +23,11 @@
     #include <aescpp.h>
 #endif //MEDIAINFO_AES
 #include "MediaInfo/HashWrapper.h"
+#include <memory>
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
 {
-
 class MediaInfo_Internal;
 
 template <class T> inline Ztring Get_Hex_ID(const T& Value)
@@ -277,6 +277,24 @@ public :
     bool   UnSynched_IsNotJunk;        //Data is actually synched
     bool   MustExtendParsingDuration;  //Data has some substreams difficult to detect (e.g. captions), must wait a bit before final filling
 
+    struct vlc
+    {
+        int32u  value;
+        int8u   bit_increment;
+        int8s   mapped_to1;
+        int8s   mapped_to2;
+        int8s   mapped_to3;
+    };
+    struct vlc_fast
+    {
+        int8u*      Array;
+        int8u*      BitsToSkip;
+        const vlc*  Vlc;
+        int8u       Size;
+    };
+    #define VLC_END \
+        {(int32u)-1, (int8u)-1, 0, 0, 0}
+
 protected :
     //***************************************************************************
     // Streams management
@@ -409,31 +427,43 @@ protected :
     //Elements - Info
 #if MEDIAINFO_TRACE
     template<typename T>
-    void Element_Info (T Parameter, const char* Measure=NULL, int8u AfterComma=3)
-    {
-        if (Config_Trace_Level<1)
-            return;
-
-        //Needed?
-        if (Config_Trace_Level<=0.7)
-            return;
-
-        Element[Element_Level].TraceNode.Infos.push_back(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+    void Element_Info (T Parameter, const char* Measure=NULL, int8u AfterComma=3) {
+        if (Trace_Activated) {
+            Element_Info_Internal(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+        }
     }
-
-    void Element_Info (const char* Parameter, const char* Measure=NULL, int8u AfterComma=3)
-    {
-        if (Config_Trace_Level<1)
-            return;
-
-        //Needed?
-        if (Config_Trace_Level<=0.7)
-            return;
-
-        if ((Parameter && std::string(Parameter) == "NOK") || (Measure && std::string(Measure) == "Error"))
-            Element[Element_Level].TraceNode.HasError = true;
-
-        Element[Element_Level].TraceNode.Infos.push_back(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+    void Element_Info(const char* Parameter, const char* Measure = nullptr, int8u AfterComma = 3);
+    template <size_t List_Size>
+    void Element_Info(int32u Value, const info_list(&List)[List_Size]) {
+        if (Trace_Activated) {
+            const info_list_size List_Sizes = { List_Size, 0 };
+            Element_Info_Internal(Value, List, &List_Sizes);
+        }
+    }
+    template <size_t List_Size>
+    void Element_Info(int32u Value, const info_list(&List)[List_Size], const info_list_size(&List_Sizes)[]) {
+        if (Trace_Activated) {
+            Element_Info_Internal(Value, List, &List_Sizes[0]);
+        }
+    }
+    template <size_t Map_Size>
+    void Element_Info(int32u Value, const info_list(&List)[], const info_list_size(&List_Sizes)[], const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            Element_Info_Internal(Value, List, &List_Sizes[0], &Map[0], Map_Size);
+        }
+    }
+    template <size_t List_Size, size_t Map_Size>
+    void Element_Info(int32u Value, const info_list(&List)[List_Size], const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            const info_list_size List_Sizes = { List_Size, 0 };
+            Element_Info_Internal(Value, List, &List_Sizes, &Map[0], Map_Size);
+        }
+    }
+    template <size_t Map_Size>
+    void Element_Info(int32u Value, const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            Element_Info_Internal(Value, nullptr, nullptr, &Map[0], Map_Size);
+        }
     }
 #endif //MEDIAINFO_TRACE
 
@@ -443,8 +473,12 @@ protected :
     #define Element_Info1(_A) Element_Info(_A)
     #define Element_Info2(_A,_B) Element_Info(_A, _B)
     #define Element_Info3(_A,_B,_C) Element_Info(_A, _B, _C)
+    #define Element_Info4(_A,_B,_C,_D) Element_Info(_A, _B, _C, _D)
     #define Element_Info1C(_CONDITION,_A) if (_CONDITION) Element_Info(_A)
-    inline void Element_Info_From_Milliseconds (int64u Parameter)                  {if (Config_Trace_Level<1) return; Element_Info(Ztring().Duration_From_Milliseconds(Parameter));}
+    #define Element_Info2C(_CONDITION,_A,_B) if (_CONDITION) ElementInfo(_A, _B)
+    #define Element_Info3C(_CONDITION,_A,_B,_C) if (_CONDITION) ElementInfo(_A, _B, _C)
+    #define Element_Info4C(_CONDITION,_A,_B,_C,_D) if (_CONDITION) ElementInfo(_A, _B, _C, _D)
+    inline void Element_Info_From_Milliseconds (int64u Parameter)                  {Element_Info(Ztring().Duration_From_Milliseconds(Parameter));}
 
     void Element_Parser (const char* Name);
     void Element_Error (const char* Name);
@@ -462,11 +496,9 @@ protected :
     //Elements - Preparation of element from external app
     void Element_Prepare (int64u Size);
 
-protected :
     //Element - Common
     void   Element_End_Common_Flush();
     void   Element_End_Common_Flush_Details();
-public :
 
     //***************************************************************************
     // Param
@@ -483,44 +515,20 @@ public :
 
     //Param - Main
     template<typename T>
-    inline void Param(const std::string &Parameter, T Value, int8u GenericOption=(int8u)-1)
-    {
-        if (!Trace_Activated)
-            return;
-
-        if (Config_Trace_Level==0 || !(Trace_Layers.to_ulong()&Config_Trace_Layers.to_ulong()))
-            return ;
-
-        //Coherancy
-        if (Element[Element_Level].UnTrusted)
-            return ;
-
-        element_details::Element_Node *node = new element_details::Element_Node;
-        node->Set_Name(Parameter);
-        node->Pos = File_Offset+Buffer_Offset+Element_Offset;
-        if (BS_Size)
-        {
-            int64u BS_BitOffset = BS_Size-BS->Remain();
-            if (GenericOption != (int8u)-1)
-                BS_BitOffset -= GenericOption;
-            node->Pos += BS_BitOffset>>3; //Including Bits to Bytes
+    inline void Param(const char* Parameter, T Value, int8u GenericOption = (int8u)-1) {
+        if (Trace_Activated) {
+            Param_Internal(Parameter, GenericOption)->Value = Value;
         }
-        node->Value.set_Option(GenericOption);
-        node->Value = Value;
-        Element[Element_Level].TraceNode.Current_Child = Element[Element_Level].TraceNode.Children.size();
-        Element[Element_Level].TraceNode.Children.push_back(node);
     }
+    element_details::Element_Node* Param_Internal(const char* Parameter, int8u GenericOption = (int8u)-1);
 
     inline void Param      (const char*   Parameter, const char*   Value, size_t Value_Size, bool Utf8=true) {Param(Parameter, ToZtring(Value, Value_Size, Utf8));}
-    inline void Param      (const char*   Parameter, const int8u*  Value, size_t Value_Size, bool Utf8=true) {Param(Parameter, (const char*)Value, Value_Size, Utf8);}
     inline void Param_GUID (const char*   Parameter, int128u Value){Param(Parameter, Ztring().From_GUID(Value));}
     inline void Param_UUID (const char*   Parameter, int128u Value){Param(Parameter, Ztring().From_UUID(Value));}
     inline void Param_CC   (const char*   Parameter, const int8u*  Value, int8u Value_Size){Ztring Name2; for (int8s i=0; i<Value_Size; i++) Name2.append(1, (ZenLib::Char)(Value[i])); Param(Parameter, Name2);}
     /* #ifdef SIZE_T_IS_LONG */
     /* inline void Param      (const char*   Parameter, size_t Value, intu Radix) {if (Trace_Activated) Param(Parameter, Ztring::ToZtring(Value, Radix).MakeUpperCase()+__T(" (")+Ztring::ToZtring(Value, 10).MakeUpperCase()+__T(")"));} */
     /* #endif //SIZE_T_IS_LONG */
-    inline void Param      (const int32u  Parameter, const Ztring& Value) {if (Trace_Activated) Param(Ztring().From_CC4(Parameter).To_UTF8(), Value.To_UTF8());};
-    inline void Param      (const int16u  Parameter, const Ztring& Value) {if (Trace_Activated) Param(Ztring().From_CC2(Parameter).To_UTF8(), Value.To_UTF8());};
     #define Param1(_A) Param_(_A)
     #define Param2(_A,_B) Param(_A, _B)
     #define Param3(_A,_B,_C) Param(_A, _B, _C)
@@ -528,43 +536,43 @@ public :
     //Param - Info
 #if MEDIAINFO_TRACE
     template<typename T>
-    void Param_Info(T Parameter, const char* Measure=NULL, int8u AfterComma=3)
-    {
-        //Coherancy
-        if (!Trace_Activated)
-            return;
-        if (Element[Element_Level].UnTrusted)
-            return;
-        if (Config_Trace_Level<=0.7)
-            return;
-
-        // if (!(Trace_Layers.to_ulong()&Config_Trace_Layers.to_ulong()) || Element[Element_Level].TraceNode.Details.size()>64*1024*1024)
-        //     return;
-        int32s child = Element[Element_Level].TraceNode.Current_Child;
-        if (child >= 0 && Element[Element_Level].TraceNode.Children[child])
-            Element[Element_Level].TraceNode.Children[child]->Infos.push_back(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
-        else
-            Element[Element_Level].TraceNode.Infos.push_back(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+    void Param_Info(T Parameter, const char* Measure = NULL, int8u AfterComma = 3) {
+        if (Trace_Activated) {
+            Param_Info_Internal(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+        }
     }
-
-    void Param_Info(const char* Parameter, const char* Measure=NULL, int8u AfterComma=3)
-    {
-        //Coherancy
-        if (!Trace_Activated)
-            return;
-        if (Element[Element_Level].UnTrusted)
-            return;
-        if (Config_Trace_Level<=0.7)
-            return;
-
-        if ((Parameter && std::string(Parameter) == "NOK") || (Measure && std::string(Measure) == "Error"))
-            Element[Element_Level].TraceNode.HasError = true;
-
-        int32s child = Element[Element_Level].TraceNode.Current_Child;
-        if (child >= 0 && Element[Element_Level].TraceNode.Children[child])
-            Element[Element_Level].TraceNode.Children[child]->Infos.push_back(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
-        else
-            Element[Element_Level].TraceNode.Infos.push_back(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+    void Param_Info(const char* Parameter, const char* Measure = nullptr, int8u AfterComma = 3);
+    template <size_t List_Size>
+    void Param_Info(int32u Value, const info_list(&List)[List_Size]) {
+        if (Trace_Activated) {
+            const info_list_size List_Sizes = { List_Size, 0 };
+            Param_Info_Internal(Value, List, &List_Sizes);
+        }
+    }
+    template <size_t List_Size>
+    void Param_Info(int32u Value, const info_list(&List)[List_Size], const info_list_size(&List_Sizes)[]) {
+        if (Trace_Activated) {
+            Param_Info_Internal(Value, List, &List_Sizes[0]);
+        }
+    }
+    template <size_t Map_Size>
+    void Param_Info(int32u Value, const info_list(&List)[], const info_list_size(&List_Sizes)[], info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            Param_Info_Internal(Value, List, &List_Sizes[0], &Map[0], Map_Size);
+        }
+    }
+    template <size_t List_Size, size_t Map_Size>
+    void Param_Info(int32u Value, const info_list(&List)[List_Size], const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            const info_list_size List_Sizes = { List_Size, 0 };
+            Param_Info_Internal(Value, List, &List_Sizes, &Map[0], Map_Size);
+        }
+    }
+    template <size_t Map_Size>
+    void Param_Info(int32u Value, const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            Param_Info_Internal(Value, nullptr, nullptr, &Map[0], Map_Size);
+        }
     }
 #endif //MEDIAINFO_TRACE
 
@@ -574,10 +582,64 @@ public :
     #define Param_Info1(_A) Param_Info(_A)
     #define Param_Info2(_A,_B) Param_Info(_A, _B)
     #define Param_Info3(_A,_B,_C) Param_Info(_A, _B, _C)
+    #define Param_Info4(_A,_B,_C) Param_Info(_A, _B, _C)
     #define Param_Info1C(_CONDITION,_A) if (_CONDITION) Param_Info(_A)
     #define Param_Info2C(_CONDITION,_A,_B) if (_CONDITION) Param_Info(_A, _B)
     #define Param_Info3C(_CONDITION,_A,_B,_C) if (_CONDITION) Param_Info(_A, _B, _C)
+    #define Param_Info4C(_CONDITION,_A,_B,_C,_D) if (_CONDITION) Param_Info(_A, _B, _C, _D)
     inline void Param_Info_From_Milliseconds (int64u Parameter)                  {if (Trace_Activated) Param_Info(Ztring().Duration_From_Milliseconds(Parameter));}
+
+    //***************************************************************************
+    // Param and Element together
+    //***************************************************************************
+
+    //Param and Element - Info
+#if MEDIAINFO_TRACE
+    template <size_t List_Size>
+    void ParamElement_Info(int32u Value, const info_list(&List)[List_Size]) {
+        if (Trace_Activated) {
+            const info_list_size List_Sizes = { List_Size, 0 };
+            ParamElement_Info_Internal(Value, List, &List_Sizes);
+        }
+    }
+    template <size_t List_Size>
+    void ParamElement_Info(int32u Value, const info_list(&List)[List_Size], const info_list_size(&List_Sizes)[]) {
+        if (Trace_Activated) {
+            ParamElement_Info_Internal(Value, List, &List_Sizes[0]);
+        }
+    }
+    template <size_t Map_Size>
+    void ParamElement_Info(int32u Value, const info_list(&List)[], const info_list_size(&List_Sizes)[], const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            ParamElement_Info_Internal(Value, List, &List_Sizes[0], &Map[0], Map_Size);
+        }
+    }
+    template <size_t List_Size, size_t Map_Size>
+    void ParamElement_Info(int32u Value, const info_list(&List)[List_Size], const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            info_list_size List_Sizes = { List_Size, 0 };
+            ParamElement_Info_Internal(Value, List, &List_Sizes, &Map[0], Map_Size);
+        }
+    }
+    template <size_t Map_Size>
+    void ParamElement_Info(int32u Value, const info_map(&Map)[Map_Size]) {
+        if (Trace_Activated) {
+            ParamElement_Info_Internal(Value, nullptr, nullptr, &Map[0], Map_Size);
+        }
+    }
+#endif //MEDIAINFO_TRACE
+
+    #ifdef SIZE_T_IS_LONG
+    inline void ParamElement_Info (size_t        Parameter, const char*   Measure=NULL) {if (Trace_Activated) ParamElement_Info(Ztring::ToZtring(Parameter)+Ztring().From_UTF8(Measure));}
+    #endif //SIZE_T_IS_LONG
+    #define ParamElement_Info1(_A) ParamElement_Info(_A)
+    #define ParamElement_Info2(_A,_B) ParamElement_Info(_A, _B)
+    #define ParamElement_Info3(_A,_B,_C) ParamElement_Info(_A, _B, _C)
+    #define ParamElement_Info4(_A,_B,_C,_D) ParamElement_Info(_A, _B, _C, _D)
+    #define ParamElement_Info1C(_CONDITION,_A) if (_CONDITION) ParamElement_Info(_A)
+    #define ParamElement_Info2C(_CONDITION,_A,_B) if (_CONDITION) ParamElement_Info(_A, _B)
+    #define ParamElement_Info3C(_CONDITION,_A,_B,_C) if (_CONDITION) ParamElement_Info(_A, _B, _C)
+    #define ParamElement_Info4C(_CONDITION,_A,_B,_C,_D) if (_CONDITION) ParamElement_Info(_A, _B, _C, _D)
 
     //***************************************************************************
     // Element Node
@@ -811,23 +873,6 @@ public :
     // Variable Length Code
     //***************************************************************************
 
-    struct vlc
-    {
-        int32u  value;
-        int8u   bit_increment;
-        int8s   mapped_to1;
-        int8s   mapped_to2;
-        int8s   mapped_to3;
-    };
-    struct vlc_fast
-    {
-        int8u*      Array;
-        int8u*      BitsToSkip;
-        const vlc*  Vlc;
-        int8u       Size;
-    };
-    #define VLC_END \
-        {(int32u)-1, (int8u)-1, 0, 0, 0}
     static void Get_VL_Prepare(vlc_fast &Vlc);
     void Get_VL (const vlc Vlc[], size_t &Info, const char* Name);
     void Get_VL (vlc_fast &Vlc, size_t &Info, const char* Name);
@@ -918,8 +963,14 @@ public :
     #if defined(MEDIAINFO_AV1_YES) || defined(MEDIAINFO_AVC_YES) || defined(MEDIAINFO_HEVC_YES) || defined(MEDIAINFO_MPEG4_YES) || defined(MEDIAINFO_MK_YES) || defined(MEDIAINFO_MXF_YES) || defined(MEDIAINFO_MPEGTS_YES)
     struct mastering_metadata_2086
     {
-        int16u Primaries[8];
-        int32u Luminance[2];
+        int16u Primaries[8]{};
+        int32u Luminance[2]{};
+
+        bool operator==(const mastering_metadata_2086& o) const
+        {
+            return !std::memcmp(Primaries, o.Primaries, sizeof(Primaries)) && !std::memcmp(Luminance, o.Luminance, sizeof(Luminance)) ;
+        }
+        bool operator!=(const mastering_metadata_2086& o) const { return !(*this == o); }
     };
     void Get_MasteringDisplayColorVolume(Ztring &MasteringDisplay_ColorPrimaries, Ztring &MasteringDisplay_Luminance, mastering_metadata_2086 &Meta, bool FromAV1=false);
     #endif
@@ -1148,6 +1199,7 @@ public :
     void Trusted_IsNot (const char* Reason);
     bool Trusted_Get   () {return !Element[Element_Level].UnTrusted;}
 
+public :
     //***************************************************************************
     // Stream filling
     //***************************************************************************
@@ -1237,6 +1289,8 @@ public :
     void Finish        (File__Analyze* Parser);
     void ForceFinish   (const char* ParserName=NULL);
     void ForceFinish   (File__Analyze* Parser);
+
+protected:
     void GoTo          (int64u GoTo, const char* ParserName=NULL);
     void GoToFromEnd   (int64u GoToFromEnd, const char* ParserName=NULL);
     int64u Element_Code_Get (size_t Level);
@@ -1329,8 +1383,6 @@ protected :
 
 protected :
     //Save for speed improvement
-    float                           Config_Trace_Level;
-    std::bitset<32>                 Config_Trace_Layers;
     MediaInfo_Config::trace_Format  Config_Trace_Format;
     int8u                           Config_Demux;
     Ztring                          Config_LineSeparator;
@@ -1441,6 +1493,12 @@ protected :
 private :
 #if MEDIAINFO_TRACE
     void Trace_Details_Handling(File__Analyze* Sub);
+    void Element_Info_Internal(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map = nullptr, size_t Map_Size = 0);
+    void Element_Info_Internal(element_details::Element_Node_Info* Value);
+    void Param_Info_Internal(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map = nullptr, size_t Map_Size = 0);
+    void Param_Info_Internal(element_details::Element_Node_Info* Value);
+    void ParamElement_Info_Internal(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map = nullptr, size_t Map_Size = 0);
+    void ParamElement_Info_Internal(int32u Levels, int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map = nullptr, size_t Map_Size = 0);
 #endif // MEDIAINFO_TRACE
     //Elements
     size_t Element_Level_Base;      //From other parsers
@@ -1824,5 +1882,6 @@ public :
 #define DATA_END_DEFAULT \
         } \
     } \
+
 
 #endif

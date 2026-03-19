@@ -1005,7 +1005,7 @@ void File_Riff::AVI__GMET()
 
     //Details
     #if MEDIAINFO_TRACE
-        if (Config_Trace_Level)
+        if (Trace_Activated)
         {
             //for (size_t Pos=0; Pos<List.size(); Pos++)
             //    Details_Add_Info(Pos, List(Pos, 0).To_Local().c_str(), List(Pos, 1));
@@ -2599,7 +2599,7 @@ void File_Riff::AVI__movi_xxxx()
     }
 
     #if MEDIAINFO_TRACE
-        if (Config_Trace_Level)
+        if (Trace_Activated)
         {
             switch (Element_Code&0x0000FFFF) //2 last bytes
             {

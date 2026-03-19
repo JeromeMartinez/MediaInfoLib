@@ -11,6 +11,8 @@
 
 #include "MediaInfo/MediaInfo_Config.h"
 #include <sstream>
+#include <type_traits>
+#include <utility>
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib

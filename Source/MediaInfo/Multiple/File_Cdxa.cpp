@@ -292,7 +292,7 @@ void File_Cdxa::Data_Parse()
 
     //Details
     #if MEDIAINFO_TRACE
-    if (Config_Trace_Level)
+    if (Trace_Activated)
     {
         if (!MI->Inform().empty())
             Element_Show_Add(MI->Info);

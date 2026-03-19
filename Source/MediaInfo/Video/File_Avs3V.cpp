@@ -252,10 +252,6 @@ picture_alf_enable_flag { false, false, false }
 
     //Temp
     video_sequence_start_IsParsed=false;
-
-    #if MEDIAINFO_TRACE
-        Trace_Activated = true;
-    #endif //MEDIAINFO_TRACE
 }
 
 //***************************************************************************

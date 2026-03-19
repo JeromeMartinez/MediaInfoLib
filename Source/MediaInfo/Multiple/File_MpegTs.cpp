@@ -30,7 +30,6 @@
 #if defined(MEDIAINFO_REFERENCES_YES)
 #include "ZenLib/File.h"
 #endif //defined(MEDIAINFO_REFERENCES_YES)
-#include <memory>
 #include <algorithm>
 #if MEDIAINFO_EVENTS
     #include "MediaInfo/MediaInfo_Config_MediaInfo.h"
@@ -1553,7 +1552,7 @@ bool File_MpegTs::Synched_Test()
         {
             //Trace config
             #if MEDIAINFO_TRACE
-                if (Config_Trace_Level)
+                if (Trace_Activated)
                 {
                     if (Stream->Kind==complete_stream::stream::pes)
                     {

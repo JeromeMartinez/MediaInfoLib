@@ -185,6 +185,24 @@ public :
     bool   UnSynched_IsNotJunk;        //Data is actually synched
     bool   MustExtendParsingDuration;  //Data has some substreams difficult to detect (e.g. captions), must wait a bit before final filling
 
+    struct vlc
+    {
+        int32u  value;
+        int8u   bit_increment;
+        int8s   mapped_to1;
+        int8s   mapped_to2;
+        int8s   mapped_to3;
+    };
+    struct vlc_fast
+    {
+        int8u*      Array;
+        int8u*      BitsToSkip;
+        const vlc*  Vlc;
+        int8u       Size;
+    };
+    #define VLC_END \
+        {(int32u)-1, (int8u)-1, 0, 0, 0}
+
 protected :
     //***************************************************************************
     // Streams management
@@ -320,11 +338,15 @@ protected :
     #define Element_Info1(_A)
     #define Element_Info2(_A,_B)
     #define Element_Info3(_A,_B,_C)
+    #define Element_Info4(_A,_B,_C,_D)
     #define Element_Info1C(_CONDITION,_A)
+    #define Element_Info2C(_CONDITION,_A,_B)
+    #define Element_Info3C(_CONDITION,_A,_B,_C)
+    #define Element_Info4C(_CONDITION,_A,_B,_C,_D)
     #define Element_Info_From_Milliseconds(_A)
-    #define Element_Parser(_A) {}
-    #define Element_Error(_A) {}
-    #define Param_Error(_A) {}
+    #define Element_Parser(_A)
+    #define Element_Error(_A)
+    #define Param_Error(_A)
 
     //Elements - End
     inline void Element_End () {Element_End_Common_Flush();}
@@ -336,29 +358,42 @@ protected :
     //Elements - Preparation of element from external app
     void Element_Prepare (int64u Size);
 
-protected :
     //Element - Common
     void   Element_End_Common_Flush();
-public :
 
     //***************************************************************************
     // Param
     //***************************************************************************
 
     //Param - Main
-    inline void noop() {}
-    #define Param1(_A) noop()
-    #define Param2(_A,_B) noop()
-    #define Param3(_A,_B,_C) noop()
+    #define Param1(_A)
+    #define Param2(_A,_B)
+    #define Param3(_A,_B,_C)
 
     //Param - Info
-    #define Param_Info1(_A) noop()
-    #define Param_Info2(_A,_B) noop()
-    #define Param_Info3(_A,_B,_C) noop()
-    #define Param_Info1C(_CONDITION,_A) noop()
-    #define Param_Info2C(_CONDITION,_A,_B) noop()
-    #define Param_Info3C(_CONDITION,_A,_B,_C) noop()
-    #define Param_Info_From_Milliseconds(A) noop()
+    #define Param_Info1(_A)
+    #define Param_Info2(_A,_B)
+    #define Param_Info3(_A,_B,_C)
+    #define Param_Info4(_A,_B,_C,_D)
+    #define Param_Info1C(_CONDITION,_A)
+    #define Param_Info2C(_CONDITION,_A,_B)
+    #define Param_Info3C(_CONDITION,_A,_B,_C)
+    #define Param_Info4C(_CONDITION,_A,_B,_C,_D)
+    #define Param_Info_From_Milliseconds(A)
+
+    //***************************************************************************
+    // Param and Element together
+    //***************************************************************************
+
+    //Param and Element - Info
+    #define ParamElement_Info1(_A)
+    #define ParamElement_Info2(_A,_B)
+    #define ParamElement_Info3(_A,_B,_C)
+    #define ParamElement_Info4(_A,_B,_C,_D)
+    #define ParamElement_Info1C(_CONDITION,_A)
+    #define ParamElement_Info2C(_CONDITION,_A,_B)
+    #define ParamElement_Info3C(_CONDITION,_A,_B,_C)
+    #define ParamElement_Info4C(_CONDITION,_A,_B,_C,_D)
 
     //***************************************************************************
     // Information
@@ -655,23 +690,6 @@ public :
     // Variable Length Code
     //***************************************************************************
 
-    struct vlc
-    {
-        int32u  value;
-        int8u   bit_increment;
-        int8s   mapped_to1;
-        int8s   mapped_to2;
-        int8s   mapped_to3;
-    };
-    struct vlc_fast
-    {
-        int8u*      Array;
-        int8u*      BitsToSkip;
-        const vlc*  Vlc;
-        int8u       Size;
-    };
-    #define VLC_END \
-        {(int32u)-1, (int8u)-1, 0, 0, 0}
     static void Get_VL_Prepare(vlc_fast &Vlc);
     void Get_VL_ (const vlc Vlc[], size_t &Info);
     void Get_VL_ (const vlc_fast &Vlc, size_t &Info);
@@ -786,8 +804,14 @@ public :
     #if defined(MEDIAINFO_AV1_YES) || defined(MEDIAINFO_AVC_YES) || defined(MEDIAINFO_HEVC_YES) || defined(MEDIAINFO_MPEG4_YES) || defined(MEDIAINFO_MATROSKA_YES) || defined(MEDIAINFO_MXF_YES) || defined(MEDIAINFO_MPEGTS_YES)
     struct mastering_metadata_2086
     {
-        int16u Primaries[8];
-        int32u Luminance[2];
+        int16u Primaries[8]{};
+        int32u Luminance[2]{};
+
+        bool operator==(const mastering_metadata_2086& o) const
+        {
+            return !std::memcmp(Primaries, o.Primaries, sizeof(Primaries)) && !std::memcmp(Luminance, o.Luminance, sizeof(Luminance));
+        }
+        bool operator!=(const mastering_metadata_2086& o) const { return !(*this == o); }
     };
     void Get_MasteringDisplayColorVolume(Ztring &MasteringDisplay_ColorPrimaries, Ztring &MasteringDisplay_Luminance, mastering_metadata_2086 &Meta, bool FromAV1=false);
     #endif
@@ -1050,6 +1074,7 @@ public :
     void Trusted_IsNot ();
     bool Trusted_Get   () {return !Element[Element_Level].UnTrusted;}
 
+public :
     //***************************************************************************
     // Stream filling
     //***************************************************************************
@@ -1145,6 +1170,8 @@ public :
     void ForceFinish   (const char*)                                            {ForceFinish();}
     void ForceFinish   ();
     void ForceFinish   (File__Analyze* Parser);
+
+protected:
     void GoTo          (int64u GoTo_, const char*)                              {GoTo(GoTo_);}
     void GoTo          (int64u GoTo);
     void GoToFromEnd   (int64u GoToFromEnd_, const char*)                       {GoToFromEnd(GoToFromEnd_);}

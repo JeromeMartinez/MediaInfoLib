@@ -167,6 +167,52 @@ string uint128toString(uint128 ii, int radix)
     return string(&sz[i]);
 }
 
+//---------------------------------------------------------------------------
+static const char* NameFromList(int32u Value, const char* const* List, const info_list_size* List_Sizes)
+{
+    unsigned Offset = 0;
+    unsigned Pos = Value;
+    for (unsigned GapArray_Pos = 0; ; ++GapArray_Pos) {
+        const auto& GapArray_Current = List_Sizes[GapArray_Pos];
+        auto Max = Offset + GapArray_Current.ContentSize;
+        if (Pos < Max) {
+            return List[Pos];
+        }
+        if (!GapArray_Current.GapSize || Pos - Max < GapArray_Current.GapSize) {
+            return nullptr;
+        }
+        Pos -= GapArray_Current.GapSize;
+        Offset = Max;
+    }
+}
+static const char* NameFromMap(int32u Value, const info_map* Map, size_t Map_Size)
+{
+    size_t Begin = 0;
+    size_t End = Map_Size;
+
+    while (Begin < End) {
+        size_t Middle = (Begin + End) / 2;
+
+        if (Map[Middle].Value < Value)
+            Begin = Middle + 1;
+        else
+            End = Middle;
+    }
+
+    if (Begin < Map_Size && Map[Begin].Value == Value)
+        return Map[Begin].Meaning;
+
+    return {};
+}
+static string NameFrom(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map, size_t Map_Size)
+{
+    auto Intermediate = NameFromList(Value, List, List_Sizes);
+    if (!Intermediate && Map) {
+        Intermediate = NameFromMap(Value, Map, Map_Size);
+    }
+    return Intermediate ? Intermediate : fmt::to_string(Value);
+}
+
 //***************************************************************************
 // Conformance
 //***************************************************************************
@@ -553,9 +599,6 @@ File__Analyze::File__Analyze ()
 {
     //Info for speed optimization
     #if MEDIAINFO_TRACE
-        Config_Trace_Level=MediaInfoLib::Config.Trace_Level_Get();
-        Config_Trace_Layers=MediaInfoLib::Config.Trace_Layers_Get();
-        Config_Trace_Format=MediaInfoLib::Config.Trace_Format_Get();
         Trace_DoNotSave=false;
         Trace_Layers.set();
         Trace_Layers_Update();
@@ -680,7 +723,7 @@ File__Analyze::File__Analyze ()
     Element[0].IsComplete=false;
     #if MEDIAINFO_TRACE
     //TraceNode part
-    if (Config_Trace_Level!=0)
+    if (Trace_Activated)
         Element[0].TraceNode.Init();
     #endif //MEDIAINFO_TRACE
     Element_Level_Base=0;
@@ -2773,7 +2816,7 @@ void File__Analyze::Header_Fill_Code(int64u Code, const Ztring &Name)
     Element[Element_Level-1].Code=Code;
 
     //TraceNode
-    if (Config_Trace_Level!=0)
+    if (Trace_Activated)
     {
         Element_Level--;
         Element_Name(Name);
@@ -3185,11 +3228,100 @@ void File__Analyze::Element_Name(const Ztring &Name)
 #if MEDIAINFO_TRACE
 void File__Analyze::Element_Parser(const char* Parser)
 {
-    //Needed?
-    if (Config_Trace_Level<=0.7)
+    if (!Trace_Activated)
         return;
+    Element_Info_Internal(new element_details::Element_Node_Info(Parser, "Parser"));
+}
+#endif //MEDIAINFO_TRACE
 
-    Element[Element_Level].TraceNode.Infos.push_back(new element_details::Element_Node_Info(Parser, "Parser"));
+//---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+void File__Analyze::Element_Info(const char* Parameter, const char* Measure, int8u AfterComma)
+{
+    if (!Trace_Activated)
+        return;
+    if ((Parameter && std::string(Parameter) == "NOK") || (Measure && std::string(Measure) == "Error"))
+        Element[Element_Level].TraceNode.HasError = true;
+    Element_Info_Internal(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+}
+#endif //MEDIAINFO_TRACE
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+void File__Analyze::Element_Info_Internal(element_details::Element_Node_Info* Value)
+{
+    Element[Element_Level].TraceNode.Infos.push_back(Value);
+}
+#endif //MEDIAINFO_TRACE
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+void File__Analyze::Param_Info(const char* Parameter, const char* Measure, int8u AfterComma)
+{
+    if (!Trace_Activated)
+        return;
+    if ((Parameter && std::string(Parameter) == "NOK") || (Measure && std::string(Measure) == "Error"))
+        Element[Element_Level].TraceNode.HasError = true;
+    Param_Info_Internal(new element_details::Element_Node_Info(Parameter, Measure, AfterComma));
+}
+#endif //MEDIAINFO_TRACE
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+element_details::Element_Node* File__Analyze::Param_Internal(const char* Parameter, int8u GenericOption)
+{
+    element_details::Element_Node* node = new element_details::Element_Node; 
+    node->Set_Name(string(Parameter));
+    node->Pos = File_Offset + Buffer_Offset + Element_Offset;
+    if (BS_Size)
+    {
+        int64u BS_BitOffset = BS_Size - BS->Remain();
+        if (GenericOption != (int8u)-1)
+            BS_BitOffset -= GenericOption;
+        node->Pos += BS_BitOffset >> 3; //Including Bits to Bytes
+    }
+    node->Value.set_Option(GenericOption);
+    Element[Element_Level].TraceNode.Current_Child = Element[Element_Level].TraceNode.Children.size();
+    Element[Element_Level].TraceNode.Children.push_back(node);
+    return node;
+}
+#endif //MEDIAINFO_TRACE
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+void File__Analyze::Param_Info_Internal(element_details::Element_Node_Info* Value)
+{
+    int32s child = Element[Element_Level].TraceNode.Current_Child;
+    if (child >= 0 && Element[Element_Level].TraceNode.Children[child])
+        Element[Element_Level].TraceNode.Children[child]->Infos.push_back(Value);
+    else
+        Element[Element_Level].TraceNode.Infos.push_back(Value);
+}
+#endif //MEDIAINFO_TRACE
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+void File__Analyze::Param_Info_Internal(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map, size_t Map_Size)
+{
+    ParamElement_Info_Internal(1, Value, List, List_Sizes, Map, Map_Size);
+}
+void File__Analyze::Element_Info_Internal(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map, size_t Map_Size)
+{
+    ParamElement_Info_Internal(2, Value, List, List_Sizes, Map, Map_Size);
+}
+void File__Analyze::ParamElement_Info_Internal(int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map, size_t Map_Size)
+{
+    ParamElement_Info_Internal(3, Value, List, List_Sizes, Map, Map_Size);
+}
+void File__Analyze::ParamElement_Info_Internal(int32u Levels, int32u Value, const info_list* List, const info_list_size* List_Sizes, const info_map* Map, size_t Map_Size)
+{
+    auto Result = NameFrom(Value, List, List_Sizes, Map, Map_Size);
+    if (Levels & 1) {
+        Param_Info_Internal(new element_details::Element_Node_Info(Result));
+    }
+    if (Levels & 2) {
+        Element_Info_Internal(new element_details::Element_Node_Info(Result));
+    }
 }
 #endif //MEDIAINFO_TRACE
 
@@ -3325,7 +3457,7 @@ void File__Analyze::Element_End_Common_Flush()
 //---------------------------------------------------------------------------
 void File__Analyze::Element_End_Common_Flush_Details()
 {
-    if (Trace_Activated)// && Config_Trace_Level!=0)
+    if (Trace_Activated)
     {
         if (!Element[Element_Level+1].WaitForMoreData && (Element[Element_Level+1].IsComplete || !Element[Element_Level+1].UnTrusted) && !Element[Element_Level+1].TraceNode.NoShow)
         {
@@ -3364,7 +3496,7 @@ void File__Analyze::Info(const std::string& Value, size_t Element_Level_Minus)
 
     //Handling a different level (only Element_Level_Minus to 1 is currently well supported)
 
-    if (Config_Trace_Level==0 || !(Trace_Layers.to_ulong()&Config_Trace_Layers.to_ulong()))
+    if (!Trace_Activated)
         return;
 
     element_details::Element_Node node;
@@ -4084,7 +4216,10 @@ void File__Analyze::Trace_Layers_Update(size_t Layer)
         Trace_Layers.reset();
         Trace_Layers.set(Layer);
     }
-    Trace_Activated=(Config_Trace_Level!=0 && (Trace_Layers&Config_Trace_Layers)!=0);
+    auto Config_Trace_Level = MediaInfoLib::Config.Trace_Level_Get();
+    auto Config_Trace_Layers = MediaInfoLib::Config.Trace_Layers_Get();
+    Config_Trace_Format = MediaInfoLib::Config.Trace_Format_Get();
+    Trace_Activated = (Config_Trace_Level && (Trace_Layers & Config_Trace_Layers) != 0);
 }
 #endif //MEDIAINFO_TRACE
 

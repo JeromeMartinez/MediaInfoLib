@@ -45,20 +45,6 @@
 #include <cstdlib>
 using namespace ZenLib;
 using namespace std;
-#if __cplusplus > 202002L || (defined(_MSC_VER) && _MSC_VER >= 1910 && _MSVC_LANG > 202002L)
-    #define constexpr23 constexpr
-#else
-    #define constexpr23
-#endif
-#if __cplusplus >= 202002L || (defined(_MSC_VER) && _MSC_VER >= 1910 && _MSVC_LANG >= 202002L)
-#else
-    #define consteval constexpr
-#endif
-#if  __cplusplus >= 201703 || _MSC_VER >= 1900
-#else
-    template <typename T, size_t N>
-    inline constexpr size_t size(const T(&)[N]) noexcept { return N; }
-#endif
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
