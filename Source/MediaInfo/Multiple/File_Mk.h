@@ -393,7 +393,7 @@ private :
         bool                    Searching_Payload;
         bool                    Searching_TimeStamps;
         bool                    Searching_TimeStamp_Start;
-        bitset<8>               ServiceKind;
+        std::bitset<8>          ServiceKind;
         int64u                  ContentCompAlgo;
         size_t                  ContentCompSettings_Buffer_Size;
         int8u*                  ContentCompSettings_Buffer;

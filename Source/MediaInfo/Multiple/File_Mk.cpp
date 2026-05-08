@@ -3557,6 +3557,7 @@ void File_Mk::Segment_Tracks_TrackEntry()
     Fill_Flush();
     Fill(StreamKind_Last, StreamPos_Last, "Language", "eng");
     Fill(StreamKind_Last, StreamPos_Last, General_StreamOrder, Stream.size());
+    Stream[(int64u)-1].ServiceKind[Service_Default] = true;
 }
 
 //---------------------------------------------------------------------------
