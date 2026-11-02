@@ -1821,7 +1821,8 @@ void File__Analyze::Open_Buffer_Finalize (File__Analyze* Sub)
         return;
 
     //Finalize
-    Open_Buffer_Init(Sub);
+    if (!Sub->Config) //Only if not yet done, a new init would reset the sub file size to a value computed from the current element, maybe lower than the sub offset
+        Open_Buffer_Init(Sub);
     Sub->Open_Buffer_Finalize();
 }
 
