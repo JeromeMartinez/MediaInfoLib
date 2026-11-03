@@ -2048,6 +2048,13 @@ File_Mxf::File_Mxf()
 
     //Temp
     RandomIndexPacks_AlreadyParsed=false;
+    RandomIndexPacks_AreFiltered=false;
+    Partitions_WalkIsSkipped=false;
+    ProbeStart_Partition_Count=0;
+    ProbeStart_BytePos=(int64u)-1;
+    ProbeStart_ByteDur=(int64u)-1;
+    IndexTableSegment_IsNeeded=false;
+    IndexTableSegment_IsSearched=false;
     Streams_Count=(size_t)-1;
     Descriptor_Type_Pending=descriptor::Type_Unknown;
     IndexTable_SegmentCount=0;
@@ -6013,6 +6020,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_St20675 (conformance_errors
         }
 
     //Partitions (5.1.1, 5.1.5, 5.2.5, 5.3)
+    const auto Partitions_AreAll=Partitions_AreAllParsed(); //Some tests need all partitions
     const auto HeaderPartition=(!Partitions.empty() && Partitions[0].Kind==0x02)?&Partitions[0]:nullptr;
     const partition* FooterPartition=nullptr;
     vector<const partition*> EssencePartitions;
@@ -6080,8 +6088,11 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_St20675 (conformance_errors
             IndexDuration+=Segment_IndexDuration;
     }
     if (IndexSID && !IndexSegments)
-        Errors.Add("Index Table is missing");
-    else if (IndexSegments && !IsCbe && IsFrameWrapped && Duration!=(int64u)-1 && IndexDuration!=Duration) //Clip-wrapped essence may have one entry (e.g. SMPTE ST 429-5)
+    {
+        if (Partitions_AreAll) //Else it may be in a partition not parsed
+            Errors.Add("Index Table is missing");
+    }
+    else if (Partitions_AreAll && IndexSegments && !IsCbe && IsFrameWrapped && Duration!=(int64u)-1 && IndexDuration!=Duration) //Clip-wrapped essence may have one entry (e.g. SMPTE ST 429-5)
         Errors.Add("Index Table does not index all edit units (actual "+to_string(IndexDuration)+", expected "+to_string(Duration)+')');
     if (IndexSegments && !IsCbe && Descriptor && (Descriptor->EssenceContainer.lo&0xFFFFFFFFFFFF0000LL)==Labels::MXFGCAESBWFAudio)
         Errors.Add("Index Table of constant bitrate audio is not a calculated one");
@@ -6128,7 +6139,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_St20675 (conformance_errors
 
     //Regular partitioning of frame-wrapped essence (5.1.5), every 60 s with a tolerance of 6 s except the last Body Partition (SMPTE ST 2067-2 5.1.3)
     const auto EditRate=EssenceTrack?EssenceTrack->Track->second.EditRate:0;
-    if (IsFrameWrapped && EditRate>0 && Duration!=(int64u)-1 && !EssencePartitions_Starts.empty() && is_sorted(EssencePartitions_Starts.begin(), EssencePartitions_Starts.end()) && EssencePartitions_Starts.back()<=Duration)
+    if (Partitions_AreAll && IsFrameWrapped && EditRate>0 && Duration!=(int64u)-1 && !EssencePartitions_Starts.empty() && is_sorted(EssencePartitions_Starts.begin(), EssencePartitions_Starts.end()) && EssencePartitions_Starts.back()<=Duration)
     {
         vector<float64> Spacings; //Duration of each essence partition, in seconds
         for (size_t i=0; i<EssencePartitions_Starts.size(); i++)
@@ -6144,7 +6155,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_St20675 (conformance_errors
     }
 
     //Index Table Segments after the essence they index (SMPTE ST 2067-2 5.1.4)
-    if (IsTrackFile && !EssencePartitions.empty())
+    if (Partitions_AreAll && IsTrackFile && !EssencePartitions.empty())
         for (const auto& Segment : IndexTableSegments)
         {
             int64u Segment_IndexSID, IndexStartPosition;
@@ -8733,6 +8744,15 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
     }
 
     //Partitions
+    const auto Partitions_AreAll=Partitions_AreAllParsed(); //Some tests need all partitions
+    auto BodyPartitions_FirstIsParsed=Partitions_AreAll; //Some tests need the first partition after the Header Partition (it is not parsed with a negative parse speed)
+    if (!BodyPartitions_FirstIsParsed && !Partitions.empty())
+        for (size_t i=1; i<RandomIndexPack_Entries.size(); i++)
+            if (ExtraMetadata_SID.find(RandomIndexPack_Entries[i].BodySID)==ExtraMetadata_SID.end())
+            {
+                BodyPartitions_FirstIsParsed=PartitionPack_AlreadyParsed.find(Partitions[0].StreamOffset+RandomIndexPack_Entries[i].ByteOffset)!=PartitionPack_AlreadyParsed.end();
+                break;
+            }
     const partition* HeaderPartition=nullptr;
     const partition* FooterPartition=nullptr;
     vector<const partition*> BodyPartitions;
@@ -8791,9 +8811,10 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
     {
         if (!RandomIndexPacks_AlreadyParsed)
             Error("Random Index Pack is missing");
-        for (const auto& Entry : RandomIndexPack_Entries)
-            if (PartitionPack_AlreadyParsed.find(Entry.ByteOffset)==PartitionPack_AlreadyParsed.end())
-                Error("Partition is not parsed");
+        if (Partitions_IsAllNeeded()) //Else not all partitions are parsed
+            for (const auto& Entry : RandomIndexPack_Entries)
+                if (PartitionPack_AlreadyParsed.find(Entry.ByteOffset)==PartitionPack_AlreadyParsed.end())
+                    Error("Partition is not parsed");
         for (const auto& Partition : Partitions)
             if (!RandomIndexPack_Find(Partition.StreamOffset))
                 Error("Random Index Pack does not list all partitions");
@@ -8822,7 +8843,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
                         //Index in Header Partition, essence in one Body Partition
                         if ((HeaderPartition->BodySID || !HeaderPartition->IndexSID) && Error("Header Partition does not contain only the Index Table"))
                             return Errors;
-                        if ((BodyPartitions.size()!=1 || !BodyPartitions[0]->BodySID || BodyPartitions[0]->IndexSID) && Error("Essence is not in one Body Partition without Index Table"))
+                        if (BodyPartitions_FirstIsParsed && (BodyPartitions.size()!=1 || !BodyPartitions[0]->BodySID || BodyPartitions[0]->IndexSID) && Error("Essence is not in one Body Partition without Index Table"))
                             return Errors;
                         if (Family==ArdZdf_SDF02 && FooterPartition && !FooterPartition->IndexSID && Error("Index Table is missing in Footer Partition"))
                             return Errors;
@@ -8833,12 +8854,12 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
                             return Errors;
                         if (BodyPartitions.empty())
                         {
-                            if (Error("Body Partition is missing"))
+                            if (BodyPartitions_FirstIsParsed && Error("Body Partition is missing"))
                                 return Errors;
                         }
                         else
                         {
-                            if ((!BodyPartitions[0]->BodySID || BodyPartitions[0]->IndexSID) && Error("First Body Partition does not contain only essence"))
+                            if (BodyPartitions_FirstIsParsed && (!BodyPartitions[0]->BodySID || BodyPartitions[0]->IndexSID) && Error("First Body Partition does not contain only essence"))
                                 return Errors;
                             for (size_t i=1; i<BodyPartitions.size(); i++)
                                 if (!BodyPartitions[i]->IndexSID && Error("Index Table is missing in Body Partition"))
@@ -8861,17 +8882,17 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
                                 return Errors;
                             if (BodyPartitions.empty())
                             {
-                                if (Error("Body Partition is missing"))
+                                if (BodyPartitions_FirstIsParsed && Error("Body Partition is missing"))
                                     return Errors;
                             }
                             else
                             {
-                                if ((!BodyPartitions[0]->BodySID || BodyPartitions[0]->IndexSID) && Error("First Body Partition does not contain only essence"))
+                                if (BodyPartitions_FirstIsParsed && (!BodyPartitions[0]->BodySID || BodyPartitions[0]->IndexSID) && Error("First Body Partition does not contain only essence"))
                                     return Errors;
                                 for (size_t i=1; i<BodyPartitions.size(); i++)
                                     if (!BodyPartitions[i]->IndexSID && Error("Index Table is missing in Body Partition"))
                                         return Errors;
-                                if (!IsCandidateTest && (BodyPartitions.size()<2 || BodyPartitions.back()->BodySID))
+                                if (!IsCandidateTest && Partitions_AreAll && (BodyPartitions.size()<2 || BodyPartitions.back()->BodySID))
                                     Error("Last Index Table Segment is not in a separate Body Partition");
                             }
                         }
@@ -8880,7 +8901,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
 
     //Index Table Segments, all of them are parsed only after candidate test
     set<int64u> IndexDurations; //Non-zero durations, to be compared to the container duration (CBE)
-    if (!IsCandidateTest && IndexTableSegments.empty())
+    if (!IsCandidateTest && IndexTableSegments.empty() && Partitions_AreAll) //Else it may be in a partition not parsed
         Error("Index Table is missing");
     const auto GetIndexProperty=[](const properties& Properties, int16u Tag, int64u UL_Lo) { //Static tag or dynamic tag
         return Property_Get(Properties, Tag, UL_Lo);
@@ -8978,7 +8999,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
     if (!IsCandidateTest && IsLongGop)
     {
         map<int64u, const indextablesegment*> Segments_PerStartPosition; //Index Table Segments may be repeated
-        auto Segments_AreComplete=true;
+        auto Segments_AreComplete=Partitions_AreAll; //Else some Index Table Segments may be in partitions not parsed
         for (const auto& Segment : IndexTableSegments)
         {
             Test(Segment.Properties, {
@@ -10519,9 +10540,11 @@ void File_Mxf::Read_Buffer_CheckFileModifications()
 //---------------------------------------------------------------------------
 void File_Mxf::Read_Buffer_AfterParsing()
 {
-    if (File_GoTo==(int64u)-1 && File_Offset+Buffer_Offset>=IsParsingMiddle_MaxOffset)
+    if (File_GoTo==(int64u)-1 && File_Offset+Buffer_Offset>=IsParsingMiddle_MaxOffset && !(IsParsingEnd && IndexTableSegment_IsSearched)) //Not when searching an Index Table Segment after the caption probe
     {
         Fill();
+        if (IndexTableSegment_Search())
+            return;
         Open_Buffer_Unsynch();
         Finish();
         return;
@@ -10538,7 +10561,7 @@ void File_Mxf::Read_Buffer_AfterParsing()
 
         if (IsParsingEnd)
         {
-            if (PartitionMetadata_PreviousPartition && RandomIndexPacks.empty() && !RandomIndexPacks_AlreadyParsed)
+            if (PartitionMetadata_PreviousPartition && RandomIndexPacks.empty() && !RandomIndexPacks_AlreadyParsed && (Partitions_IsAllNeeded() || !ExtraMetadata_SID.empty())) //Without Random Index Pack, previous partitions are parsed if all partitions are needed or for finding Generic Stream Partitions
             {
                 Partitions_Pos=0;
                 while (Partitions_Pos<Partitions.size() && Partitions[Partitions_Pos].StreamOffset!=PartitionMetadata_PreviousPartition)
@@ -10626,6 +10649,18 @@ void File_Mxf::Read_Buffer_Unsynched()
             StreamOffset_Offset+=Partitions[Partitions_Pos].PartitionPackByteCount+Partitions[Partitions_Pos].HeaderByteCount+Partitions[Partitions_Pos].IndexByteCount;
             Partitions_Pos++;
         }
+        if (Partitions_WalkIsSkipped && Partitions_Pos && RandomIndexPacks_AlreadyParsed)
+        {
+            //Not all partitions before the position are parsed, the byte count is from the essence offset of the partition containing the position
+            const auto& Partition=Partitions[Partitions_Pos-1];
+            const auto RunIn=Partitions[0].StreamOffset;
+            auto Partition_IsContaining=Partition.BodySID && Partition.PartitionPackByteCount!=(int64u)-1 && FutureFileOffset>=Partition.StreamOffset+Partition.PartitionPackByteCount+Partition.HeaderByteCount+Partition.IndexByteCount;
+            for (const auto& Entry : RandomIndexPack_Entries)
+                if (RunIn+Entry.ByteOffset>Partition.StreamOffset && RunIn+Entry.ByteOffset<=FutureFileOffset)
+                    Partition_IsContaining=false;
+            if (Partition_IsContaining)
+                StreamOffset_Offset=Partition.StreamOffset+Partition.PartitionPackByteCount+Partition.HeaderByteCount+Partition.IndexByteCount-Partition.BodyOffset;
+        }
 
         if (Partitions_Pos==2 && Partitions[1].StreamOffset==FutureFileOffset && Descriptors.size()==1 && Descriptors.begin()->second.StreamKind==Stream_Text)
             Frame_Count_NotParsedIncluded=0;
@@ -10701,6 +10736,21 @@ void File_Mxf::Read_Buffer_Unsynched()
                 StreamOffset=FutureFileOffset-StreamOffset_Offset;
             else
                 StreamOffset=0;
+            size_t IndexTable_Pos, Entry_Pos;
+            if (Partitions_WalkIsSkipped) //Index Table Segments may overlap or miss
+            {
+                if (IndexTables_Find(StreamOffset, IndexTable_Pos, Entry_Pos))
+                {
+                    const auto& IndexTable=IndexTables[IndexTable_Pos];
+                    Frame_Count_NotParsedIncluded=IndexTable.IndexStartPosition+Entry_Pos;
+                    if (IndexTable.IndexEditRate)
+                        FrameInfo.DTS=float64_int64s(DTS_Delay*1000000000+((float64)Frame_Count_NotParsedIncluded)/IndexTable.IndexEditRate*1000000000);
+                    #if MEDIAINFO_DEMUX
+                        Demux_random_access=IndexTable.Entries[Entry_Pos].Type?false:true;
+                    #endif //MEDIAINFO_DEMUX
+                }
+            }
+            else
             for (size_t Pos=0; Pos<IndexTables.size(); Pos++)
             {
                 //Searching the right index
@@ -13690,7 +13740,11 @@ void File_Mxf::RandomIndexPack()
             RandomIndexPack_Size=Header_Size+Element_Size;
             RandomIndexPack_Length=Length;
         }
-        if (Config->ParseSpeed<1.0 && !RandomIndexPacks_AlreadyParsed && !RandomIndexPacks.empty() && (Config->File_Mxf_ParseIndex_Get() || ArdZdf_IsRequested || ArdZdf_FromContent_IsRequested || CompliantWith_ArdZdf_IsCandidate() || CompliantWith_St20672_IsTested(true))) //All partitions are parsed if requested or if they are needed for checking compliance with specifications
+        const auto IsAllNeeded=Partitions_IsAllNeeded();
+        const auto IsComplianceChecked=[&]() {
+            return ArdZdf_IsRequested || ArdZdf_FromContent_IsRequested || CompliantWith_ArdZdf_IsCandidate() || CompliantWith_St20672_IsTested(true);
+        };
+        if (Config->ParseSpeed<1.0 && !RandomIndexPacks_AlreadyParsed && !RandomIndexPacks.empty() && IsAllNeeded && (Config->File_Mxf_ParseIndex_Get() || IsComplianceChecked())) //All partitions are parsed if requested or if they are needed for checking compliance with specifications, only if all partitions are needed
         {
             IsParsingEnd=true;
             GoTo(RandomIndexPacks[0].ByteOffset);
@@ -13704,6 +13758,25 @@ void File_Mxf::RandomIndexPack()
         else if (!RandomIndexPacks_AlreadyParsed && !Partitions_IsFooter && !RandomIndexPacks.empty() && (!RandomIndexPacks[RandomIndexPacks.size()-1].BodySID || File_Offset+Buffer_Offset-Header_Size-RandomIndexPacks[RandomIndexPacks.size()-1].ByteOffset<16*1024*1024)) // If footer was not parsed but is available
         {
             GoTo(RandomIndexPacks[RandomIndexPacks.size()-1].ByteOffset);
+        }
+        if (!RandomIndexPacks_AlreadyParsed && !IsAllNeeded)
+        {
+            //Only Generic Stream Partitions with metadata are parsed, other partitions would be parsed only for their partition pack and Index Table Segments
+            const auto RandomIndexPacks_Size=RandomIndexPacks.size();
+            RandomIndexPacks.erase(remove_if(RandomIndexPacks.begin(), RandomIndexPacks.end(), [&](const randomindexpack& Entry) {
+                return ExtraMetadata_SID.find(Entry.BodySID)==ExtraMetadata_SID.end();
+            }), RandomIndexPacks.end());
+            RandomIndexPacks_AreFiltered=RandomIndexPacks.size()!=RandomIndexPacks_Size;
+
+            //Checking compliance with specifications needs only an Index Table Segment, after the Generic Stream Partitions and the caption probe if any
+            if (IsComplianceChecked())
+            {
+                IndexTableSegment_IsNeeded=true;
+                if (RandomIndexPacks_AreFiltered)
+                    Partitions_WalkIsSkipped=true;
+                if (File_GoTo==(int64u)-1 && ExtraMetadata_Offset==(int64u)-1 && !MayHaveCaptionsInStream)
+                    IndexTableSegment_Search();
+            }
         }
         RandomIndexPacks_AlreadyParsed=true;
     FILLING_END();
@@ -22681,9 +22754,11 @@ void File_Mxf::NextRandomIndexPack()
 {
     //We have the necessary for indexes, jumping to next index
     Skip_XX(Element_Size-Element_Offset,                        "Data");
+    if (RandomIndexPacks_AreFiltered)
+        Partitions_WalkIsSkipped=true; //Partitions not parsed would be parsed from here
     if (RandomIndexPacks.empty())
     {
-        if (!RandomIndexPacks_AlreadyParsed)
+        if (!RandomIndexPacks_AlreadyParsed && (Partitions_IsAllNeeded() || !ExtraMetadata_SID.empty())) //Without Random Index Pack, previous partitions are parsed if all partitions are needed or for finding Generic Stream Partitions
         {
             Partitions_Pos=0;
             while (Partitions_Pos<Partitions.size() && Partitions[Partitions_Pos].StreamOffset!=PartitionMetadata_PreviousPartition)
@@ -22696,7 +22771,7 @@ void File_Mxf::NextRandomIndexPack()
             else
                 GoToFromEnd(0);
         }
-        else
+        else if (MayHaveCaptionsInStream || !IndexTableSegment_Search()) //Index Table Segment after the caption probe if any
             GoToFromEnd(0);
     }
     else
@@ -22842,6 +22917,12 @@ bool File_Mxf::BookMark_Needed()
                 ProbeCaptionByteDur=ContentSize/100*Probe.Duration;
                 break;
         }
+        if (ProbeStart_Partition_Count)
+        {
+            //Same caption probe as before the parsing of the partitions needed for its start (durations are cleared by their parsing)
+            ProbeCaptionBytePos=ProbeStart_BytePos;
+            ProbeCaptionByteDur=ProbeStart_ByteDur;
+        }
         if (ProbeCaptionBytePos!=(int64u)-1 && ProbeCaptionByteDur!=(int64u)-1)
         {
             if (File_Size/2<ProbeCaptionByteDur &&
@@ -22858,6 +22939,11 @@ bool File_Mxf::BookMark_Needed()
             auto CurrentEnd=File_Offset+Buffer_Offset;
             if (File_Size/2>=ProbeCaptionByteDur)
             {
+                ProbeStart_BytePos=ProbeCaptionBytePos;
+                ProbeStart_ByteDur=ProbeCaptionByteDur;
+                if (ProbeStart_Partition_Search(ProbeCaptionBytePos))
+                    return false; //The caption probe starts after the parsing of this partition
+
                 IsParsingMiddle_MaxOffset=MaxOffset;
                 GoTo(ProbeCaptionBytePos);
                 Open_Buffer_Unsynch();
@@ -22874,8 +22960,200 @@ bool File_Mxf::BookMark_Needed()
         ExtraMetadata_Offset=(int64u)-1;
     }
 
+    if (File_GoTo==(int64u)-1)
+        IndexTableSegment_Search();
+
     return false;
 }
+
+//---------------------------------------------------------------------------
+bool File_Mxf::Partitions_IsAllNeeded()
+{
+    //All partitions are parsed with full parsing, if the Index Tables are needed (seek, demux), if a hash is computed, or if the parsing does not jump
+    return Config->ParseSpeed>=1.0 || Config->File_Mxf_ParseIndex_Get() || IsSub || !Config->File_IsSeekable_Get()
+        #if MEDIAINFO_DEMUX
+            || Config_Demux
+        #endif //MEDIAINFO_DEMUX
+        #if MEDIAINFO_HASH
+            || Hash
+        #endif //MEDIAINFO_HASH
+        ;
+}
+
+//---------------------------------------------------------------------------
+bool File_Mxf::Partitions_AreAllParsed()
+{
+    //Tests needing all partitions are done if all partitions are expected to be parsed, or if all partitions are parsed (all partitions listed in the Random Index Pack, else all partitions from the Footer Partition to the Header Partition) with their Index Table Segments
+    if (Partitions_IsAllNeeded())
+        return true;
+    if (Partitions.empty() || Partitions[0].Kind!=0x02)
+        return false;
+    const auto RunIn=Partitions[0].StreamOffset;
+    for (const auto& Partition : Partitions)
+    {
+        if (!Partition.IndexByteCount || Partition.PartitionPackByteCount==(int64u)-1)
+            continue;
+        const auto Index_Begin=Partition.StreamOffset+Partition.PartitionPackByteCount+Partition.HeaderByteCount;
+        auto Index_IsParsed=false;
+        for (const auto& Segment : IndexTableSegments)
+            if (Segment.StreamOffset>=Index_Begin && Segment.StreamOffset<Index_Begin+Partition.IndexByteCount)
+                Index_IsParsed=true;
+        if (!Index_IsParsed)
+            return false; //e.g. caption probe ending in the partition
+    }
+    if (RandomIndexPacks_AlreadyParsed)
+    {
+        for (const auto& Entry : RandomIndexPack_Entries)
+            if (PartitionPack_AlreadyParsed.find(RunIn+Entry.ByteOffset)==PartitionPack_AlreadyParsed.end())
+                return false;
+        return true;
+    }
+    if (Partitions.back().Kind!=0x04)
+        return false;
+    auto Partition=Partitions.end()-1;
+    while (Partition!=Partitions.begin())
+    {
+        partition Previous;
+        Previous.StreamOffset=RunIn+Partition->PreviousPartition;
+        if (Previous.StreamOffset>=Partition->StreamOffset)
+            return false;
+        const auto Previous_Item=lower_bound(Partitions.begin(), Partition, Previous); //Partitions are sorted by offset
+        if (Previous_Item==Partition || Previous_Item->StreamOffset!=Previous.StreamOffset)
+            return false;
+        Partition=Previous_Item;
+    }
+    return true;
+}
+
+//---------------------------------------------------------------------------
+bool File_Mxf::IndexTableSegment_Search()
+{
+    //If an Index Table Segment is needed and none is parsed (it is usually parsed with the first partitions, the Footer Partition or the caption probe), one partition is parsed, a partition without essence if possible
+    if (!IndexTableSegment_IsNeeded || IndexTableSegment_IsSearched || !IndexTableSegments.empty() || Partitions_IsAllNeeded() || Partitions.empty())
+        return false;
+    IndexTableSegment_IsSearched=true;
+    const auto RunIn=Partitions[0].StreamOffset;
+    const randomindexpack* Partition=nullptr;
+    for (const auto& Entry : RandomIndexPack_Entries)
+    {
+        if (PartitionPack_AlreadyParsed.find(RunIn+Entry.ByteOffset)!=PartitionPack_AlreadyParsed.end() || ExtraMetadata_SID.find(Entry.BodySID)!=ExtraMetadata_SID.end() || RunIn+Entry.ByteOffset>=File_Size)
+            continue;
+        if (!Partition)
+            Partition=&Entry;
+        if (!Entry.BodySID)
+        {
+            Partition=&Entry;
+            break;
+        }
+    }
+    if (!Partition)
+        return false;
+
+    IsParsingEnd=true;
+    GoTo(RunIn+Partition->ByteOffset);
+    Open_Buffer_Unsynch();
+
+    //Hints
+    if (File_Buffer_Size_Hint_Pointer)
+        (*File_Buffer_Size_Hint_Pointer)=64*1024;
+    return true;
+}
+
+//---------------------------------------------------------------------------
+bool File_Mxf::ProbeStart_Partition_Search(int64u Offset)
+{
+    //If partitions are not parsed while all of them would be parsed, the frame number at the caption probe start needs the partition containing it, and the partition with its Index Table Segment (the next one with backward indexing)
+    #if MEDIAINFO_DEMUX || MEDIAINFO_SEEK
+        if (!Partitions_WalkIsSkipped || ProbeStart_Partition_Count>=2 || Partitions.empty())
+            return false;
+        const auto RunIn=Partitions[0].StreamOffset;
+        size_t i=0;
+        while (i<RandomIndexPack_Entries.size() && RunIn+RandomIndexPack_Entries[i].ByteOffset<=Offset)
+            i++;
+        if (!i || !RandomIndexPack_Entries[i-1].BodySID || ExtraMetadata_SID.find(RandomIndexPack_Entries[i-1].BodySID)!=ExtraMetadata_SID.end())
+            return false; //Not in a partition with essence
+        const randomindexpack* ToParse=nullptr;
+        const auto& Containing=RandomIndexPack_Entries[i-1];
+        if (PartitionPack_AlreadyParsed.find(RunIn+Containing.ByteOffset)==PartitionPack_AlreadyParsed.end())
+            ToParse=&Containing;
+        else if (i<RandomIndexPack_Entries.size() && PartitionPack_AlreadyParsed.find(RunIn+RandomIndexPack_Entries[i].ByteOffset)==PartitionPack_AlreadyParsed.end())
+        {
+            //Index Table Segment of the essence at the probe start
+            partition Item;
+            Item.StreamOffset=RunIn+Containing.ByteOffset;
+            const auto Partition=lower_bound(Partitions.begin(), Partitions.end(), Item);
+            if (Partition==Partitions.end() || Partition->StreamOffset!=Item.StreamOffset || Partition->PartitionPackByteCount==(int64u)-1)
+                return false;
+            const auto Essence_Begin=Partition->StreamOffset+Partition->PartitionPackByteCount+Partition->HeaderByteCount+Partition->IndexByteCount;
+            if (Offset<Essence_Begin)
+                return false;
+            const auto StreamOffset=Partition->BodyOffset+(Offset-Essence_Begin);
+            size_t IndexTable_Pos, Entry_Pos;
+            for (const auto& IndexTable : IndexTables)
+                if (IndexTable.EditUnitByteCount)
+                    return false; //Constant size of edit units
+            if (IndexTables_Find(StreamOffset, IndexTable_Pos, Entry_Pos))
+                return false; //Index Table Segment is parsed
+            ToParse=&RandomIndexPack_Entries[i];
+        }
+        if (!ToParse || RunIn+ToParse->ByteOffset>=File_Size)
+            return false;
+        ProbeStart_Partition_Count++;
+
+        IsParsingEnd=true;
+        GoTo(RunIn+ToParse->ByteOffset);
+        Open_Buffer_Unsynch();
+
+        //Hints
+        if (File_Buffer_Size_Hint_Pointer)
+            (*File_Buffer_Size_Hint_Pointer)=64*1024;
+        return true;
+    #else //MEDIAINFO_DEMUX || MEDIAINFO_SEEK
+        return false;
+    #endif //MEDIAINFO_DEMUX || MEDIAINFO_SEEK
+}
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_DEMUX || MEDIAINFO_SEEK
+bool File_Mxf::IndexTables_Find(int64u StreamOffset, size_t& IndexTable_Pos, size_t& Entry_Pos)
+{
+    //Index entry of the edit unit containing a position of the essence container, if Index Table Segments are not all parsed: the edit unit ends at the next entry, at the first entry of the segment of the next edit unit, or at the essence start of the next parsed partition
+    for (size_t Pos=0; Pos<IndexTables.size(); Pos++)
+    {
+        const auto& IndexTable=IndexTables[Pos];
+        const auto& Entries=IndexTable.Entries;
+        const auto Entry_Offset=[&](size_t i) {
+            return Entries[i].StreamOffset+(IndexTable.IndexStartPosition+i)*SDTI_SizePerFrame;
+        };
+        if (Entries.empty() || StreamOffset<Entry_Offset(0))
+            continue;
+        size_t Next=0;
+        while (Next<Entries.size() && Entry_Offset(Next)<=StreamOffset)
+            Next++;
+        auto End=(int64u)-1;
+        if (Next<Entries.size())
+            End=Entry_Offset(Next);
+        else
+        {
+            const auto Next_Position=IndexTable.IndexStartPosition+Entries.size();
+            for (const auto& IndexTable_Next : IndexTables)
+                if (IndexTable_Next.IndexStartPosition==Next_Position && !IndexTable_Next.Entries.empty())
+                    End=IndexTable_Next.Entries[0].StreamOffset+Next_Position*SDTI_SizePerFrame;
+            if (End==(int64u)-1)
+                for (const auto& Partition : Partitions)
+                    if (Partition.BodySID && Partition.BodyOffset>Entries.back().StreamOffset && Partition.BodyOffset<End)
+                        End=Partition.BodyOffset+Next_Position*SDTI_SizePerFrame;
+        }
+        if (End!=(int64u)-1 && StreamOffset<End)
+        {
+            IndexTable_Pos=Pos;
+            Entry_Pos=Next-1;
+            return true;
+        }
+    }
+    return false;
+}
+#endif //MEDIAINFO_DEMUX || MEDIAINFO_SEEK
 
 //---------------------------------------------------------------------------
 void File_Mxf::Descriptor_Type_Set(descriptor::type Type)

@@ -732,6 +732,13 @@ protected :
     };
     std::deque<randomindexpack>      RandomIndexPacks; //Front is removed when the partition is parsed
     bool                             RandomIndexPacks_AlreadyParsed;
+    bool                             RandomIndexPacks_AreFiltered; //Partitions not parsed for their Index Table Segments
+    bool                             Partitions_WalkIsSkipped; //Partitions not parsed while all of them would be parsed before the caption probe without filtering
+    int8u                            ProbeStart_Partition_Count; //Partitions parsed for the caption probe start
+    int64u                           ProbeStart_BytePos;
+    int64u                           ProbeStart_ByteDur;
+    bool                             IndexTableSegment_IsNeeded; //For checking compliance with specifications without parsing all partitions
+    bool                             IndexTableSegment_IsSearched;
     std::set<int64u>                 PartitionPack_AlreadyParsed;
     size_t Streams_Count;
     int128u Code;
@@ -1457,6 +1464,13 @@ protected :
     bool Essence_IsNotNeeded();
     int64u Element_Size_AsIfRead();
     bool BookMark_Needed();
+    bool Partitions_IsAllNeeded(); //All partitions are parsed (full parsing, Index Tables needed)
+    bool Partitions_AreAllParsed(); //For tests needing all partitions
+    bool IndexTableSegment_Search(); //Parsing of one partition if an Index Table Segment is needed, returns true if it is parsed
+    bool ProbeStart_Partition_Search(int64u Offset); //Parsing of the partition containing the caption probe start if needed, returns true if it is parsed
+    #if MEDIAINFO_DEMUX || MEDIAINFO_SEEK
+        bool IndexTables_Find(int64u StreamOffset, size_t& IndexTable_Pos, size_t& Entry_Pos); //Index entry containing a position of the essence container, false if unknown
+    #endif //MEDIAINFO_DEMUX || MEDIAINFO_SEEK
 
     //Temp
     int128u EssenceContainer_FromPartitionMetadata;
