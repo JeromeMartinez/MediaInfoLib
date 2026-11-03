@@ -2068,6 +2068,10 @@ File_Mxf::File_Mxf()
     FooterPartitionAddress_Jumped=false;
     PartitionPack_Parsed=false;
     HeaderPartition_IsOpen=false;
+    Data_IsSkipped=false;
+    Data_Skipped_End=(int64u)-1;
+    Data_Skipped_Hint=0;
+    Data_Skipped_DataMustAlwaysBeComplete=false;
     Is1001=false;
     IdIsAlwaysSame_Offset=0;
     PartitionMetadata_PreviousPartition=(int64u)-1;
@@ -3339,7 +3343,7 @@ void File_Mxf::HeaderMetadata_Sequence_Test()
         if (IsFill && !HeaderMetadata_FillIsParsed)
         {
             HeaderMetadata_FillIsParsed=true;
-            HeaderMetadata_End+=Header_Size+Element_Size;
+            HeaderMetadata_End+=Header_Size+Element_Size_AsIfRead();
             return;
         }
         const auto IsPrimerPack=(Code.hi>>24)==0x060E2B3402 && Code.lo==GroupsPacks::PrimerPack;
@@ -10246,6 +10250,14 @@ void File_Mxf::Read_Buffer_Continue()
 
     Read_Buffer_CheckFileModifications();
 
+    //After a jump over content not read, the next hint is the one used when content is read
+    if (Data_Skipped_Hint && File_Offset==Data_Skipped_End)
+    {
+        if (File_Buffer_Size_Hint_Pointer)
+            (*File_Buffer_Size_Hint_Pointer)=Data_Skipped_Hint;
+        Data_Skipped_Hint=0;
+    }
+
     if (IsRtmd)
     {
         Synched=false;
@@ -10558,6 +10570,16 @@ void File_Mxf::Read_Buffer_AfterParsing()
 //---------------------------------------------------------------------------
 void File_Mxf::Read_Buffer_Unsynched()
 {
+    //Skipped content (data may be parsed again without header, e.g. clip wrapped content after a seek)
+    Data_IsSkipped=false;
+    Data_Skipped_End=(int64u)-1;
+    if (Data_Skipped_Hint)
+    {
+        if (File_Buffer_Size_Hint_Pointer)
+            (*File_Buffer_Size_Hint_Pointer)=Data_Skipped_Hint; //Same hint as if the content was read
+        Data_Skipped_Hint=0;
+    }
+
     //Adapting DataSizeToParse
     if (Buffer_End)
     {
@@ -11525,6 +11547,8 @@ void File_Mxf::Header_Parse()
     int32u Code_Compare3=Code.lo>>32;
     bool IsFiller=(Code.hi>>24)==0x060E2B3401
               && (Code.lo==Elements::FillerData || Code.lo==Elements::TerminatingFillerData);
+    Data_IsSkipped=IsFiller || Essence_IsNotNeeded();
+    Data_Skipped_End=(int64u)-1;
     if (IsFiller)
         DataMustAlwaysBeComplete=false;
     if (Config->ParseSpeed<0
@@ -11635,6 +11659,7 @@ void File_Mxf::Header_Parse()
                 Buffer_End=Buffer_Begin+Length;
                 Buffer_Header_Size=Element_Offset;
                 MustSynchronize=false;
+                Data_IsSkipped=false;
                 Length=0;
                 #if MEDIAINFO_DEMUX || MEDIAINFO_SEEK
                 Clip_Begin=Buffer_Begin;
@@ -11647,7 +11672,42 @@ void File_Mxf::Header_Parse()
 
         if (Buffer_Begin==(int64u)-1)
         {
-            if (Length<=File_Size/2) //Divided by 2 for testing if this is a big chunk = Clip based and not frames.))
+            //Content not needed is not read if the jump is possible (file reader providing the same buffers as if the content was read, if the file reader would read it in one read without changing its buffer size), big enough for being faster than reading it, with a coherent size, if the element is not the last one or truncated, and if the caption probe would not stop before it
+            bool CanJump=Status[IsAccepted] && !IsSub && Config->File_IsSeekable_Get() && File_Buffer_Size_Hint_Pointer && File_Size!=(int64u)-1 && Length<=File_Size/2 && Element_Offset+Length<=Buffer_MaximumSize && Element_Offset+Length+24<=Config->File_Buffer_Size_Max && Buffer_Offset+Element_Offset+Length-Buffer_Size>=0x100000 && File_Offset+Buffer_Offset+Element_Offset+Length<File_Size && File_Offset+Buffer_Offset<IsParsingMiddle_MaxOffset;
+            if (CanJump && !IsParsingEnd && IsParsingMiddle_MaxOffset==(int64u)-1 && Config->ParseSpeed<1.0 && File_Offset+Buffer_Offset+Element_Offset+Length+128*1024>=Buffer_PaddingBytes+(Config->ParseSpeed<=0?0x1000000:0x4000000))
+                CanJump=false; //Content near the first pass limit is read, the limit is tested with the buffer offset
+            #if MEDIAINFO_HASH
+                if (Hash)
+                    CanJump=false; //All the content is read for the hash
+            #endif //MEDIAINFO_HASH
+            #if MEDIAINFO_TRACE
+                if (Config_Trace_Level!=0)
+                    CanJump=false; //All the content is shown in the trace
+            #endif //MEDIAINFO_TRACE
+            #if MEDIAINFO_DEMUX
+                if (Config_Demux)
+                    CanJump=false; //All the content is read for demux
+            #endif //MEDIAINFO_DEMUX
+            if (CanJump && Data_IsSkipped)
+            {
+                Data_Skipped_End=File_Offset+Buffer_Offset+Element_Offset+Length;
+                Data_Skipped_DataMustAlwaysBeComplete=DataMustAlwaysBeComplete;
+                DataMustAlwaysBeComplete=false;
+
+                //Hints: reading as if the element was read (the next 24 bytes, then the hint for reading the whole element)
+                Data_Skipped_Hint=(size_t)(Buffer_Offset+Element_Offset+Length-Buffer_Size+24);
+                if (Data_Skipped_Hint<128*1024)
+                    Data_Skipped_Hint=128*1024;
+                if (IsParsingEnd)
+                {
+                    //Jump to the next partition instead
+                    (*File_Buffer_Size_Hint_Pointer)=Data_Skipped_Hint;
+                    Data_Skipped_Hint=0;
+                }
+                else
+                    (*File_Buffer_Size_Hint_Pointer)=24;
+            }
+            else if (Length<=File_Size/2) //Divided by 2 for testing if this is a big chunk = Clip based and not frames.))
             {
                 if (File_Buffer_Size_Hint_Pointer)
                 {
@@ -11694,7 +11754,7 @@ void File_Mxf::Data_Parse()
         FrameInfo=frame_info();
     }
 
-    if (!Element_IsComplete_Get() && !Buffer_End) {
+    if (!Element_IsComplete_Get() && !Buffer_End && Data_Skipped_End==(int64u)-1) {
         Element_WaitForMoreData();
         return;
     }
@@ -11885,6 +11945,9 @@ void File_Mxf::Data_Parse()
             Essences_FirstEssence_Parsed=true;
         }
 
+        if (Data_Skipped_End!=(int64u)-1)
+            DataMustAlwaysBeComplete=Data_Skipped_DataMustAlwaysBeComplete;
+
         if (IsParsingEnd)
         {
             NextRandomIndexPack();
@@ -11904,7 +11967,7 @@ void File_Mxf::Data_Parse()
             SystemItem_Checks.ContentPackage_Elements.push_back(Code_Compare4);
         if (Code_Compare4==0x17010201) //Frame-wrapped ANC Data, size of the element for checking compliance with specifications
         {
-            const auto Size=Header_Size+Element_Size;
+            const auto Size=Header_Size+Element_Size_AsIfRead();
             if (Anc_ElementSize==(int64u)-1)
                 Anc_ElementSize=Size;
             else if (Anc_ElementSize!=Size)
@@ -12119,9 +12182,10 @@ void File_Mxf::Data_Parse()
         //Element size, for the stream size if all elements have the same size
         if (!Buffer_End)
         {
+            const auto Size=Element_Size_AsIfRead();
             if (!Essence->second.Element_Size_Constant)
-                Essence->second.Element_Size_Constant=Element_Size;
-            else if (Essence->second.Element_Size_Constant!=Element_Size)
+                Essence->second.Element_Size_Constant=Size;
+            else if (Essence->second.Element_Size_Constant!=Size)
                 Essence->second.Element_Size_Constant=(int64u)-1;
         }
 
@@ -12199,7 +12263,7 @@ void File_Mxf::Data_Parse()
 
         #endif //MEDIAINFO_DEMUX
 
-        if (!Essence->second.Parsers.empty() && !(*(Essence->second.Parsers.begin()))->Status[IsFinished])
+        if (!Data_IsSkipped && !Essence->second.Parsers.empty() && !(*(Essence->second.Parsers.begin()))->Status[IsFinished])
         {
             if (Code_Compare3!=0x0E090502 && ((Code_Compare4&0xFF00FF00)==0x17000100 || (Code_Compare4&0xFF00FF00)==0x17000200))
             {
@@ -12400,7 +12464,20 @@ void File_Mxf::Data_Parse()
             }
         }
         else
+        {
             Skip_XX(Element_Size,                               "Data");
+
+            //Frame info as if the content was parsed
+            if (Data_IsSkipped && !Essence->second.Parsers.empty() && !(*(Essence->second.Parsers.begin()))->Status[IsFinished])
+            {
+                if (Essence->second.Frame_Count_NotParsedIncluded!=(int64u)-1)
+                    Essence->second.Frame_Count_NotParsedIncluded++;
+                if (Essence->second.FrameInfo.DTS!=(int64u)-1 && Essence->second.FrameInfo.DUR!=(int64u)-1)
+                    Essence->second.FrameInfo.DTS+=Essence->second.FrameInfo.DUR;
+                if (Essence->second.FrameInfo.PTS!=(int64u)-1 && Essence->second.FrameInfo.DUR!=(int64u)-1)
+                    Essence->second.FrameInfo.PTS+=Essence->second.FrameInfo.DUR;
+            }
+        }
 
         //Frame info is specific to the container, and it is not updated
         if (Essence->first==Essences_UsedForFrameCount)
@@ -12448,7 +12525,7 @@ void File_Mxf::Data_Parse()
     }
     break;
     case 0x060E2B34010101LL: {
-    if (!Element_IsComplete_Get())
+    if (!Element_IsComplete_Get() && Data_Skipped_End==(int64u)-1)
     {
         Element_WaitForMoreData();
         return;
@@ -12656,7 +12733,7 @@ void File_Mxf::Data_Parse()
         Fill();
 
         IsParsingEnd=true;
-        if (PartitionMetadata_FooterPartition!=(int64u)-1 && PartitionMetadata_FooterPartition>File_Offset+Buffer_Offset+(size_t)Element_Size)
+        if (PartitionMetadata_FooterPartition!=(int64u)-1 && PartitionMetadata_FooterPartition>File_Offset+Buffer_Offset+Element_Size_AsIfRead())
         {
             if (PartitionMetadata_FooterPartition+17<=File_Size)
             {
@@ -12677,7 +12754,7 @@ void File_Mxf::Data_Parse()
         Open_Buffer_Unsynch();
     }
 
-    if (File_Offset+Buffer_Offset+Element_Size>=RandomIndexPacks_MaxOffset)
+    if (File_Offset+Buffer_Offset+Element_Size_AsIfRead()>=RandomIndexPacks_MaxOffset)
         NextRandomIndexPack();
 }
 
@@ -15261,7 +15338,7 @@ void File_Mxf::Filler()
 
     Skip_XX(Element_Size,                                       "Junk");
 
-    Buffer_PaddingBytes+=Element_Size;
+    Buffer_PaddingBytes+=Element_Size_AsIfRead();
     DataMustAlwaysBeComplete=true;
 }
 
@@ -15287,7 +15364,7 @@ void File_Mxf::TerminatingFillerData()
 
     Skip_XX(Element_Size,                                       "Junk");
 
-    Buffer_PaddingBytes+=Element_Size;
+    Buffer_PaddingBytes+=Element_Size_AsIfRead();
 }
 
 //---------------------------------------------------------------------------
@@ -21616,6 +21693,7 @@ void File_Mxf::ChooseParser_Vc3(const essences::iterator &Essence, const descrip
     //Filling
     #if defined(MEDIAINFO_VC3_YES)
         File_Vc3* Parser=new File_Vc3;
+        Parser->ParserName="VC-3"; //Used for not reading content not needed
         if (Descriptor!=Descriptors.end())
             Parser->FrameRate=Descriptor->second.SampleRate;
     #else
@@ -22629,6 +22707,48 @@ void File_Mxf::NextRandomIndexPack()
     }
 
     RandomIndexPacks_MaxOffset=(int64u)-1;
+}
+
+//---------------------------------------------------------------------------
+bool File_Mxf::Essence_IsNotNeeded()
+{
+    //Only for frame wrapped essence, when it is possible to jump
+    if ((Code.hi>>8)!=0x060E2B34010201LL || IsSub || Buffer_End || IsArriExperimental)
+        return false;
+    #if MEDIAINFO_DEMUX
+        if (Config_Demux)
+            return false;
+    #endif //MEDIAINFO_DEMUX
+    #if MEDIAINFO_TRACE
+        if (Config_Trace_Level!=0)
+            return false; //All the content is shown in the trace
+    #endif //MEDIAINFO_TRACE
+
+    //Only partitions and indexes are parsed at the end of the file
+    if (IsParsingEnd)
+        return true;
+
+    //Parsers having nothing more to say
+    if (Config->ParseSpeed>=1.0)
+        return false;
+    essences::iterator Essence=Essences.find((int32u)Code.lo);
+    if (Essence==Essences.end() || Essence->second.Parsers.size()!=1)
+        return false;
+    const File__Analyze* Parser=Essence->second.Parsers[0];
+    if (Parser->Status[IsFinished])
+        return true;
+    if (!Parser->Status[IsFilled])
+        return false;
+    return Parser->ParserName=="PCM" //No detection after the first frames
+        || Parser->ParserName=="ProRes" //Only the first frame is used
+        || Parser->ParserName=="VC-3"; //Frames are skipped once filled
+}
+
+//---------------------------------------------------------------------------
+int64u File_Mxf::Element_Size_AsIfRead()
+{
+    //Size of the content of the current element, including the content not read
+    return Data_Skipped_End==(int64u)-1?Element_Size:Element_TotalSize_Get();
 }
 
 //---------------------------------------------------------------------------
