@@ -4,7 +4,8 @@
  *  be found in the License.html file in the root of the source tree.
  */
 
-// File names with non-ASCII characters with the C API (narrow and wide functions, C++ classes without Unicode) and the locale of the environment, for filename.sh
+// File names with non-ASCII characters with the C API (narrow and wide functions, the same results with and without Unicode) and the locale of
+// the environment, for filename.sh
 // Usage: mil_filename setlocale(0|1) charset_utf8(0|1) directory
 // Prints "NOK: check, message" lines or "OK: count checks", exit code 0 (OK) or 1 (NOK)
 
@@ -24,13 +25,11 @@
     #include <langinfo.h>
 #endif
 
-#if defined(UNICODE)
-
 #if !defined(_WIN32)
     #define __stdcall
 #endif
 
-// C API, narrow and wide functions (MediaInfoDLL_Static.h declares only one of them, depending on UNICODE)
+// C API, narrow and wide functions (MediaInfoDLL_Static.h declares only one of them, depending on UNICODE), with and without Unicode
 extern "C"
 {
     void*           __stdcall MediaInfoA_New();
@@ -51,98 +50,6 @@ extern "C"
     size_t          __stdcall MediaInfo_Open(void* Handle, const wchar_t* File);
     const wchar_t*  __stdcall MediaInfo_Get(void* Handle, int StreamKind, size_t StreamNumber, const wchar_t* Parameter, int KindOfInfo, int KindOfSearch);
 }
-
-#else //defined(UNICODE)
-
-// The C API is only in the Unicode build: same names for the C++ classes, strings are the bytes of the names
-#include "MediaInfo/MediaInfo.h"
-#include "MediaInfo/MediaInfoList.h"
-#if defined(__APPLE__)
-    #include "ZenLib/OS_Utils.h" // Names listed in the locale encoding, from the UTF-8 names of the file system
-#endif
-typedef MediaInfoLib::MediaInfo     MediaInfo_Class;
-typedef MediaInfoLib::MediaInfoList MediaInfoList_Class;
-
-static std::string Result; // Valid until the next call, as the strings of the C API
-
-static const char* Result_Set(const std::string& Value)
-{
-    Result=Value;
-    return Result.c_str();
-}
-
-static void* MediaInfoA_New()
-{
-    return new MediaInfo_Class;
-}
-
-static void* MediaInfoA_New_Quick(const char* File, const char*)
-{
-    MediaInfo_Class* MI=new MediaInfo_Class;
-    if (MI->Open(File))
-        return MI;
-    delete MI;
-    return NULL;
-}
-
-static void MediaInfoA_Delete(void* Handle)
-{
-    delete (MediaInfo_Class*)Handle;
-}
-
-static size_t MediaInfoA_Open(void* Handle, const char* File)
-{
-    return ((MediaInfo_Class*)Handle)->Open(File);
-}
-
-static const char* MediaInfoA_Inform(void* Handle, size_t)
-{
-    return Result_Set(((MediaInfo_Class*)Handle)->Inform());
-}
-
-static const char* MediaInfoA_Get(void* Handle, int StreamKind, size_t StreamNumber, const char* Parameter, int KindOfInfo, int KindOfSearch)
-{
-    return Result_Set(((MediaInfo_Class*)Handle)->Get((MediaInfoLib::stream_t)StreamKind, StreamNumber, Parameter, (MediaInfoLib::info_t)KindOfInfo, (MediaInfoLib::info_t)KindOfSearch));
-}
-
-static const char* MediaInfoA_Option(void* Handle, const char* Option, const char* Value)
-{
-    return Result_Set(Handle?((MediaInfo_Class*)Handle)->Option(Option, Value):MediaInfo_Class::Option_Static(Option, Value));
-}
-
-static void* MediaInfoListA_New()
-{
-    return new MediaInfoList_Class;
-}
-
-static void* MediaInfoListA_New_Quick(const char* File, const char*)
-{
-    MediaInfoList_Class* List=new MediaInfoList_Class;
-    List->Open(File);
-    return List;
-}
-
-static void MediaInfoListA_Delete(void* Handle)
-{
-    delete (MediaInfoList_Class*)Handle;
-}
-
-static size_t MediaInfoListA_Open(void* Handle, const char* File, int)
-{
-    return ((MediaInfoList_Class*)Handle)->Open(File);
-}
-
-static const char* MediaInfoListA_Get(void* Handle, size_t FilePos, int StreamKind, size_t StreamNumber, const char* Parameter, int KindOfInfo, int KindOfSearch)
-{
-    return Result_Set(((MediaInfoList_Class*)Handle)->Get(FilePos, (MediaInfoLib::stream_t)StreamKind, StreamNumber, Parameter, (MediaInfoLib::info_t)KindOfInfo, (MediaInfoLib::info_t)KindOfSearch));
-}
-
-static size_t MediaInfoListA_Count_Get_Files(void* Handle)
-{
-    return ((MediaInfoList_Class*)Handle)->Count_Get();
-}
-
-#endif //defined(UNICODE)
 
 static const int Stream_General=0;
 static const int Info_Name=0;
@@ -351,14 +258,12 @@ static std::string Listed_Path(const char* Value)
             if (ToReturn[Pos]=='\\')
                 ToReturn[Pos]='/';
         }
-    #elif defined(__APPLE__) && !defined(UNICODE)
-        ToReturn=ZenLib::FileName_To_Native(ToReturn);
     #endif
     return ToReturn;
 }
 
-// File system functions with the bytes of the names (UTF-8 on Windows with Unicode), independent from the library and from the locale
-#if defined(_WIN32) && defined(UNICODE)
+// File system functions with the bytes of the names (UTF-8 on Windows), independent from the library and from the locale
+#if defined(_WIN32)
 static FILE* Open_Raw(const std::string& Path)
 {
     std::wstring Wide;
@@ -372,17 +277,6 @@ static bool Create_Directory(const std::string& Path)
 {
     std::wstring Wide;
     return UTF8_To_Wide(Path, Wide) && !_wmkdir(Wide.c_str());
-}
-#elif defined(_WIN32)
-static FILE* Open_Raw(const std::string& Path)
-{
-    FILE* F=NULL;
-    return fopen_s(&F, Path.c_str(), "wb")?NULL:F;
-}
-
-static bool Create_Directory(const std::string& Path)
-{
-    return !_mkdir(Path.c_str());
 }
 #else //defined(_WIN32)
 static FILE* Open_Raw(const std::string& Path)
@@ -467,13 +361,6 @@ int main(int argc, char* argv[])
         #else
             bool FileNames_IsUnicode=IsUnicode;
         #endif
-    #endif
-    #if !defined(UNICODE)
-        // Without Unicode, strings are the bytes of the names, no conversion whatever the locale: same results as with the bytes kept with an ASCII locale
-        IsASCII=true;
-        IsUnicode=true;
-        IsLatin1=false;
-        FileNames_IsUnicode=true;
     #endif
     Locale_IsLatin1=IsLatin1;
     Narrow_IsUTF8=IsUnicode || CharSet_UTF8; // The option has the priority over the locale
@@ -582,22 +469,20 @@ int main(int argc, char* argv[])
         }
 
         // Wide API, e.g. pymediainfo
-        #if defined(UNICODE)
-            std::wstring Path_Wide, Title_Wide;
-            UTF8_To_Wide(Path, Path_Wide);
-            UTF8_To_Wide(Files[i].Title, Title_Wide);
-            void* MI=MediaInfo_New();
-            size_t Opened=MediaInfo_Open(MI, Path_Wide.c_str());
-            Check(Opened, "MediaInfo_Open("+Shown+")", "file not opened");
-            if (Opened)
-            {
-                const wchar_t* Value_Wide=MediaInfo_Get(MI, Stream_General, 0, L"CompleteName", Info_Text, Info_Name);
-                Check(Value_Wide && Path_Wide==Value_Wide, "MediaInfo_Get("+Shown+", CompleteName)", "wrong name");
-                Value_Wide=MediaInfo_Get(MI, Stream_General, 0, L"Title", Info_Text, Info_Name);
-                Check(Value_Wide && Title_Wide==Value_Wide, "MediaInfo_Get("+Shown+", Title)", "wrong title");
-            }
-            MediaInfo_Delete(MI);
-        #endif //defined(UNICODE)
+        std::wstring Path_Wide, Title_Wide;
+        UTF8_To_Wide(Path, Path_Wide);
+        UTF8_To_Wide(Files[i].Title, Title_Wide);
+        void* MI=MediaInfo_New();
+        size_t Opened=MediaInfo_Open(MI, Path_Wide.c_str());
+        Check(Opened, "MediaInfo_Open("+Shown+")", "file not opened");
+        if (Opened)
+        {
+            const wchar_t* Value_Wide=MediaInfo_Get(MI, Stream_General, 0, L"CompleteName", Info_Text, Info_Name);
+            Check(Value_Wide && Path_Wide==Value_Wide, "MediaInfo_Get("+Shown+", CompleteName)", "wrong name");
+            Value_Wide=MediaInfo_Get(MI, Stream_General, 0, L"Title", Info_Text, Info_Name);
+            Check(Value_Wide && Title_Wide==Value_Wide, "MediaInfo_Get("+Shown+", Title)", "wrong title");
+        }
+        MediaInfo_Delete(MI);
     }
 
     // Narrow API, text which is not a file name: encoding of the locale, or UTF-8 with an ASCII locale or the UTF-8 option
