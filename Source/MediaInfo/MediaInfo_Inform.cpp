@@ -114,14 +114,47 @@ static std::wstring ToFullWidth(const std::wstring& input)
 }
 
 //---------------------------------------------------------------------------
-static size_t nonASCII_Count(const std::wstring& input)
+// Count of columns used by a character in a terminal: 2 for East Asian Wide and Fullwidth characters
+static size_t DisplayWidth(wchar_t c)
 {
-    size_t count{};
-    for (wchar_t ch : input) {
-        if (!(ch >= 0x20 && ch <= 0x7E))
-            ++count;
+    auto ch = (unsigned long)c;
+    if (ch < 0x1100)
+        return 1;
+    if ((ch >= 0x1100 && ch <= 0x115F)    // Hangul Jamo initial consonants
+     || (ch >= 0x2E80 && ch <= 0x303E)    // CJK Radicals Supplement to CJK Symbols and Punctuation
+     || (ch >= 0x3041 && ch <= 0x33FF)    // Hiragana to CJK Compatibility
+     || (ch >= 0x3400 && ch <= 0x4DBF)    // CJK Unified Ideographs Extension A
+     || (ch >= 0x4E00 && ch <= 0x9FFF)    // CJK Unified Ideographs
+     || (ch >= 0xA000 && ch <= 0xA4CF)    // Yi
+     || (ch >= 0xAC00 && ch <= 0xD7A3)    // Hangul Syllables
+     || (ch >= 0xD800 && ch <= 0xDBFF)    // UTF-16 high surrogate: supplementary ideographs and emojis are wide
+     || (ch >= 0xF900 && ch <= 0xFAFF)    // CJK Compatibility Ideographs
+     || (ch >= 0xFE30 && ch <= 0xFE4F)    // CJK Compatibility Forms
+     || (ch >= 0xFF00 && ch <= 0xFF60)    // Fullwidth Forms
+     || (ch >= 0xFFE0 && ch <= 0xFFE6)    // Fullwidth signs
+     || (ch >= 0x1F300 && ch <= 0x1F64F)  // Emojis
+     || (ch >= 0x1F900 && ch <= 0x1F9FF)  // Emojis
+     || (ch >= 0x20000 && ch <= 0x3FFFD)) // CJK Unified Ideographs Extension B and next ones
+        return 2;
+    if (ch >= 0xDC00 && ch <= 0xDFFF)     // UTF-16 low surrogate: counted with the high surrogate
+        return 0;
+    return 1;
+}
+
+//---------------------------------------------------------------------------
+// Padding with spaces up to Size columns, characters using 2 columns are counted as 2
+static void ResizeToDisplayWidth(std::wstring& Name, size_t Size)
+{
+    size_t Width = 0;
+    size_t Pos = 0;
+    for (; Pos < Name.size(); Pos++) {
+        auto CharWidth = DisplayWidth(Name[Pos]);
+        if (Width + CharWidth > Size)
+            break;
+        Width += CharWidth;
     }
-    return count;
+    Name.resize(Pos);
+    Name.append(Size - Width, L' ');
 }
 
 //---------------------------------------------------------------------------
@@ -1043,17 +1076,23 @@ Ztring MediaInfo_Internal::Inform (stream_t StreamKind, size_t StreamPos, bool I
                     Ztring lang = MediaInfoLib::Config.Language_Get(__T("  Language_ISO639"));
                     if (!lang.compare(__T("ja")) || !lang.compare(__T("ko")) || !lang.compare(__T("zh-CN")) || !lang.compare(__T("zh-HK")) || !lang.compare(__T("zh-TW")))
                     {
+                        //Align Japanese, Korean and Chinese characters with ASCII characters
                         #if !defined(UNICODE) && !defined(_UNICODE)
                         std::wstring Nom_Wide=Nom.To_Unicode();
-                        //Nom_Wide.resize(Nom_Size, ' ');
-                        //Nom=Ztring().From_Unicode(ToFullWidth(Nom_Wide)); //Align Japanese, Korean and Chinese characters with ASCII characters
-                        Nom_Size -= nonASCII_Count(Nom_Wide); //Align Japanese, Korean and Chinese characters with ASCII characters
                         #else
-                        //Nom.resize(Nom_Size, ' ');
-                        //Nom=ToFullWidth(Nom); //Align Japanese, Korean and Chinese characters with ASCII characters
-                        Nom_Size -= nonASCII_Count(Nom); //Align Japanese, Korean and Chinese characters with ASCII characters
+                        std::wstring& Nom_Wide=Nom;
                         #endif
-                        Nom.resize(Nom_Size, ' ');
+                        if (MediaInfoLib::Config.Inform_HalfWidth_Get())
+                            ResizeToDisplayWidth(Nom_Wide, Nom_Size); //Shorter and can be copied, aligned with a font having CJK characters twice as wide as the others (terminals)
+                        else
+                        {
+                            //All characters in full width, aligned whatever is the font
+                            Nom_Wide.resize(Nom_Size, ' ');
+                            Nom_Wide=ToFullWidth(Nom_Wide);
+                        }
+                        #if !defined(UNICODE) && !defined(_UNICODE)
+                        Nom.From_Unicode(Nom_Wide);
+                        #endif
                     }
                     #if !defined(UNICODE) && !defined(_UNICODE)
                     else if (std::find_if(Nom.begin(), Nom.end(), [](char c) { return (unsigned char)c>=0x80; })!=Nom.end())
