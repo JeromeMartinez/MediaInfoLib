@@ -3225,7 +3225,7 @@ void File_Dts::Rev2Aux()
     int8u Rev2Bytes;
     Peek_B1(Rev2Bytes);
     auto Rev2AUXDataByteSize=(Rev2Bytes>>1)+1;
-    if (Element_Size-Element_Offset>=Rev2Bytes && Dts_CRC_CCIT_Compute(Buffer+Buffer_Offset+Element_Offset, Rev2Bytes)==0)
+    if (Element_Size-Element_Offset>=Rev2AUXDataByteSize && Dts_CRC_CCIT_Compute(Buffer+Buffer_Offset+Element_Offset, Rev2AUXDataByteSize)==0)
     {
         BS_Begin();
         // Will later use Rev2BitsRemain to skip padding up to CRC
@@ -3270,7 +3270,6 @@ void File_Dts::Rev2Aux()
         if (Rev2BitsRemain >= 3)
         {
             Skip_S1(2,                                          "NEOX Encoded Height Info");
-            bool T1CC;
             Get_SB(Type1CertifiedContent,                       "Type 1 Certified Content");
             Rev2BitsRemain-=3;
         }
