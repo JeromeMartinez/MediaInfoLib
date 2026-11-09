@@ -1,6 +1,6 @@
 require 'fileutils'
 
-Dir.mkdir('lib') unless File.exists?('lib')
+Dir.mkdir('lib') unless File.exist?('lib')
 FileUtils.cp('../../Source/MediaInfoDLL/MediaInfoDLL.rb', 'lib/mediainfolib.rb')
 
 Gem::Specification.new do |s|
