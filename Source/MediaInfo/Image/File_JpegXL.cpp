@@ -89,7 +89,7 @@ void File_JpegXL::FileHeader_Parse()
         w_div8 += 1;
         width = w_div8 * 8;
     }
-    else {
+    if (!div8 && !ratio) {
         Get_U32(B(9, 1), B(13, 1), B(18, 1), B(30, 1), width,       "width");
     }
     Element_End0();
