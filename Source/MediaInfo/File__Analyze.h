@@ -24,7 +24,9 @@
 #endif //MEDIAINFO_AES
 #include "MediaInfo/HashWrapper.h"
 #include "MediaInfo/MediaInfo_Conformance.h"
+#include "MediaInfo/TimeCode.h"
 #include <cstring>
+#include <memory>
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
@@ -1787,7 +1789,8 @@ public :
 
     #if MEDIAINFO_CONFORMANCE
         void*               Conformance_Data;
-        void                Fill_Conformance(conformance::id Id, conformance::args Args = {}, uint8_t Flags = {}, stream_t StreamKind = Stream_Max, size_t StreamPos = 0, int64u Offset = Conformance_Offset_Parser); //Flags: profiles the message is for, all if 0; stream: last stream if Stream_Max; Offset: offset of the item the message is about instead of the position of the parser (no frame or time), (int64u)-1 if the message is about the whole stream
+        bitset8             ConformanceFlags; //Profiles the stream is checked against, a message filled with flags is kept only if one of them is set here
+        void                Fill_Conformance(conformance::id Id, conformance::args Args = {}, bitset8 Flags = {}, stream_t StreamKind = Stream_Max, size_t StreamPos = 0, int64u Offset = Conformance_Offset_Parser); //Flags: profiles the message is for, all if none; stream: last stream if Stream_Max; Offset: offset of the item the message is about instead of the position of the parser (no frame or time), (int64u)-1 if the message is about the whole stream
         void                Fill_Conformance(const conformance_errors& Errors, const string& Specification = {}, const char* Field = nullptr); //Messages about the whole stream, with the specification they come from; Field: field instead of the fields of the catalog, when the same checks are reported at another place
         void                Fill_Conformance_Text(stream_t StreamKind, size_t StreamPos, const string& Field, const string& Text, const string& Data, bool ReplaceYes = false); //Field of a message with its text and its structured data, "Yes" in its empty parent fields; ReplaceYes: the text replaces the "Yes" of a field which is also a parent field
         void                Fill_SetConformance(stream_t StreamKind, size_t StreamPos, const char* Parameter, const string& Data, bool Replace = false); //Structured data of a conformance field, added to the current data if not Replace
@@ -1797,6 +1800,9 @@ public :
         void                Streams_Finish_Conformance(stream_t StreamKind = Stream_Max, size_t StreamPos = (size_t)-1);
         void                Conformance_Data_Init();
         void                Conformance_Position_Update();
+        virtual void        Conformance_Position_Adjust(int64u& /*Frame_Count*/, int64u& /*Frame_Count_NotParsedIncluded*/, int64u& /*SubFramePos*/) {} //For a parser knowing more about the position of its messages than the common computing, e.g. the position inside the frame (index of a frame carried by the frame)
+        std::shared_ptr<void> Conformance_Pending_Get(); //Messages not merged yet, for setting them back after a part of the stream is parsed again or rejected
+        void                Conformance_Pending_Set(const std::shared_ptr<void>& Pending);
         virtual string      CreateElementName();
         string              Conformance_Prefix(const char* Prefix); //Prefix, or parser name if no prefix, with "_" if ending with a digit
         void                IsTruncated(int64u ExpectedSize = (int64u)-1, bool MoreThan = false, const char* Prefix = nullptr);
@@ -1804,7 +1810,7 @@ public :
         void                RanOutOfData(const char* Prefix = nullptr);
         void                SynchLost(const char* Prefix = nullptr, int64u CountOfBytes = 0, bool AreZero = false);
     #else //MEDIAINFO_CONFORMANCE
-        void                Fill_Conformance(conformance::id, const conformance::args& = {}, uint8_t = {}, stream_t = Stream_Max, size_t = 0, int64u = Conformance_Offset_Parser) {}
+        void                Fill_Conformance(conformance::id, const conformance::args& = {}, bitset8 = {}, stream_t = Stream_Max, size_t = 0, int64u = Conformance_Offset_Parser) {}
         void                Fill_Conformance(const conformance_errors&, const string& = {}, const char* = nullptr) {}
         void                Clear_Conformance() {}
         void                Merge_Conformance(bool FromConfig = false) {}

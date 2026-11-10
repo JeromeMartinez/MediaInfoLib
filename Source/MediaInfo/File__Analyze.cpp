@@ -231,12 +231,11 @@ struct conformance_data
     stream_t                        StreamKind_Last = Stream_General;
     size_t                          StreamPos_Last = 0;
 
-    bitset8                         ConformanceFlags;
+    int64u                          SubFramePos = (int64u)-1;
     vector<field_value>             ConformanceErrors_Total[Conformance_Max];
     vector<field_value>             ConformanceErrors[Conformance_Max];
     bool                            Warning_Error = false;
-    int8u                           IsParsingRaw = 0;
-    bool                            CheckIf(const bitset8 Flags) { return !Flags || (ConformanceFlags & Flags); }
+    bool                            CheckIf(const bitset8 Flags) { return !Flags || (A->ConformanceFlags & Flags); }
 
     void                            Fill_Conformance(conformance::id Id, conformance::args&& Args, bitset8 Flags, stream_t StreamKind, size_t StreamPos);
     void                            Fill_Conformance(conformance::id Id, conformance::args&& Args, string&& Field, string&& Value, bitset8 Flags, conformance_type Level, stream_t StreamKind, size_t StreamPos, const string& Specification = {}, const string& StreamID = {}); //Field and text already rendered, level of the catalog if Conformance_Max
@@ -266,7 +265,7 @@ void conformance_data::Fill_Conformance(conformance::id Id, conformance::args&& 
         Level = conformance::Message_Get(Id).Level;
     if (Level == Conformance_Warning && Warning_Error)
         Level = Conformance_Error;
-    field_value FieldValue(std::move(Field), std::move(Value), Flags, (int64u)-1, (int64u)-1, IsParsingRaw >= 2 ? (IsParsingRaw - 2) : (int64u)-1, (int64u)-1, (int64u)-1);
+    field_value FieldValue(std::move(Field), std::move(Value), Flags, (int64u)-1, (int64u)-1, SubFramePos, (int64u)-1, (int64u)-1);
     FieldValue.StreamKind = StreamKind;
     FieldValue.StreamPos = StreamPos;
     auto& Conformance = ConformanceErrors[Level];
@@ -315,6 +314,10 @@ void conformance_data::Clear_Conformance()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
+static bool Conformance_IsSameOrNextFrame(int64u Frame_Count, int64u Previous)
+{
+    return Previous != (int64u)-1 && Previous != (int64u)-2 && Frame_Count >= Previous && Frame_Count - Previous <= 1;
+}
 void conformance_data::Merge_Conformance(bool FromConfig)
 {
     auto Limit = MediaInfoLib::Config.Conformance_Limit_Get();
@@ -329,12 +332,15 @@ void conformance_data::Merge_Conformance(bool FromConfig)
             if (Current != Conformance_Total.end()) {
                 if (Current->FramePoss.size() < Limit) {
                     if (FromConfig) {
-                        Current->FramePoss.insert(Current->FramePoss.begin(), { (int64u)-2 });
+                        if (Current->FramePoss.empty() || Current->FramePoss.front().Frame_Count_Min != (int64u)-2) {
+                            Current->FramePoss.insert(Current->FramePoss.begin(), { (int64u)-2 });
+                        }
                     }
-                    else if (Frame_Count != (int64u)-1 && !Current->FramePoss.empty() && (Frame_Count - Current->FramePoss.back().Frame_Count_Min <= 1 || Frame_Count - Current->FramePoss.back().Frame_Count_Max <= 1)) {
+                    else if (Frame_Count != (int64u)-1 && !Current->FramePoss.empty()
+                          && Current->FramePoss.back().SubFramePos_Min == (int64u)-1 && FieldValue.FramePoss[0].SubFramePos_Min == (int64u)-1
+                          && (Conformance_IsSameOrNextFrame(Frame_Count, Current->FramePoss.back().Frame_Count_Min) || Conformance_IsSameOrNextFrame(Frame_Count, Current->FramePoss.back().Frame_Count_Max))) {
                         Current->FramePoss.back().Frame_Count_Max = Frame_Count;
                         Current->FramePoss.back().Frame_Count_NotParsedIncluded_Max = Frame_Count_NotParsedIncluded;
-                        Current->FramePoss.back().SubFramePos_Min = FieldValue.FramePoss[0].SubFramePos_Min;
                         Current->FramePoss.back().PTS_Max = PTS;
                         Current->FramePoss.back().File_Offset_Max = File_Offset;
                     }
@@ -430,6 +436,13 @@ void conformance_data::Streams_Finish_Conformance()
                     }
                     size_t Frames_HasContent, Times_HasContent, Offsets_HasContent;
                     Frames_HasContent = Times_HasContent = Offsets_HasContent = Pos_Total;
+                    bool HasFrames = false;
+                    for (size_t i = 0; i < Pos_Total; i++) {
+                        if (ConformanceError.FramePoss[i].Frame_Count_Min != (int64u)-2) {
+                            HasFrames = true;
+                        }
+                    }
+                    bool IsConfAndFrames = false;
                     for (size_t i = 0; i < Pos_Total; i++) {
                         auto& FramePos = ConformanceError.FramePoss[i];
 
@@ -467,6 +480,14 @@ void conformance_data::Streams_Finish_Conformance()
                         Data.Locations.push_back(std::move(Location));
 
                         //Position as text
+                        if (FramePos.Frame_Count_Min == (int64u)-2 && HasFrames) {
+                            //In the configuration and in frames: "conf & " before the frames, which are the only ones listed
+                            IsConfAndFrames = true;
+                            Frames_HasContent--;
+                            Times_HasContent--;
+                            Offsets_HasContent--;
+                            continue;
+                        }
                         if (FramePos.Frame_Count_Min == (int64u)-2) {
                             Frames += "conf";
                         }
@@ -570,6 +591,9 @@ void conformance_data::Streams_Finish_Conformance()
                         else {
                             Extra = ' ';
                             Extra += '(';
+                        }
+                        if (IsConfAndFrames) {
+                            Extra += "conf & ";
                         }
                         if (Frames == "conf") {
                             Extra += Frames;
@@ -4801,23 +4825,27 @@ void File__Analyze::Decoded (const int8u* Buffer, size_t Buffer_Size)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File__Analyze::Fill_Conformance(conformance::id Id, conformance::args Args, uint8_t Flags, stream_t StreamKind, size_t StreamPos, int64u Offset)
+void File__Analyze::Fill_Conformance(conformance::id Id, conformance::args Args, bitset8 Flags, stream_t StreamKind, size_t StreamPos, int64u Offset)
 {
     if (Offset == Conformance_Offset_Parser) {
         Conformance_Position_Update();
-        ((conformance_data*)Conformance_Data)->Fill_Conformance(Id, std::move(Args), Flags, StreamKind, StreamPos);
+        auto& Data = *(conformance_data*)Conformance_Data;
+        Data.SubFramePos = (int64u)-1;
+        Conformance_Position_Adjust(Data.Frame_Count, Data.Frame_Count_NotParsedIncluded, Data.SubFramePos);
+        Data.Fill_Conformance(Id, std::move(Args), Flags, StreamKind, StreamPos);
         return;
     }
 
-    //Position given by the caller, without frame or time, for this message only
+    //Position given by the caller, without frame or time, for this message only; without offset the message is about the whole stream, as its configuration
     Conformance_Data_Init();
     auto& Data = *(conformance_data*)Conformance_Data;
+    Data.SubFramePos = (int64u)-1;
     Data.Frame_Count = (int64u)-1;
     Data.Frame_Count_NotParsedIncluded = (int64u)-1;
     Data.PTS = (int64u)-1;
     Data.File_Offset = Offset;
     Data.Fill_Conformance(Id, std::move(Args), Flags, StreamKind, StreamPos);
-    Data.Merge_Conformance();
+    Data.Merge_Conformance(Offset == (int64u)-1);
 }
 void File__Analyze::Conformance_Data_Init()
 {
@@ -4959,6 +4987,50 @@ void File__Analyze::Fill_Conformance_Field(stream_t StreamKind, size_t StreamPos
         Fill_SetConformance(StreamKind, StreamPos, Field.c_str(), conformance::Data_Serialize(Data), IsNew);
     #endif //MEDIAINFO_CONFORMANCE
 }
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
+struct conformance_pending
+{
+    vector<field_value>             ConformanceErrors[Conformance_Max];
+};
+std::shared_ptr<void> File__Analyze::Conformance_Pending_Get()
+{
+    if (!Conformance_Data) {
+        return {};
+    }
+    auto& Data = *(conformance_data*)Conformance_Data;
+    bool IsEmpty = true;
+    for (size_t Level = 0; Level < Conformance_Max; Level++) {
+        if (!Data.ConformanceErrors[Level].empty()) {
+            IsEmpty = false;
+        }
+    }
+    if (IsEmpty) {
+        return {};
+    }
+    auto Pending = std::make_shared<conformance_pending>();
+    for (size_t Level = 0; Level < Conformance_Max; Level++) {
+        Pending->ConformanceErrors[Level] = Data.ConformanceErrors[Level];
+    }
+    return Pending;
+}
+void File__Analyze::Conformance_Pending_Set(const std::shared_ptr<void>& Pending)
+{
+    if (!Conformance_Data) {
+        return;
+    }
+    auto& Data = *(conformance_data*)Conformance_Data;
+    for (size_t Level = 0; Level < Conformance_Max; Level++) {
+        if (Pending) {
+            Data.ConformanceErrors[Level] = ((conformance_pending*)Pending.get())->ConformanceErrors[Level];
+        }
+        else {
+            Data.ConformanceErrors[Level].clear();
+        }
+    }
+}
+#endif
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE

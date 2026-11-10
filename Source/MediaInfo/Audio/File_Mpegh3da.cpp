@@ -663,12 +663,6 @@ void File_Mpegh3da::Streams_Finish()
 //***************************************************************************
 
 //---------------------------------------------------------------------------
-void File_Mpegh3da::Read_Buffer_Init()
-{
-    File_Usac::Read_Buffer_Init();
-}
-
-//---------------------------------------------------------------------------
 void File_Mpegh3da::Read_Buffer_Continue()
 {
     if (MustParse_mhaC)

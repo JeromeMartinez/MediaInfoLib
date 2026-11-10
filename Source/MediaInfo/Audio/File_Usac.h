@@ -49,9 +49,6 @@ public :
     File_Usac();
     ~File_Usac();
 
-    //Buffer - Global
-    void Read_Buffer_Init();
-
     // Temp
     void   hcod_sf(const char* Name);
     int32u arith_decode(int16u& low, int16u& high, int16u& value, const int16u* cf, int32u cfl, size_t* TooMuch);
@@ -79,43 +76,6 @@ public :
         LONG_STOP_SEQUENCE
     };
 
-    #if MEDIAINFO_CONFORMANCE
-    enum conformance_level
-    {
-        Error,
-        Warning,
-        Info,
-        ConformanceLevel_Max
-    };
-    struct field_value
-    {
-        string Field;
-        string Value;
-        bitset8 Flags;
-        conformance::id Id=conformance::None;
-        conformance::args Args;
-        struct frame_pos
-        {
-            int64u Main;
-            int64u Sub;
-        };
-        vector<frame_pos> FramePoss;
-
-        field_value(string&& Field, string&& Value, bitset8 Flags, int64u FramePos, int64u SubFramePos)
-            : Field(Field)
-            , Value(Value)
-            , Flags(Flags)
-        {
-            FramePoss.push_back({FramePos, SubFramePos});
-        }
-
-        friend bool operator==(const field_value& l, const field_value& r)
-        {
-            return l.Field==r.Field && l.Value==r.Value && l.Flags.to_int8u()==r.Flags.to_int8u();
-        }
-    };
-    #endif
-
     //Bookmark
     struct bs_bookmark
     {
@@ -128,7 +88,7 @@ public :
         int8u                       BitsNotIncluded;
         bool                        UnTrusted;
         #if MEDIAINFO_CONFORMANCE
-            vector<field_value>     ConformanceErrors[ConformanceLevel_Max];
+            std::shared_ptr<void>   Conformance; //Messages not merged yet when the bookmark is set
         #endif
     };
     bs_bookmark                     BS_Bookmark(size_t NewSize);
@@ -246,10 +206,6 @@ public :
         MpegH,
         Conformance_Max
     };
-    bitset8                         ConformanceFlags;
-    vector<field_value>             ConformanceErrors_Total[ConformanceLevel_Max];
-    vector<field_value>             ConformanceErrors[ConformanceLevel_Max];
-    bool                            Warning_Error;
     profilelevel_struct             ProfileLevel;
     set<int8u>                      usacExtElementType_Present;
     const std::vector<int64u>*      Immediate_FramePos;
@@ -260,15 +216,13 @@ public :
     const std::vector<sgpd_prol_struct>* roll_distance_Values;
     const std::vector<sbgp_struct>* roll_distance_FramePos;
     const bool*                     roll_distance_FramePos_IsPresent;
-    bool CheckIf(const bitset8 Flags) { return !Flags || (ConformanceFlags & Flags); }
     void SetProfileLevel(int8u AudioProfileLevelIndication);
-    void Fill_Conformance(conformance::id Id, conformance::args Args={}, bitset8 Flags={});
-    void Clear_Conformance();
-    void Merge_Conformance(bool FromConfig=false);
-    void Streams_Finish_Conformance();
+    void Fill_Conformance(conformance::id Id, conformance::args Args={}, bitset8 Flags={}, int64u Offset=Conformance_Offset_Parser) { File__Analyze::Fill_Conformance(Id, std::move(Args), Flags, Stream_Audio, 0, Offset); } //Messages are in the audio stream
+    void Conformance_Position_Adjust(int64u& Frame_Count_, int64u& Frame_Count_NotParsedIncluded_, int64u& SubFramePos) override; //Frame being parsed and index of the frame carried by AudioPreRoll
+    void Streams_Finish_Conformance(); //Checks of the profile then messages filled
     struct usac_config;
     struct usac_frame;
-    void Streams_Finish_Conformance_Profile(usac_config& CurrentConf);
+    void Streams_Finish_Conformance_Profile(usac_config& CurrentConf, int64u Offset=Conformance_Offset_Parser); //Offset: (int64u)-1 when the stream is finished
     void numPreRollFrames_Check(usac_config& CurrentConf, int32u numPreRollFrames, const char* Structure, const char* Name);
     #else
     inline void Streams_Finish_Conformance() {}

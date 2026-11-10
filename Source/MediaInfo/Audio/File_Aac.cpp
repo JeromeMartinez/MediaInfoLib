@@ -264,7 +264,7 @@ void File_Aac::Streams_Finish()
                 audioObjectTypeString += audioObjectTypeTemp;
                 audioObjectTypeString += ')';
             }
-            Fill_Conformance(conformance::Aac_ProfileLevel_NotPermittedAudioObjectType, {{"audioProfileLevelIndication", ProfileLevelString}, {"audioObjectType", audioObjectTypeString}}, bitset8().set(Usac).set(BaselineUsac).set(xHEAAC));
+            Fill_Conformance(conformance::Aac_ProfileLevel_NotPermittedAudioObjectType, {{"audioProfileLevelIndication", ProfileLevelString}, {"audioObjectType", audioObjectTypeString}}, bitset8().set(Usac).set(BaselineUsac).set(xHEAAC), (int64u)-1);
         }
         Streams_Finish_Conformance();
         }
@@ -340,12 +340,6 @@ void File_Aac::FileHeader_Parse_ADIF()
 //***************************************************************************
 // Buffer - Global
 //***************************************************************************
-
-//---------------------------------------------------------------------------
-void File_Aac::Read_Buffer_Init()
-{
-    File_Usac::Read_Buffer_Init();
-}
 
 //---------------------------------------------------------------------------
 void File_Aac::Read_Buffer_Continue()

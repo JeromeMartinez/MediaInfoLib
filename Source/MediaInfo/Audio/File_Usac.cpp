@@ -1078,17 +1078,6 @@ static const int8u  nBitsTsdCWTab64[]=
 //***************************************************************************
 
 //---------------------------------------------------------------------------
-#if MEDIAINFO_CONFORMANCE
-const char* ConformanceLevel_Strings[]=
-{
-    "Errors",
-    "Warnings",
-    "Infos",
-};
-static_assert(sizeof(ConformanceLevel_Strings)/sizeof(const char*)==File_Usac::ConformanceLevel_Max, "");
-#endif
-
-//---------------------------------------------------------------------------
 extern int8u Aac_AudioSpecificConfig_sampling_frequency_index(const int64s sampling_frequency, bool usac=false);
 extern const int32u Aac_sampling_frequency[];
 extern const int8u Aac_Channels[];
@@ -1494,18 +1483,6 @@ File_Usac::~File_Usac()
 {
 }
 
-//***************************************************************************
-// Buffer - Global
-//***************************************************************************
-
-//---------------------------------------------------------------------------
-void File_Usac::Read_Buffer_Init()
-{
-    #if MEDIAINFO_CONFORMANCE
-        Warning_Error=MediaInfoLib::Config.WarningError();
-    #endif
-}
-
 //***********************************************************************
 // Temp
 //***********************************************************************
@@ -1689,8 +1666,7 @@ File_Usac::bs_bookmark File_Usac::BS_Bookmark(size_t NewSize)
     BS_Size=AlreadyParsed+B.NewSize;
     Element_Size=Element_Offset+(BS_Size+7)/8;
     #if MEDIAINFO_CONFORMANCE
-        for (size_t Level=0; Level<ConformanceLevel_Max; Level++)
-            B.ConformanceErrors[Level]=ConformanceErrors[Level];
+        B.Conformance=Conformance_Pending_Get();
     #endif
     return B;
 }
@@ -1737,8 +1713,7 @@ bool File_Usac::BS_Bookmark(File_Usac::bs_bookmark& B)
     #if MEDIAINFO_CONFORMANCE
         if (IsNotValid)
         {
-            for (size_t Level=0; Level<ConformanceLevel_Max; Level++)
-                ConformanceErrors[Level]=B.ConformanceErrors[Level];
+            Conformance_Pending_Set(B.Conformance);
             Fill_Conformance(conformance::Usac_Bitstream_Malformed, {{"element", ConformanceFieldName}});
         }
     #endif
@@ -1760,74 +1735,6 @@ bool File_Usac::BS_Bookmark(File_Usac::bs_bookmark& B)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File_Usac::Fill_Conformance(conformance::id Id, conformance::args Args, bitset8 Flags)
-{
-    auto Level = (conformance_level)conformance::Message_Get(Id).Level; //Same order of levels
-    if (Level == Warning && Warning_Error)
-        Level = Error;
-    field_value FieldValue(conformance::Field_Get(Id, Args), conformance::Text_Get(Id, Args), Flags, (int64u)-1, IsParsingRaw>=2?(IsParsingRaw-2):(int64u)-1);
-    auto& Conformance = ConformanceErrors[Level];
-    auto Current = find(Conformance.begin(), Conformance.end(), FieldValue);
-    if (Current != Conformance.end())
-        return;
-    FieldValue.Id = Id;
-    FieldValue.Args = std::move(Args);
-    Conformance.emplace_back(std::move(FieldValue));
-}
-#endif
-
-//---------------------------------------------------------------------------
-#if MEDIAINFO_CONFORMANCE
-void File_Usac::Clear_Conformance()
-{
-    for (size_t Level = 0; Level < ConformanceLevel_Max; Level++)
-    {
-        auto& Conformance = ConformanceErrors[Level];
-        Conformance.clear();
-    }
-}
-#endif
-
-//---------------------------------------------------------------------------
-#if MEDIAINFO_CONFORMANCE
-void File_Usac::Merge_Conformance(bool FromConfig)
-{
-    for (size_t Level = 0; Level < ConformanceLevel_Max; Level++)
-    {
-        auto& Conformance = ConformanceErrors[Level];
-        auto& Conformance_Total = ConformanceErrors_Total[Level];
-        for (const auto& FieldValue : Conformance)
-        {
-            auto Current = find(Conformance_Total.begin(), Conformance_Total.end(), FieldValue);
-            if (Current != Conformance_Total.end())
-            {
-                if (Current->FramePoss.size() < 8)
-                {
-                    if (FromConfig)
-                    {
-                        if (Current->FramePoss.empty() || Current->FramePoss[0].Main != (int64u)-1)
-                            Current->FramePoss.insert(Current->FramePoss.begin(), {(int64u)-1, (int64u)-1});
-                    }
-                    else
-                        Current->FramePoss.push_back({Frame_Count_NotParsedIncluded, FieldValue.FramePoss[0].Sub});
-                }
-                else if (Current->FramePoss.size() == 8)
-                    Current->FramePoss.push_back({(int64u)-1, (int64u)-1}); //Indicating "..."
-                continue;
-            }
-            if (!CheckIf(FieldValue.Flags))
-                continue;
-            Conformance_Total.push_back(FieldValue);
-            if (!FromConfig)
-                Conformance_Total.back().FramePoss.front() = {Frame_Count_NotParsedIncluded, FieldValue.FramePoss[0].Sub};
-        }
-        Conformance.clear();
-    }
-}
-#endif
-
-//---------------------------------------------------------------------------
-#if MEDIAINFO_CONFORMANCE
 const profilelevel_struct& Mpeg4_Descriptors_ToProfileLevel(int8u AudioProfileLevelIndication);
 void File_Usac::SetProfileLevel(int8u AudioProfileLevelIndication)
 {
@@ -1843,7 +1750,7 @@ void File_Usac::SetProfileLevel(int8u AudioProfileLevelIndication)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File_Usac::Streams_Finish_Conformance_Profile(usac_config& CurrentConf)
+void File_Usac::Streams_Finish_Conformance_Profile(usac_config& CurrentConf, int64u Offset)
 {
     if (ProfileLevel.profile == UnknownAudio)
     {
@@ -1860,17 +1767,17 @@ void File_Usac::Streams_Finish_Conformance_Profile(usac_config& CurrentConf)
         {
             int32u MaxSamplingRate = 24000 << (xHEAAC_Constraints[ProfileLevel.level].MaxSamplingRate - 1);
             if (CurrentConf.sampling_frequency > MaxSamplingRate)
-                Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}, {"max", MaxSamplingRate}});
+                Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}, {"max", MaxSamplingRate}}, {}, Offset);
         }
         else if (CurrentConf.sampling_frequency > 48000)
-            Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}, {"max", "48000"}});
+            Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}, {"max", "48000"}}, {}, Offset);
         else if (CurrentConf.sampling_frequency_index < Aac_sampling_frequency_Size && Aac_sampling_frequency[CurrentConf.sampling_frequency_index] == CurrentConf.sampling_frequency
          && ((CurrentConf.sampling_frequency_index < 0x03 || CurrentConf.sampling_frequency_index > 0x0C) && (CurrentConf.sampling_frequency_index < 0x11 || CurrentConf.sampling_frequency_index > 0x1B)))
-            Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}});
+            Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}}, {}, Offset);
         if (!CurrentConf.channelConfigurationIndex)
         {
             if (CurrentConf.numOutChannels && CurrentConf.numOutChannels > xHEAAC_Constraints[ProfileLevel.level].MaxChannels)
-                Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedNumOutChannels, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"numOutChannels", CurrentConf.numOutChannels}, {"max", xHEAAC_Constraints[ProfileLevel.level].MaxChannels}});
+                Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedNumOutChannels, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"numOutChannels", CurrentConf.numOutChannels}, {"max", xHEAAC_Constraints[ProfileLevel.level].MaxChannels}}, {}, Offset);
         }
         else
         {
@@ -1881,103 +1788,24 @@ void File_Usac::Streams_Finish_Conformance_Profile(usac_config& CurrentConf)
                 case 8 :
                         break;
                 default:
-                    Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedChannelConfigurationIndex, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"channelConfigurationIndex", CurrentConf.channelConfigurationIndex}});
+                    Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedChannelConfigurationIndex, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"channelConfigurationIndex", CurrentConf.channelConfigurationIndex}}, {}, Offset);
             }
         }
     }
     if (IsCmaf && *IsCmaf && CurrentConf.channelConfigurationIndex != 1 && CurrentConf.channelConfigurationIndex != 2)
-        Fill_Conformance(conformance::Usac_channelConfigurationIndex_NotPermittedInCMAF, {{"channelConfigurationIndex", CurrentConf.channelConfigurationIndex}});
+        Fill_Conformance(conformance::Usac_channelConfigurationIndex_NotPermittedInCMAF, {{"channelConfigurationIndex", CurrentConf.channelConfigurationIndex}}, {}, Offset);
+}
+void File_Usac::Conformance_Position_Adjust(int64u& Frame_Count_, int64u& Frame_Count_NotParsedIncluded_, int64u& SubFramePos)
+{
+    //The messages are filled while the frame is parsed, before it is counted, also when it is not the first frame of the block
+    Frame_Count_=Frame_Count;
+    Frame_Count_NotParsedIncluded_=Frame_Count_NotParsedIncluded;
+    SubFramePos=IsParsingRaw>=2?(IsParsingRaw-2):(int64u)-1;
 }
 void File_Usac::Streams_Finish_Conformance()
 {
-    Streams_Finish_Conformance_Profile(Conf);
-    Merge_Conformance(true);
-
-    for (size_t Level = 0; Level < ConformanceLevel_Max; Level++)
-    {
-        auto& Conformance_Total = ConformanceErrors_Total[Level];
-        if (Conformance_Total.empty())
-            continue;
-        for (size_t i = Conformance_Total.size(); i-- > 0;) {
-            if (!CheckIf(Conformance_Total[i].Flags)) {
-                Conformance_Total.erase(Conformance_Total.begin() + i);
-            }
-        }
-        if (Conformance_Total.empty())
-            continue;
-        string Conformance_String = "Conformance";
-        Conformance_String += ConformanceLevel_Strings[Level];
-        Fill(Stream_Audio, 0, Conformance_String.c_str(), Conformance_Total.size());
-        Conformance_String += ' ';
-        for (const auto& ConformanceError : Conformance_Total) {
-            size_t Space = 0;
-            for (;;) {
-                Space = ConformanceError.Field.find(' ', Space + 1);
-                if (Space == string::npos) {
-                    break;
-                }
-                const auto Field = Conformance_String + ConformanceError.Field.substr(0, Space);
-                const auto& Value = Retrieve_Const(StreamKind_Last, StreamPos_Last, Field.c_str());
-                if (Value.empty()) {
-                    Fill(StreamKind_Last, StreamPos_Last, Field.c_str(), "Yes");
-                }
-            }
-            auto Value = ConformanceError.Value;
-            conformance::data Data;
-            if (!ConformanceError.FramePoss.empty() && (ConformanceError.FramePoss.size() != 1 || ConformanceError.FramePoss[0].Main != (int64u)-1))
-            {
-                auto HasConfError = ConformanceError.FramePoss[0].Main == (int64u)-1;
-                Value += " (";
-                if (HasConfError)
-                {
-                    Value += "conf & ";
-                    Data.Locations.emplace_back();
-                    Data.Locations.back().IsConfiguration = true;
-                }
-                Value += "frame";
-                if (ConformanceError.FramePoss.size() - HasConfError > 1)
-                    Value += 's';
-                Value += ' ';
-                for (size_t i = HasConfError; i < ConformanceError.FramePoss.size(); i++)
-                {
-                    auto FramePos = ConformanceError.FramePoss[i];
-                    if (FramePos.Main == (int64u)-1)
-                    {
-                        Value += "...";
-                        Data.Locations_More = true;
-                    }
-                    else
-                    {
-                        auto Frame = to_string(FramePos.Main);
-                        if (FramePos.Sub != (int64u)-1)
-                        {
-                            Frame += '.';
-                            Frame += to_string(FramePos.Sub);
-                        }
-                        Value += Frame;
-                        Data.Locations.emplace_back();
-                        Data.Locations.back().Frame = to_string(FramePos.Main);
-                        if (FramePos.Sub != (int64u)-1)
-                            Data.Locations.back().SubFrame = to_string(FramePos.Sub);
-                    }
-                    Value += '+';
-                }
-                Value.back() = ')';
-            }
-            const auto Field = Conformance_String + ConformanceError.Field;
-            const auto IsNew = Retrieve_Const(Stream_Audio, 0, Field.c_str()).empty();
-            Fill(Stream_Audio, 0, Field.c_str(), Value);
-            if (ConformanceError.Id)
-            {
-                Data.Name = conformance::Message_Get(ConformanceError.Id).Name;
-                Data.Text = ConformanceError.Value;
-                for (const auto& Arg : ConformanceError.Args)
-                    Data.Args.emplace_back(Arg.Name, Arg.To_String());
-                Fill_SetConformance(Stream_Audio, 0, Field.c_str(), conformance::Data_Serialize(Data), IsNew);
-            }
-        }
-        Conformance_Total.clear();
-    }
+    Streams_Finish_Conformance_Profile(Conf, (int64u)-1);
+    File__Analyze::Streams_Finish_Conformance();
 }
 #endif
 
