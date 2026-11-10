@@ -3612,8 +3612,8 @@ Ztring MediaInfo_Config::Conformance_Limit_Set(const Ztring& Value)
         ValueI=-1;
     else
     {
-        ValueI=-Value.To_int64s();
-        if ((!ValueI && Value != __T("0")) || ValueI>numeric_limits<int64s>::max())
+        ValueI=Value.To_int64s();
+        if ((!ValueI && Value != __T("0")) || ValueI<0)
             return __T("Invalid Conformance_Limit value");
     }
 
