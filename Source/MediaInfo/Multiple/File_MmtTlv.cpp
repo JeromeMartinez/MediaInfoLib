@@ -1092,7 +1092,7 @@ void File_MmtTlv::Parse_Mpu(int16u packet_id, int32u seq_num)
                 if (nal)
                     Feed_NalFragment(packet_id, p, n, false);
                 else
-                    Ass.Data.insert(Ass.Data.end(), p, p + n);
+                    Ass.Append(p, n);
             }
             break;
         case 3: // LAST
@@ -1102,8 +1102,7 @@ void File_MmtTlv::Parse_Mpu(int16u packet_id, int32u seq_num)
                     Feed_NalFragment(packet_id, p, n, false);
                 else
                 {
-                    Ass.Data.insert(Ass.Data.end(), p, p + n);
-                    if (!Ass.Data.empty())
+                    if (Ass.Append(p, n) && !Ass.Data.empty())
                         Feed_DataUnit(packet_id, &Ass.Data[0], Ass.Data.size());
                 }
             }
@@ -1294,13 +1293,12 @@ void File_MmtTlv::Parse_SignalingMessages(int16u packet_id, int32u seq_num, cons
                 break;
             case 2: // MIDDLE
                 if (Ass.State == fragment_assembler::InFragment)
-                    Ass.Data.insert(Ass.Data.end(), p, p + n);
+                    Ass.Append(p, n);
                 break;
             case 3: // LAST
                 if (Ass.State == fragment_assembler::InFragment)
                 {
-                    Ass.Data.insert(Ass.Data.end(), p, p + n);
-                    if (!Ass.Data.empty())
+                    if (Ass.Append(p, n) && !Ass.Data.empty())
                         Parse_SignalingMessage(&Ass.Data[0], Ass.Data.size());
                 }
                 Ass.Data.clear();

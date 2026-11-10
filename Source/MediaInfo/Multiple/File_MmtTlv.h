@@ -87,6 +87,20 @@ private :
         state_t            State = Init;
         int32u             LastSeq = 0;
         std::vector<int8u> Data;
+
+        //Fragmented data larger than that is considered as malformed: dropped, until the next first or complete fragment
+        static const size_t Data_Size_Max = 16 * 1024 * 1024;
+        bool Append(const int8u* p, size_t n)
+        {
+            if (Data.size() + n > Data_Size_Max)
+            {
+                Data.clear();
+                State = Skip;
+                return false;
+            }
+            Data.insert(Data.end(), p, p + n);
+            return true;
+        }
     };
     std::map<int16u, fragment_assembler> Assemblers;
 
