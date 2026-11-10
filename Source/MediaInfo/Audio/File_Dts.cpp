@@ -3286,7 +3286,12 @@ bool File_Dts::Rev2AuxProbe() const
 {
     auto Base=Buffer+Buffer_Offset;
     auto Offset=Element_Offset;
-    auto Offset_Max=Element_Size-3;
+    int64u End=Buffer_Size-Buffer_Offset; //Element_Size may be more than what is in the buffer (e.g. truncated frame)
+    if (End>Element_Size)
+        End=Element_Size;
+    if (End<4)
+        return false;
+    auto Offset_Max=End-3;
     auto AlignmentBytes=Element_Offset%4;
     if (AlignmentBytes)
         Offset+=4-AlignmentBytes;
