@@ -2074,7 +2074,20 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
     Get_S1 (5, C.channelConfigurationIndex,                     "channelConfigurationIndex"); Param_Info1C(C.channelConfigurationIndex, Aac_ChannelLayout_GetString(C.channelConfigurationIndex));
     #if MEDIAINFO_CONFORMANCE
         if (channelConfiguration && C.channelConfigurationIndex && C.channelConfigurationIndex != channelConfiguration)
-            Fill_Conformance(conformance::Usac_channelConfiguration_MismatchChannelConfigurationIndex, {{"channelConfiguration", channelConfiguration}, {"mp4_channel_layout", Aac_ChannelLayout_GetString(channelConfiguration, false, true)}, {"channelConfigurationIndex", C.channelConfigurationIndex}, {"usac_channel_layout", Aac_ChannelLayout_GetString(C.channelConfigurationIndex, false, true)}});
+        {
+            const auto ChannelLayout = [](int8u Value) {
+                const auto Tip = Aac_ChannelLayout_GetString(Value, false, true); // " (L R)", empty if not known
+                return Tip.size() > 3 ? Tip.substr(2, Tip.size() - 3) : string();
+            };
+            conformance::args Args = {{"channelConfiguration", channelConfiguration}, {"channelConfigurationIndex", C.channelConfigurationIndex}};
+            const auto Mp4_ChannelLayout = ChannelLayout(channelConfiguration);
+            if (!Mp4_ChannelLayout.empty())
+                Args.emplace_back("mp4_channel_layout", Mp4_ChannelLayout);
+            const auto Usac_ChannelLayout = ChannelLayout(C.channelConfigurationIndex);
+            if (!Usac_ChannelLayout.empty())
+                Args.emplace_back("usac_channel_layout", Usac_ChannelLayout);
+            Fill_Conformance(conformance::Usac_channelConfiguration_MismatchChannelConfigurationIndex, Args);
+        }
     #endif
     if (!C.channelConfigurationIndex)
     {
@@ -2221,7 +2234,7 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
             if (!IsParsingRaw)
             {
                 Clear_Conformance();
-                Fill_Conformance(conformance::Usac_Bitstream_MalformedUsacConfig, {{"element", "UsacConfig"}});
+                Fill_Conformance(conformance::Usac_Bitstream_Malformed, {{"element", "UsacConfig"}});
                 Merge_Conformance();
             }
         #endif

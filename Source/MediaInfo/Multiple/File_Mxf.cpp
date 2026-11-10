@@ -6305,7 +6305,7 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_St20675 (conformance_errors
             EssencePartitions.push_back(&Partition);
     }
     if (!KAGSizes.empty())
-        Error(conformance::Mxf_KAGSize_WrongNot1, {{"actual", *KAGSizes.begin()}, {"expected", "1"}});
+        Error(conformance::Mxf_KAGSize_Wrong, {{"actual", *KAGSizes.begin()}, {"expected", "1"}});
     if ((!HeaderPartition || HeaderPartition->Status!=0x04) && (!FooterPartition || FooterPartition->Status!=0x04))
         Error(conformance::Mxf_HeaderFooterPartitionStatus_Wrong, {});
     if (!FooterPartition)
