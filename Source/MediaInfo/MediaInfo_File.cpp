@@ -835,7 +835,7 @@ static File__Analyze* SelectFromExtension(const String& Parser)
         if (Parser==__T("Jpeg"))        return new File_Jpeg();
     #endif
     #if defined(MEDIAINFO_JPEGXL_YES)
-        if (Parser==__T("Jpeg"))        return new File_JpegXL();
+        if (Parser==__T("JpegXL"))      return new File_JpegXL();
     #endif
     #if defined(MEDIAINFO_PCX_YES)
         if (Parser==__T("PCX"))         return new File_Pcx();
