@@ -1886,18 +1886,36 @@ void File_Mpeg4::brob()
 {
     Element_Name("Brotli-compressed box");
 
+    if (Element_Size <= 4) {
+        Skip_XX(Element_Size,                                   "(Incomplete)");
+        return;
+    }
     int32u type;
     Get_C4(type,                                                "payload box type");
     Element_Info1(Ztring::ToZtring_From_CC4(type));
 
-    std::vector<int8u> decoded_buffer(Element_Size * 6);
-    const auto encoded_size{ Element_Size - 4 };
-    const auto encoded_buffer{ Buffer + Buffer_Offset + Element_Offset };
-    auto decoded_size{ decoded_buffer.size() };
-    BrotliDecoderResult br_result = BrotliDecoderDecompress(encoded_size, encoded_buffer, &decoded_size, decoded_buffer.data());
+    // The decompressed size is not stored: the output buffer grows while the decoder needs more room, up to a limit
+    const size_t decoded_size_max = 16 * 1024 * 1024;
+    const auto encoded_size{ (size_t)(Element_Size - Element_Offset) };
+    std::vector<int8u> decoded_buffer;
+    size_t decoded_size = 0;
+    BrotliDecoderResult br_result = BROTLI_DECODER_RESULT_ERROR;
+    if (auto state = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr)) {
+        auto available_in{ encoded_size };
+        const uint8_t* next_in{ Buffer + Buffer_Offset + (size_t)Element_Offset };
+        do {
+            auto new_size{ decoded_buffer.empty() ? (encoded_size < decoded_size_max / 6 ? encoded_size * 6 : decoded_size_max) : decoded_buffer.size() * 2 };
+            decoded_buffer.resize(new_size < decoded_size_max ? new_size : decoded_size_max);
+            auto available_out{ decoded_buffer.size() - decoded_size };
+            uint8_t* next_out{ decoded_buffer.data() + decoded_size };
+            br_result = BrotliDecoderDecompressStream(state, &available_in, &next_in, &available_out, &next_out, nullptr);
+            decoded_size = decoded_buffer.size() - available_out;
+        } while (br_result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT && decoded_buffer.size() < decoded_size_max);
+        BrotliDecoderDestroyInstance(state);
+    }
 
     if (br_result != BROTLI_DECODER_RESULT_SUCCESS) {
-        Skip_XX(Element_Size - 4,                               "compressed data");
+        Skip_XX(Element_Size - Element_Offset,                  "compressed data");
         return;
     }
 
@@ -1908,7 +1926,7 @@ void File_Mpeg4::brob()
     auto element_size_save{ Element_Size };
     Buffer = decoded_buffer.data();
     Buffer_Offset = 0;
-    Buffer_Size = decoded_buffer.size();
+    Buffer_Size = decoded_size;
     Element_Offset = 0;
     Element_Size = decoded_size;
 
