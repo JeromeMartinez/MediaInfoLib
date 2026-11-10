@@ -3050,6 +3050,7 @@ void File__Analyze::Streams_Finish_StreamOnly_General(size_t StreamPos)
 
     const auto& FileExtension_Invalid = Retrieve(Stream_General, StreamPos, "FileExtension_Invalid");
     if (!FileExtension_Invalid.empty()) {
+        Fill_SetOptions(Stream_General, StreamPos, "FileExtension_Invalid", "N NT"); //The expected extensions are in the conformance warning
         Fill(Stream_General, StreamPos, "ConformanceWarnings", "Yes", Unlimited, true, true);
         Fill_Conformance_Field(Stream_General, StreamPos, conformance::General_FileExtension_NotExpected, {{"actual", Retrieve(Stream_General, StreamPos, General_FileExtension)}, {"expected", FileExtension_Invalid}}, true);
     }
