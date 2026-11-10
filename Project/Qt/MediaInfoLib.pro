@@ -143,6 +143,7 @@ HEADERS += \
         ../../Source/MediaInfo/MediaInfo_Config.h \
         ../../Source/MediaInfo/MediaInfo_Config_MediaInfo.h \
         ../../Source/MediaInfo/MediaInfo_Config_PerPackage.h \
+        ../../Source/MediaInfo/MediaInfo_Conformance.h \
         ../../Source/MediaInfo/MediaInfo_Const.h \
         ../../Source/MediaInfo/MediaInfo_Events.h \
         ../../Source/MediaInfo/MediaInfo_Events_Internal.h \
@@ -395,6 +396,7 @@ SOURCES += \
         ../../Source/MediaInfo/MediaInfo_Config_Automatic.cpp \
         ../../Source/MediaInfo/MediaInfo_Config_MediaInfo.cpp \
         ../../Source/MediaInfo/MediaInfo_Config_PerPackage.cpp \
+        ../../Source/MediaInfo/MediaInfo_Conformance.cpp \
         ../../Source/MediaInfo/MediaInfo_File.cpp \
         ../../Source/MediaInfo/MediaInfo_Inform.cpp \
         ../../Source/MediaInfo/MediaInfo_Internal.cpp \

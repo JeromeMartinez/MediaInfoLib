@@ -179,6 +179,10 @@ struct field_value
     bitset8 Flags;
     stream_t StreamKind = Stream_Max;
     size_t StreamPos = (size_t)-1;
+    conformance::id Id = conformance::None;
+    conformance::args Args;
+    string Specification;
+    string StreamID;
     struct frame_pos
     {
         int64u Frame_Count_Min = (int64u)-1;
@@ -215,9 +219,9 @@ struct field_value
         return l.Field == r.Field && l.Value == r.Value && l.Flags.to_int8u() == r.Flags.to_int8u() && l.StreamKind == r.StreamKind && l.StreamPos == r.StreamPos;
     }
 };
-struct conformance
+struct conformance_data
 {
-    conformance(File__Analyze* A) : A(A) {}
+    conformance_data(File__Analyze* A) : A(A) {}
 
     File__Analyze*                  A;
     int64u                          Frame_Count = (int64u)-1;
@@ -234,66 +238,73 @@ struct conformance
     int8u                           IsParsingRaw = 0;
     bool                            CheckIf(const bitset8 Flags) { return !Flags || (ConformanceFlags & Flags); }
 
-    void                            Fill_Conformance(const char* Field, const char* Value, bitset8 Flags = {}, conformance_type Level = Conformance_Error, stream_t StreamKind = Stream_Max, size_t StreamPos = 0);
-    void                            Fill_Conformance(const char* Field, const string& Value, bitset8 Flags = {}, conformance_type Level = Conformance_Error) { Fill_Conformance(Field, Value.c_str(), Flags, Level); }
+    void                            Fill_Conformance(conformance::id Id, conformance::args&& Args, bitset8 Flags, stream_t StreamKind, size_t StreamPos);
+    void                            Fill_Conformance(conformance::id Id, conformance::args&& Args, string&& Field, string&& Value, bitset8 Flags, conformance_type Level, stream_t StreamKind, size_t StreamPos, const string& Specification = {}, const string& StreamID = {}); //Field and text already rendered, level of the catalog if Conformance_Max
     void                            Clear_Conformance();
     void                            Merge_Conformance(bool FromConfig = false);
     void                            Streams_Finish_Conformance();
 };
-typedef conformance conformance_data;
+#endif //MEDIAINFO_CONFORMANCE
 static const char* Conformance_Type_String[] = {
     "Errors",
     "Warnings",
     "Infos",
 };
 static_assert(sizeof(Conformance_Type_String) / sizeof(Conformance_Type_String[0]) == Conformance_Max, "");
-#endif //MEDIAINFO_CONFORMANCE
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-string File__Analyze::BuildConformanceName(const string& ParserName, const char* Prefix, const char* Suffix)
+void conformance_data::Fill_Conformance(conformance::id Id, conformance::args&& Args, bitset8 Flags, stream_t StreamKind, size_t StreamPos)
 {
-    string Result;
-    if (!Prefix) {
-        Prefix = ParserName.c_str();
-    }
-    if (Prefix) {
-        Result += Prefix;
-    }
-    if (!Result.empty()) {
-        if (Result.back() >= '0' && Result.back() <= '9') {
-            Result += '_';
-        }
-        if (!Result.empty() && Suffix && Suffix[0]) {
-            Result += ' ';
-        }
-    }
-    if (Suffix) {
-        Result += Suffix;
-        if (!Result.empty() && Result.back() >= '0' && Result.back() <= '9') {
-            Result += '_';
-        }
-    }
-    return Result;
+    auto Field = conformance::Field_Get(Id, Args);
+    auto Value = conformance::Text_Get(Id, Args);
+    Fill_Conformance(Id, std::move(Args), std::move(Field), std::move(Value), Flags, Conformance_Max, StreamKind, StreamPos);
 }
-void conformance::Fill_Conformance(const char* Field, const char* Value, bitset8 Flags, conformance_type Level, stream_t StreamKind, size_t StreamPos)
+void conformance_data::Fill_Conformance(conformance::id Id, conformance::args&& Args, string&& Field, string&& Value, bitset8 Flags, conformance_type Level, stream_t StreamKind, size_t StreamPos, const string& Specification, const string& StreamID)
 {
+    if (Level == Conformance_Max)
+        Level = conformance::Message_Get(Id).Level;
     if (Level == Conformance_Warning && Warning_Error)
         Level = Conformance_Error;
-    field_value FieldValue(Field, Value, Flags, (int64u)-1, (int64u)-1, IsParsingRaw >= 2 ? (IsParsingRaw - 2) : (int64u)-1, (int64u)-1, (int64u)-1);
+    field_value FieldValue(std::move(Field), std::move(Value), Flags, (int64u)-1, (int64u)-1, IsParsingRaw >= 2 ? (IsParsingRaw - 2) : (int64u)-1, (int64u)-1, (int64u)-1);
     FieldValue.StreamKind = StreamKind;
     FieldValue.StreamPos = StreamPos;
     auto& Conformance = ConformanceErrors[Level];
     auto Current = find(Conformance.begin(), Conformance.end(), FieldValue);
     if (Current != Conformance.end())
         return;
-    Conformance.emplace_back(FieldValue);
+    FieldValue.Id = Id;
+    FieldValue.Args = std::move(Args);
+    FieldValue.Specification = Specification;
+    FieldValue.StreamID = StreamID;
+    Conformance.emplace_back(std::move(FieldValue));
 }
+
+//---------------------------------------------------------------------------
+// Time of a position in seconds, rounded to the millisecond as in the text
+static string Conformance_Seconds(int64u Time)
+{
+    auto Value = (int64_t)Time;
+    Value += Value >= 0 ? 500000 : -500000;
+    Value /= 1000000;
+    string Result;
+    if (Value < 0) {
+        Result += '-';
+        Value = -Value;
+    }
+    Result += to_string(Value / 1000);
+    Result += '.';
+    const auto Milliseconds = to_string(Value % 1000);
+    Result.append(3 - Milliseconds.size(), '0');
+    Result += Milliseconds;
+    return Result;
+}
+
 #endif
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void conformance::Clear_Conformance()
+void conformance_data::Clear_Conformance()
 {
     for (size_t Level = 0; Level < Conformance_Max; Level++) {
         auto& Conformance = ConformanceErrors[Level];
@@ -304,7 +315,7 @@ void conformance::Clear_Conformance()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void conformance::Merge_Conformance(bool FromConfig)
+void conformance_data::Merge_Conformance(bool FromConfig)
 {
     auto Limit = MediaInfoLib::Config.Conformance_Limit_Get();
     if (!Limit) {
@@ -345,8 +356,9 @@ void conformance::Merge_Conformance(bool FromConfig)
             else {
                 if (Conformance_Total.size() == Limit) {
                     field_value TooMany;
-                    TooMany.Field = "GeneralCompliance";
-                    TooMany.Value = "[More conformance errors...]";
+                    TooMany.Id = conformance::General_Messages_MoreThanLimit;
+                    TooMany.Field = conformance::Field_Get(TooMany.Id, TooMany.Args);
+                    TooMany.Value = conformance::Text_Get(TooMany.Id, TooMany.Args);
                     Conformance_Total.push_back(TooMany);
                 }
                 break;
@@ -359,7 +371,7 @@ void conformance::Merge_Conformance(bool FromConfig)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void conformance::Streams_Finish_Conformance()
+void conformance_data::Streams_Finish_Conformance()
 {
     Merge_Conformance(true);
 
@@ -406,20 +418,9 @@ void conformance::Streams_Finish_Conformance()
                 if (ConformanceError.StreamKind != StreamKind || ConformanceError.StreamPos != StreamPos) {
                     continue;
                 }
-                size_t Space = 0;
-                for (;;) {
-                    Space = ConformanceError.Field.find(' ', Space + 1);
-                    if (Space == string::npos) {
-                        break;
-                    }
-                    const auto Field = Conformance_String + ConformanceError.Field.substr(0, Space);
-                    const auto& Value = A->Retrieve_Const(StreamKind, StreamPos, Field.c_str());
-                    if (Value.empty()) {
-                        A->Fill(StreamKind, StreamPos, Field.c_str(), "Yes");
-                    }
-                }
                 string Extra;
                 bool RemoveOneValueCharacter = false;
+                conformance::data Data;
                 if (!ConformanceError.FramePoss.empty())
                 {
                     string Frames, Times, Offsets;
@@ -431,6 +432,41 @@ void conformance::Streams_Finish_Conformance()
                     Frames_HasContent = Times_HasContent = Offsets_HasContent = Pos_Total;
                     for (size_t i = 0; i < Pos_Total; i++) {
                         auto& FramePos = ConformanceError.FramePoss[i];
+
+                        //Position as values
+                        conformance::location Location;
+                        if (FramePos.Frame_Count_Min == (int64u)-2) {
+                            Location.IsConfiguration = true;
+                        }
+                        else {
+                            if (FramePos.Frame_Count_NotParsedIncluded_Min != (int64u)-1) {
+                                Location.Frame = to_string(FramePos.Frame_Count_NotParsedIncluded_Min);
+                                if (FramePos.SubFramePos_Min != (int64u)-1) {
+                                    Location.SubFrame = to_string(FramePos.SubFramePos_Min);
+                                }
+                                if (FramePos.Frame_Count_NotParsedIncluded_Max != (int64u)-1) {
+                                    Location.Frame_Last = to_string(FramePos.Frame_Count_NotParsedIncluded_Max);
+                                    if (FramePos.SubFramePos_Min != (int64u)-1) {
+                                        Location.SubFrame_Last = to_string(FramePos.SubFramePos_Max);
+                                    }
+                                }
+                            }
+                            if (FramePos.PTS_Min != (int64u)-1) {
+                                Location.Time = Conformance_Seconds(FramePos.PTS_Min);
+                                if (FramePos.PTS_Max != (int64u)-1) {
+                                    Location.Time_Last = Conformance_Seconds(FramePos.PTS_Max);
+                                }
+                            }
+                        }
+                        if (FramePos.File_Offset_Min != (int64u)-1) {
+                            Location.Offset = to_string(FramePos.File_Offset_Min);
+                            if (FramePos.File_Offset_Max != (int64u)-1) {
+                                Location.Offset_Last = to_string(FramePos.File_Offset_Max);
+                            }
+                        }
+                        Data.Locations.push_back(std::move(Location));
+
+                        //Position as text
                         if (FramePos.Frame_Count_Min == (int64u)-2) {
                             Frames += "conf";
                         }
@@ -518,6 +554,7 @@ void conformance::Streams_Finish_Conformance()
                         Frames += "...";
                         Times += "...";
                         Offsets += "...";
+                        Data.Locations_More = true;
                     }
                     else {
                         Frames.pop_back();
@@ -561,12 +598,27 @@ void conformance::Streams_Finish_Conformance()
                         }
                         Extra += ')';
                     }
+                    else {
+                        // Locations are not shown
+                        Data.Locations.clear();
+                        Data.Locations_More = false;
+                    }
                 }
                 auto Value = ConformanceError.Value;
                 if (RemoveOneValueCharacter)
                     Value.pop_back();
                 Value += Extra;
-                A->Fill(StreamKind, StreamPos, (Conformance_String + ConformanceError.Field).c_str(), Value);
+                string Data_Serialized;
+                if (ConformanceError.Id) {
+                    Data.Name = conformance::Message_Get(ConformanceError.Id).Name;
+                    Data.Text = conformance::Text_Get(ConformanceError.Id, ConformanceError.Args);
+                    for (const auto& Arg : ConformanceError.Args)
+                        Data.Args.emplace_back(Arg.Name, Arg.To_String());
+                    Data.Specification = ConformanceError.Specification;
+                    Data.StreamID = ConformanceError.StreamID;
+                    Data_Serialized = conformance::Data_Serialize(Data);
+                }
+                A->Fill_Conformance_Text(StreamKind, StreamPos, Conformance_String + ConformanceError.Field, Value, Data_Serialized);
             }
         }
         Conformance_Total.clear();
@@ -3007,12 +3059,7 @@ void File__Analyze::Header_Fill_Size(int64u Size)
     else if (File_Offset+Buffer_Offset+Size>Element[Element_Level-2].Next)
     {
         if (Element_IsComplete_Get() && (!IsSub || (File_Offset + Buffer_Size < File_Size && File_Size - (File_Offset + Buffer_Size) >= 0x10000))) { //TODO: good support of end of TS dumps
-            auto Name = CreateElementName();
-            if (!Name.empty()) {
-                Name += ' ';
-            }
-            Name += "GeneralCompliance";
-            Fill_Conformance(Name.c_str(), "Element size is more than maximal permitted size (actual " + to_string(Size - Element_Offset) + ", expected " + to_string(Element[Element_Level - 2].Next - (File_Offset + Buffer_Offset + Element_Offset)) + ")");
+            Fill_Conformance(conformance::General_ElementSize_MoreThanPermitted, {{"element", CreateElementName()}, {"actual", Size - Element_Offset}, {"expected", Element[Element_Level - 2].Next - (File_Offset + Buffer_Offset + Element_Offset)}});
         }
 
         Elem1.Next=Element[Element_Level-2].Next;
@@ -3305,10 +3352,8 @@ void File__Analyze::Loop_CheckValue(int64u& Value, int64u RemainingSize, int64u 
             Element_Level++; // CreateElementName() does not include the last level
             auto FullName = CreateElementName();
             Element_Level = Element_Level_Save;
-            if (!FullName.empty())
-                FullName += ' ';
 
-            Fill_Conformance((FullName + Name).c_str(), "Value " + std::to_string(Value) + " is bigger than what the element can contain " + std::to_string(MaxSize));
+            Fill_Conformance(conformance::General_ElementValue_MoreThanPermitted, {{"element", FullName}, {"name", Name}, {"actual", Value}, {"expected", MaxSize}});
         #endif //MEDIAINFO_CONFORMANCE
         Value = MaxSize;
     }
@@ -3498,32 +3543,11 @@ void File__Analyze::Element_Error(const char* Message)
 {
     if (Trace_Activated)
         Trace_Info(Element[Element_Level].TraceNode, Message, "Error", (int8u)-1);
-
-    // Quick transform of old fashion error to new system. TODO: better wording of errors
-    string M(Message);
-    size_t Dash_Pos=string::npos;
-    if (M.find(' ')!=string::npos)
-    {
-        Fill_Conformance("GeneralCompliance", M.c_str());
-    }
-    else
-    {
-        auto Version_Pos=M.find(':');
-        if (Version_Pos!=string::npos)
-            M.erase(Version_Pos);
-        auto FFV1_Pos=M.rfind("FFV1-", 0);
-        if (FFV1_Pos !=string::npos)
-            M.erase(0, 5);
-        for (;;)
-        {
-            auto Temp=M.find('-', Dash_Pos+1);
-            if (Temp==string::npos)
-                break;
-            Dash_Pos=Temp;
-            M[Dash_Pos]=' ';
-        }
-        Fill_Conformance(M.c_str(), M.substr(Dash_Pos+1));
-    }
+}
+void File__Analyze::Element_Error(const char* Message, conformance::id Id)
+{
+    Element_Error(Message);
+    Fill_Conformance(Id);
 }
 #endif //MEDIAINFO_TRACE
 
@@ -3533,34 +3557,11 @@ void File__Analyze::Param_Error(const char* Message)
 {
     if (Trace_Activated)
         Param_Info(Message, "Error");
-
-    // Quick transform of old fashion error to new system. TODO: better wording of errors
-    string M(Message);
-    if (M=="TRUNCATED-ELEMENT:1")
-        return; // Redundant, TODO: sub-elements
-    size_t Dash_Pos=string::npos;
-    if (M.find(' ')!=string::npos)
-    {
-        Fill_Conformance("GeneralCompliance", M.c_str());
-    }
-    else
-    {
-        auto Version_Pos=M.find(':');
-        if (Version_Pos!=string::npos)
-            M.erase(Version_Pos);
-        auto FFV1_Pos=M.rfind("FFV1-", 0);
-        if (FFV1_Pos !=string::npos)
-            M.erase(0, 5);
-        for (;;)
-        {
-            auto Temp=M.find('-', Dash_Pos+1);
-            if (Temp==string::npos)
-                break;
-            Dash_Pos=Temp;
-            M[Dash_Pos]=' ';
-        }
-        Fill_Conformance(M.c_str(), M.substr(Dash_Pos+1));
-    }
+}
+void File__Analyze::Param_Error(const char* Message, conformance::id Id)
+{
+    Param_Error(Message);
+    Fill_Conformance(Id);
 }
 #endif //MEDIAINFO_TRACE
 
@@ -4800,12 +4801,34 @@ void File__Analyze::Decoded (const int8u* Buffer, size_t Buffer_Size)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File__Analyze::Fill_Conformance(const char* Field, const char* Value, uint8_t Flags, conformance_type Level, stream_t StreamKind, size_t StreamPos)
+void File__Analyze::Fill_Conformance(conformance::id Id, conformance::args Args, uint8_t Flags, stream_t StreamKind, size_t StreamPos, int64u Offset)
+{
+    if (Offset == Conformance_Offset_Parser) {
+        Conformance_Position_Update();
+        ((conformance_data*)Conformance_Data)->Fill_Conformance(Id, std::move(Args), Flags, StreamKind, StreamPos);
+        return;
+    }
+
+    //Position given by the caller, without frame or time, for this message only
+    Conformance_Data_Init();
+    auto& Data = *(conformance_data*)Conformance_Data;
+    Data.Frame_Count = (int64u)-1;
+    Data.Frame_Count_NotParsedIncluded = (int64u)-1;
+    Data.PTS = (int64u)-1;
+    Data.File_Offset = Offset;
+    Data.Fill_Conformance(Id, std::move(Args), Flags, StreamKind, StreamPos);
+    Data.Merge_Conformance();
+}
+void File__Analyze::Conformance_Data_Init()
 {
     if (!Conformance_Data) {
         Conformance_Data = new conformance_data(this);
         ((conformance_data*)Conformance_Data)->Warning_Error = MediaInfoLib::Config.WarningError();
     }
+}
+void File__Analyze::Conformance_Position_Update()
+{
+    Conformance_Data_Init();
     auto& Data = *(conformance_data*)Conformance_Data;
     Data.Frame_Count = Frame_Count;
     Data.Frame_Count_NotParsedIncluded = Frame_Count_NotParsedIncluded;
@@ -4828,25 +4851,30 @@ void File__Analyze::Fill_Conformance(const char* Field, const char* Value, uint8
         }
     }
     Data.File_Offset = File_Offset + Buffer_Offset + Element_Offset + BS->Offset_Get() + BT->Offset_Get(); //BS or BT, the other one is not attached
-    Data.Fill_Conformance( Field, Value, Flags, Level, StreamKind, StreamPos);
 }
 #endif
 
 //---------------------------------------------------------------------------
-bool File__Analyze::conformance_errors::Add(const string& Value)
+bool File__Analyze::conformance_errors::Add(conformance::id Id, conformance::args Args)
 {
-    //Errors differing only by their actual and expected values are listed once per stream, with the first values
-    const auto Key_Size=min(Value.find(" (actual "), Value.size());
-    for (const auto& Item : *this)
-        if (Item.StreamID==StreamID && !Item.Value.compare(0, Key_Size, Value, 0, Key_Size) && min(Item.Value.find(" (actual "), Item.Value.size())==Key_Size) //Start compared first, " (actual " is searched in the stored error only if it is the same
-            return StopAtFirst;
-    push_back({Value, StreamID});
+    #if MEDIAINFO_CONFORMANCE
+        //Errors differing only by their actual and expected values are listed once per stream, with the first values
+        auto Value=conformance::Text_Get(Id, Args);
+        const auto Key_Size=min(Value.find(" (actual "), Value.size());
+        for (const auto& Item : *this)
+            if (Item.StreamID==StreamID && !Item.Value.compare(0, Key_Size, Value, 0, Key_Size) && min(Item.Value.find(" (actual "), Item.Value.size())==Key_Size) //Start compared first, " (actual " is searched in the stored error only if it is the same
+                return StopAtFirst;
+        push_back({Id, std::move(Args), std::move(Value), StreamID});
+    #else //MEDIAINFO_CONFORMANCE
+        //Only the presence of errors is used
+        push_back({Id, std::move(Args), string(), StreamID});
+    #endif //MEDIAINFO_CONFORMANCE
     return StopAtFirst;
 }
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File__Analyze::Fill_Conformance_Specification(const char* Field, const string& Specification, const conformance_errors& Errors, conformance_type Level)
+void File__Analyze::Fill_Conformance(const conformance_errors& Errors, const string& Specification, const char* Field)
 {
     if (Errors.empty())
         return;
@@ -4874,15 +4902,65 @@ void File__Analyze::Fill_Conformance_Specification(const char* Field, const stri
                     }
                 }
         }
+        //Text with the specification, and with the ID if its stream is not found
         auto Value=Specification.empty()?Error.Value:(Specification+": "+Error.Value);
-        if (StreamKind==Stream_Max && !Error.StreamID.empty())
-            Value+=" (ID "+Error.StreamID+')';
-        Fill_Conformance(Field, Value, {}, Level, StreamKind, StreamPos);
+        const auto StreamID=StreamKind==Stream_Max?Error.StreamID:string();
+        if (!StreamID.empty())
+            Value+=" (ID "+StreamID+')';
+        Conformance_Position_Update();
+        ((conformance_data*)Conformance_Data)->Fill_Conformance(Error.Id, conformance::args(Error.Args), Field?string(Field):conformance::Field_Get(Error.Id, Error.Args), std::move(Value), {}, Conformance_Max, StreamKind, StreamPos, Specification, StreamID);
     }
     Merge_Conformance(true);
     File_Offset=File_Offset_Save;
 }
 #endif
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
+void File__Analyze::Fill_Conformance_Text(stream_t StreamKind, size_t StreamPos, const string& Field, const string& Text, const string& Data, bool ReplaceYes)
+{
+    //Parent fields, after the "Conformance<Level>" one
+    for (auto Space = Field.find(' '); Space != string::npos;) {
+        Space = Field.find(' ', Space + 1);
+        if (Space == string::npos) {
+            break;
+        }
+        const auto Parent = Field.substr(0, Space);
+        if (Retrieve_Const(StreamKind, StreamPos, Parent.c_str()).empty()) {
+            Fill(StreamKind, StreamPos, Parent.c_str(), "Yes");
+        }
+    }
+
+    if (ReplaceYes && Retrieve_Const(StreamKind, StreamPos, Field.c_str()) == __T("Yes")) {
+        Clear(StreamKind, StreamPos, Field.c_str());
+    }
+    const auto IsNew = Retrieve_Const(StreamKind, StreamPos, Field.c_str()).empty();
+    Fill(StreamKind, StreamPos, Field.c_str(), Text);
+    if (!Data.empty()) {
+        Fill_SetConformance(StreamKind, StreamPos, Field.c_str(), Data, IsNew);
+    }
+}
+#endif //MEDIAINFO_CONFORMANCE
+
+//---------------------------------------------------------------------------
+void File__Analyze::Fill_Conformance_Field(stream_t StreamKind, size_t StreamPos, conformance::id Id, const conformance::args& Args, bool Replace)
+{
+    const auto& Message = conformance::Message_Get(Id);
+    const auto Field = string("Conformance") + Conformance_Type_String[Message.Level] + ' ' + conformance::Field_Get(Id, Args);
+    const auto Text = conformance::Text_Get(Id, Args);
+    #if MEDIAINFO_CONFORMANCE
+        const auto IsNew = Replace || Retrieve_Const(StreamKind, StreamPos, Field.c_str()).empty();
+    #endif //MEDIAINFO_CONFORMANCE
+    Fill(StreamKind, StreamPos, Field.c_str(), Text, true, Replace);
+    #if MEDIAINFO_CONFORMANCE
+        conformance::data Data;
+        Data.Name = Message.Name;
+        Data.Text = Text;
+        for (const auto& Arg : Args)
+            Data.Args.emplace_back(Arg.Name, Arg.To_String());
+        Fill_SetConformance(StreamKind, StreamPos, Field.c_str(), conformance::Data_Serialize(Data), IsNew);
+    #endif //MEDIAINFO_CONFORMANCE
+}
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
@@ -4919,8 +4997,9 @@ void File__Analyze::Merge_Conformance(File__Analyze& Sub)
     bool IsFilled = false;
     for (size_t Level = 0; Level < Conformance_Max; Level++) {
         auto& Conformance = Sub_Data.ConformanceErrors[Level];
-        for (const auto& FieldValue : Conformance) {
-            Fill_Conformance(FieldValue.Field.c_str(), FieldValue.Value.c_str(), FieldValue.Flags.to_int8u(), (conformance_type)Level, FieldValue.StreamKind, FieldValue.StreamPos);
+        for (auto& FieldValue : Conformance) {
+            Conformance_Position_Update();
+            ((conformance_data*)Conformance_Data)->Fill_Conformance(FieldValue.Id, std::move(FieldValue.Args), std::move(FieldValue.Field), std::move(FieldValue.Value), FieldValue.Flags, (conformance_type)Level, FieldValue.StreamKind, FieldValue.StreamPos, FieldValue.Specification, FieldValue.StreamID);
             IsFilled = true;
         }
         Conformance.clear();
@@ -4981,29 +5060,31 @@ string File__Analyze::CreateElementName()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-static string to_string_with_percent(int64u num, int64u den, bool no_ratio = false)
+// Percentage of num in den, with the count of digits needed for showing a difference with 0 and 100 (without "%")
+static string Percent_Get(int64u num, int64u den)
 {
-    auto Value = fmt::format("{}", num);
-    if (!no_ratio) {
-        auto Percent = (double)num / den;
-        if (Percent >= 1) {
-            Value += ' ' + string(16, '9') + '%';
-            Value[Value.size() - 15] = '.';
-        }
-        else {
-            Percent *= 100;
-            string ActualPercent;
-            for (auto i = 0; ; i++) {
-                ActualPercent = fmt::format("{:.{}f}", Percent, i);
-                if ((ActualPercent.front() == '0' && (ActualPercent.size() > 1 && ActualPercent[1] == '.' && ActualPercent.find_first_not_of('0', 2) != string::npos)) // Not 0.0...
-                    || (ActualPercent.front() != '0' && (ActualPercent.size() <= 2 || ActualPercent[2] == '.'))) {
-                    Value += ' ' + ActualPercent + '%';
-                    break;
-                }
-            }
+    auto Percent = (double)num / den;
+    if (Percent >= 1) {
+        string Value(16, '9');
+        Value[Value.size() - 14] = '.'; // Same as before: 16 digits, the third character replaced by a dot
+        return Value;
+    }
+    Percent *= 100;
+    for (auto i = 0; ; i++) {
+        auto ActualPercent = fmt::format("{:.{}f}", Percent, i);
+        if ((ActualPercent.front() == '0' && (ActualPercent.size() > 1 && ActualPercent[1] == '.' && ActualPercent.find_first_not_of('0', 2) != string::npos)) // Not 0.0...
+            || (ActualPercent.front() != '0' && (ActualPercent.size() <= 2 || ActualPercent[2] == '.'))) {
+            return ActualPercent;
         }
     }
-    return Value;
+}
+string File__Analyze::Conformance_Prefix(const char* Prefix)
+{
+    string Result(Prefix ? Prefix : ParserName.c_str());
+    if (!Result.empty() && Result.back() >= '0' && Result.back() <= '9') {
+        Result += '_';
+    }
+    return Result;
 }
 void File__Analyze::IsTruncated(int64u ExpectedSize, bool MoreThan, const char* Prefix)
 {
@@ -5016,7 +5097,12 @@ void File__Analyze::IsTruncated(int64u ExpectedSize, bool MoreThan, const char* 
     Frame_Count_NotParsedIncluded = (int64u)-1;
     Fill(Stream_General, 0, "IsTruncated", "Yes", Unlimited, true, true);
     Fill_SetOptions(Stream_General, 0, "IsTruncated", "N NT");
-    Fill_Conformance(BuildConformanceName(ParserName, Prefix, "GeneralCompliance").c_str(), "File size is less than expected size (actual " + to_string_with_percent(File_Size, ExpectedSize, ExpectedSize == (int64u)-1 || MoreThan) + (ExpectedSize == (int64u)-1 ? std::string() : (", expected " + ((MoreThan ? ">=" : "") + fmt::format("{}", ExpectedSize)))) + ')');
+    if (ExpectedSize == (int64u)-1)
+        Fill_Conformance(conformance::General_FileSize_LessThanNeeded, {{"prefix", Conformance_Prefix(Prefix)}, {"actual", File_Size}});
+    else if (MoreThan)
+        Fill_Conformance(conformance::General_FileSize_LessThanMinimum, {{"prefix", Conformance_Prefix(Prefix)}, {"actual", File_Size}, {"expected", ExpectedSize}});
+    else
+        Fill_Conformance(conformance::General_FileSize_LessThanExpected, {{"prefix", Conformance_Prefix(Prefix)}, {"actual", File_Size}, {"actual_percent", Percent_Get(File_Size, ExpectedSize)}, {"expected", ExpectedSize}});
     Merge_Conformance();
     Frame_Count = Frame_Count_Save;
     Frame_Count_NotParsedIncluded = Frame_Count_NotParsedIncluded_Save;
@@ -5041,13 +5127,8 @@ void File__Analyze::DurationIssue(int64u ActualDuration, int64u ExpectedDuration
     }
     if (ActualDuration < ExpectedDuration_Min) {
         auto ActualTC = TimeCode((double)ActualDuration / 1000, 999, TimeCode::Timed()).ToString();
-        auto ForPercentage = to_string_with_percent(ActualDuration, ExpectedDuration, false);
-        auto ForPercentage_CutPos = ForPercentage.find(' ');
-        if (ForPercentage_CutPos != string::npos) {
-            ActualTC += ForPercentage.substr(ForPercentage_CutPos);
-        }
         auto ExpectedTC = TimeCode((double)ExpectedDuration / 1000, (Multiplier - 1) ? 0 : 999, TimeCode::Timed()).ToString();
-        Fill_Conformance(BuildConformanceName(ParserName, Prefix ? Prefix : "", "Duration").c_str(), "Duration is less than expected duration (actual " + ActualTC + ", expected " + ExpectedTC + ')');
+        Fill_Conformance(conformance::General_Duration_LessThanExpected, {{"prefix", Conformance_Prefix(Prefix ? Prefix : "")}, {"actual", ActualTC}, {"actual_percent", Percent_Get(ActualDuration, ExpectedDuration)}, {"expected", ExpectedTC}});
     }
 }
 #endif //MEDIAINFO_CONFORMANCE
@@ -5066,7 +5147,7 @@ void File__Analyze::RanOutOfData(const char* Prefix)
         Frame_Count_InThisBlock++;
     }
     Clear_Conformance();
-    Fill_Conformance(BuildConformanceName(ParserName, Prefix, "GeneralCompliance").c_str(), "Bitstream parsing ran out of data to read before the end of the syntax was reached, most probably the bitstream is malformed");
+    Fill_Conformance(conformance::General_Bitstream_Malformed, {{"prefix", Conformance_Prefix(Prefix)}});
     Trusted_IsNot("out of data");
 }
 
@@ -5077,23 +5158,19 @@ void File__Analyze::RanOutOfData(const char* Prefix)
 void File__Analyze::SynchLost(const char* Prefix, int64u CountOfBytes, bool AreZero)
 {
     Synched=false;
-    const auto Name = BuildConformanceName(ParserName, Prefix, "GeneralCompliance");
-    string Content = "Bitstream synchronization is lost";
-    auto Type = conformance_type::Conformance_Error;
+    conformance::args Args{{"prefix", Conformance_Prefix(Prefix)}};
+    auto Id = conformance::General_Synchronization_Lost;
     if (CountOfBytes) {
-        if (AreZero) {
-            Content += ", zeroed bytes";
-        }
-        if (File_Offset + Buffer_Offset + CountOfBytes >= File_Size) {
-            if (!AreZero)
-                Content += ',';
-            Content += " at the end";
-            Type = Conformance_Information;
-        }
-        Content += " (count " + to_string_with_percent(CountOfBytes, File_Size) + ")";
+        const auto AtEnd = File_Offset + Buffer_Offset + CountOfBytes >= File_Size;
+        if (AreZero)
+            Id = AtEnd ? conformance::General_Synchronization_LostZeroedBytesAtEnd : conformance::General_Synchronization_LostZeroedBytes;
+        else
+            Id = AtEnd ? conformance::General_Synchronization_LostAtEnd : conformance::General_Synchronization_LostBytes;
+        Args.emplace_back("count", CountOfBytes);
+        Args.emplace_back("count_percent", Percent_Get(CountOfBytes, File_Size));
     }
     File_Offset-=CountOfBytes;
-    Fill_Conformance(Name.c_str(), Content, {}, Type);
+    Fill_Conformance(Id, std::move(Args));
     Trusted_IsNot("Synchronization lost");
     File_Offset+=CountOfBytes;
     Merge_Conformance();

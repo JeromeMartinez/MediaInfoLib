@@ -1558,7 +1558,7 @@ void File_Mpeg4::Streams_Finish()
                         Fill((stream_t)i, j, General_ID, IDs.Read(), true);
                         Fill((stream_t)i, j, "ConformanceErrors", "Yes", Unlimited, true, true);
                         Fill((stream_t)i, j, "ConformanceErrors tkhd", "Yes", Unlimited, true, true);
-                        Fill((stream_t)i, j, "ConformanceErrors tkhd track_ID", ("track_ID "+RealID.To_UTF8()+" is already used by another track"));
+                        Fill_Conformance_Field((stream_t)i, j, conformance::Mpeg4_track_ID_Duplicate, {{"actual", RealID}});
                     }
                 }
             }

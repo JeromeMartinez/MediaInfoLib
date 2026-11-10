@@ -261,7 +261,7 @@ void File_Pcm::Streams_Finish()
     if (Config->ParseSpeed>=1 && !IsNotSilence)
     {
         Fill(Stream_Audio, 0, "ConformanceInfos", "1");
-        Fill(Stream_Audio, 0, "ConformanceInfos Content", "Content is silence");
+        Fill_Conformance_Field(Stream_Audio, 0, conformance::Pcm_Silence_Present);
     }
     #endif
 }

@@ -152,6 +152,7 @@ set(MediaInfoLib_SRCS
   ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_Config_Automatic.cpp
   ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_Config_MediaInfo.cpp
   ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_Config_PerPackage.cpp
+  ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_Conformance.cpp
   ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_File.cpp
   ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_Inform.cpp
   ${MediaInfoLib_SOURCES_PATH}/MediaInfo/MediaInfo_Internal.cpp

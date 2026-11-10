@@ -99,6 +99,7 @@ protected :
     void Streams_Finish_Conformance_MCA (); //SMPTE ST 377-4 and SMPTE ST 377-41, MCA Label Sub-Descriptors
     void Streams_Finish_Conformance_RiffChunks (); //SMPTE ST 2131
     void Streams_Finish_Conformance_References ();
+    void Fill_Conformance_AtOffset (int64u Offset, conformance::id Id, conformance::args Args={}) { Fill_Conformance(Id, std::move(Args), {}, Stream_Max, 0, Offset); } //Message about the item at this offset, no offset if (int64u)-1, no frame or time
     #endif //MEDIAINFO_CONFORMANCE
     void Streams_Finish_Track (const int128u TrackUID);
     void Streams_Finish_Track_ForTimeCode (const int128u TrackUID, bool IsSourcePackage);
@@ -1223,10 +1224,10 @@ protected :
     #if MEDIAINFO_CONFORMANCE
     struct conformance_reference
     {
-        int64u      Offset;
-        const char* Field;
-        string      Value;
-        int32u      TrackID;
+        int64u              Offset;
+        conformance::id     Id;
+        conformance::args   Args;
+        int32u              TrackID;
     };
     std::vector<conformance_reference> Conformance_References;
     #endif //MEDIAINFO_CONFORMANCE
@@ -1702,8 +1703,8 @@ protected :
         struct headermetadata_error
         {
             int64u                  Offset;
-            const char*             Field;
-            std::string             Value;
+            conformance::id         Id;
+            conformance::args       Args;
         };
         std::vector<headermetadata_error> HeaderMetadata_Errors; //Errors found while parsing
         std::map<int128u, int64u>   SetKeys; //Key is InstanceUID of a Header Metadata Set (including dark sets), value is the low part of the set key

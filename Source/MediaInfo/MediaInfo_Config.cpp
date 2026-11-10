@@ -115,6 +115,7 @@
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 #include "MediaInfo/MediaInfo_Config.h"
+#include "MediaInfo/MediaInfo_Conformance.h"
 #include "ZenLib/ZtringListListF.h"
 #if defined(MEDIAINFO_FILE_YES)
 #include "ZenLib/File.h"
@@ -485,6 +486,7 @@ void MediaInfo_Config::Init(bool Force)
     CarriageReturnReplace=__T(" / ");
     #if MEDIAINFO_CONFORMANCE
         Conformance_Limit=32;
+        Conformance_Structured=false;
     #endif //MEDIAINFO_CONFORMANCE
     #if MEDIAINFO_ADVANCED
         Collection_Trigger=-2;
@@ -1473,6 +1475,22 @@ Ztring MediaInfo_Config::Option (const String &Option, const String &Value_Raw)
             return Ztring();
         #else // MEDIAINFO_CONFORMANCE
             return __T("advanced features are disabled due to compilation options");
+        #endif // MEDIAINFO_CONFORMANCE
+    }
+    if (Option_Lower==__T("conformance_output"))
+    {
+        #if MEDIAINFO_CONFORMANCE
+            return Conformance_Output_Set(Value);
+        #else // MEDIAINFO_CONFORMANCE
+            return __T("conformance features are disabled due to compilation options");
+        #endif // MEDIAINFO_CONFORMANCE
+    }
+    if (Option_Lower==__T("info_conformance"))
+    {
+        #if MEDIAINFO_CONFORMANCE
+            return Ztring().From_UTF8(conformance::Catalog_Get());
+        #else // MEDIAINFO_CONFORMANCE
+            return __T("conformance features are disabled due to compilation options");
         #endif // MEDIAINFO_CONFORMANCE
     }
     if (Option_Lower==__T("collection_trigger"))
@@ -3627,6 +3645,30 @@ int64u MediaInfo_Config::Conformance_Limit_Get()
     CriticalSectionLocker CSL(CS);
 
     return Conformance_Limit;
+}
+
+Ztring MediaInfo_Config::Conformance_Output_Set(const Ztring& Value)
+{
+    auto Value_Lower(Value);
+    transform(Value_Lower.begin(), Value_Lower.end(), Value_Lower.begin(), ToLower_ASCII);
+    bool NewValue;
+    if (Value_Lower.empty() || Value_Lower==__T("text"))
+        NewValue=false;
+    else if (Value_Lower==__T("structured"))
+        NewValue=true;
+    else
+        return __T("Invalid Conformance_Output value, permitted values are Text and Structured");
+
+    CriticalSectionLocker CSL(CS);
+    Conformance_Structured=NewValue;
+    return {};
+}
+
+bool MediaInfo_Config::Conformance_Structured_Get()
+{
+    CriticalSectionLocker CSL(CS);
+
+    return Conformance_Structured;
 }
 #endif // MEDIAINFO_CONFORMANCE
 

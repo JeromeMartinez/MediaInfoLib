@@ -5144,7 +5144,7 @@ Ztring File_Mk::String_Get()
             for (size_t i=0; i<s; i++)
                 if ((unsigned)Data[i]<0x20 || (unsigned)Data[i]>=0x80)
                 {
-                    Param_Error("EBML-ASCII-ONLY-IN-STRING:1");
+                    Param_Error("EBML-ASCII-ONLY-IN-STRING:1", conformance::Mk_StringElement_NotPermittedCharacters);
                     break;
                 }
         }

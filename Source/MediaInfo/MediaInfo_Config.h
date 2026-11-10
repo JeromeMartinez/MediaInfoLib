@@ -348,6 +348,8 @@ public :
     #if MEDIAINFO_CONFORMANCE
           Ztring      Conformance_Limit_Set (const Ztring &Value);
           int64u      Conformance_Limit_Get ();
+          Ztring      Conformance_Output_Set (const Ztring &Value);
+          bool        Conformance_Structured_Get ();
     #endif //MEDIAINFO_CONFORMANCE
     #if MEDIAINFO_ADVANCED
           void        Collection_Trigger_Set (const Ztring& Value);
@@ -551,6 +553,7 @@ private :
 
     #if MEDIAINFO_CONFORMANCE
         int64u      Conformance_Limit;
+        bool        Conformance_Structured;
     #endif //MEDIAINFO_CONFORMANCE
     #if MEDIAINFO_ADVANCED
         int64s      Collection_Trigger;

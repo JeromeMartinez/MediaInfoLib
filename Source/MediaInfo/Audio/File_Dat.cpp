@@ -665,7 +665,7 @@ void File_Dat::dttimepack(TimeCode& TC)
         auto FramesMax = TC.GetFramesMax();
         auto FrameMax_Theory = pro ? (index <= 2 ? 29 : (((int32u)Dat_xrate[index]) - 1)) : (33 + ((s % 3) == 2));
         if (f > FrameMax_Theory && FramesMax <= FrameMax_Theory) {
-            Fill_Conformance("dttimepack", "dttimepack is indicated as pro time code but contains frame numbers as if it is non pro time code");
+            Fill_Conformance(conformance::Dat_dttimepack_MismatchProTimeCode, {});
             FramesMax = 33 + ((s % 3) == 2);
         }
         else if (FramesMax < FrameMax_Theory) {

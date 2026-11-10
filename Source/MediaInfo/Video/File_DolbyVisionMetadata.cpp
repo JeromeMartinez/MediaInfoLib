@@ -183,7 +183,7 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
         Fill(Stream_Video, 0, Video_HDR_Format, "Dolby Vision Metadata");
         Stream_Prepare(Stream_Other);
         Fill(Stream_Other, 0, Other_Format, "Dolby Vision MDF");
-        Fill_Conformance("DolbyVision XML", "XML is malformed (line " + std::to_string(document.ErrorLineNum()) + ')', {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_XML_Malformed, {{"line", document.ErrorLineNum()}}, {}, Stream_Video, 0);
         Element_Offset=File_Size;
         return true;
     }
@@ -1233,7 +1233,7 @@ bool File_DolbyVisionMetadata::FileHeader_Begin()
     if (MDF_Output || Structure_Missing)
         Conformance_MDF(Root, MasterElements[1], Version, HasSchema);
     if (Structure_Missing && Version_IsSupported(Version))
-        Fill_Conformance("DolbyVision Structure", string(Structure_Missing) + " element is missing", {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_StructureElement_Missing, {{"name", string(Structure_Missing)}}, {}, Stream_Video, 0);
     if (IsV6)
         Conformance_V6(Root);
 
@@ -1871,13 +1871,14 @@ struct xsd_messages
 {
     struct item
     {
-        string      Message;
-        size_t      Count;
+        conformance::id     Id;
+        conformance::args   Args;
+        size_t              Count;
     };
     std::vector<string> Keys;               // Order of appearance
     std::map<string, item> Items;
 
-    void Add(const string& Key, const string& Message)
+    void Add(const string& Key, conformance::id Id, conformance::args&& Args)
     {
         auto Item = Items.find(Key);
         if (Item != Items.end())
@@ -1886,7 +1887,7 @@ struct xsd_messages
             return;
         }
         Keys.push_back(Key);
-        Items[Key] = { Message, 1 };
+        Items[Key] = { Id, std::move(Args), 1 };
     }
 };
 
@@ -2094,7 +2095,7 @@ static void Value_Check(const char* Text, const xsd_value& Value, const XMLEleme
         return;
     case XSD_Empty:
         if (!Content.empty())
-            Messages.Add(Path + " content", Path + " content \"" + Content + "\" is not permitted, no content is expected");
+            Messages.Add(Path + " content", conformance::DolbyVision_Content_NotPermitted, {{"path", Path}, {"actual", Content}});
         return;
     case XSD_Gamut:
     case XSD_Transfer:
@@ -2115,7 +2116,7 @@ static void Value_Check(const char* Text, const xsd_value& Value, const XMLEleme
         if (!Count)
         {
             if (!Content.empty())
-                Messages.Add(Path + " content", Path + " content \"" + Content + "\" is not permitted with name \"" + Name + "\", no content is expected");
+                Messages.Add(Path + " content", conformance::DolbyVision_Content_NotPermittedWithName, {{"path", Path}, {"actual", Content}, {"name", Name}});
             return;
         }
         Value_Specific = Value_Type == XSD_Gamut ? XSD_Value(XSD_Decimal, -10, 10, 8, 8) : XSD_Value(XSD_Float, 0, std::numeric_limits<float64>::max(), Count, Count);
@@ -2132,7 +2133,7 @@ static void Value_Check(const char* Text, const xsd_value& Value, const XMLEleme
         Items = Split(Content);
         if (Items.size() < Value_Final.List_Min || Items.size() > Value_Final.List_Max)
         {
-            Messages.Add(Path + " count", Path + " value \"" + Content + "\" is not permitted, " + Value_Expected(Value_Final) + " is expected");
+            Messages.Add(Path + " count", conformance::DolbyVision_Value_NotPermitted, {{"path", Path}, {"actual", Content}, {"expected", Value_Expected(Value_Final)}});
             return;
         }
     }
@@ -2170,7 +2171,7 @@ static void Value_Check(const char* Text, const xsd_value& Value, const XMLEleme
         }
         if (!IsValid)
         {
-            Messages.Add(Path + " value", Path + " value \"" + Content + "\" is not permitted, " + Value_Expected(Value_Final) + " is expected");
+            Messages.Add(Path + " value", conformance::DolbyVision_Value_NotPermitted, {{"path", Path}, {"actual", Content}, {"expected", Value_Expected(Value_Final)}});
             return;
         }
     }
@@ -2194,24 +2195,24 @@ static void Schema_Check(const XMLElement* Element, const xsd_element& Info, int
         auto Attribute_Path = Path + '@' + Name;
         if (!Attribute_Info)
         {
-            Messages.Add(Attribute_Path + " unknown", Attribute_Path + " attribute is not part of the specs");
+            Messages.Add(Attribute_Path + " unknown", conformance::DolbyVision_Attribute_NotExpected, {{"path", Attribute_Path}});
             continue;
         }
         if (Attribute_Info->Fixed && strcmp(Attribute->Value(), Attribute_Info->Fixed))
-            Messages.Add(Attribute_Path + " fixed", Attribute_Path + " value \"" + Attribute->Value() + "\" is not permitted, \"" + Attribute_Info->Fixed + "\" is expected");
+            Messages.Add(Attribute_Path + " fixed", conformance::DolbyVision_AttributeValue_NotPermitted, {{"path", Attribute_Path}, {"actual", Attribute->Value()}, {"expected", Attribute_Info->Fixed}});
         else
             Value_Check(Attribute->Value(), *Attribute_Info->Value, Element, Attribute_Path, Messages);
     }
     for (auto Item = Info.Attributes; Item && Item->Name; Item++)
         if (Item->Required && !Element->Attribute(Item->Name))
-            Messages.Add(Path + '@' + Item->Name + " missing", Path + '@' + Item->Name + " attribute is missing");
+            Messages.Add(Path + '@' + Item->Name + " missing", conformance::DolbyVision_Attribute_Missing, {{"path", Path}, {"name", Item->Name}});
 
     // Content
     if (Info.Value->Type != XSD_Complex)
     {
         Value_Check(Element->GetText(), *Info.Value, Element, Path, Messages);
         if (Element->FirstChildElement())
-            Messages.Add(Path + " children", Path + " child elements are not permitted");
+            Messages.Add(Path + " children", conformance::DolbyVision_ChildElements_NotPermitted, {{"path", Path}});
         return;
     }
     if (Info.Flags & XSD_Any)
@@ -2233,20 +2234,20 @@ static void Schema_Check(const XMLElement* Element, const xsd_element& Info, int
             i++;
         if (i >= Children_Count)
         {
-            Messages.Add(Child_Path + " unknown", Child_Path + " element is not part of the specs");
+            Messages.Add(Child_Path + " unknown", conformance::DolbyVision_Element_NotExpected, {{"path", Child_Path}});
             continue;
         }
         Counts[i]++;
         if (Info.Flags & XSD_Choice)
         {
             if (Choice_Name && strcmp(Choice_Name, Name))
-                Messages.Add(Path + " choice", Path + " element contains " + Choice_Name + " and " + Name + " elements, only one kind is permitted");
+                Messages.Add(Path + " choice", conformance::DolbyVision_ChoiceElements_NotPermittedTogether, {{"path", Path}, {"choice_name", Choice_Name}, {"name", Name}});
             Choice_Name = Name;
         }
         else if (!(Info.Flags & XSD_Unordered))
         {
             if (i < Order_Last)
-                Messages.Add(Child_Path + " order", Child_Path + " element is not at the expected position");
+                Messages.Add(Child_Path + " order", conformance::DolbyVision_Element_WrongPosition, {{"path", Child_Path}});
             else
                 Order_Last = i;
         }
@@ -2259,12 +2260,12 @@ static void Schema_Check(const XMLElement* Element, const xsd_element& Info, int
             continue;
         auto Child_Path = Path + '/' + Child_Info.Name;
         if (Counts[i] < Child_Info.Min)
-            Messages.Add(Child_Path + " missing", Child_Path + " element is missing");
+            Messages.Add(Child_Path + " missing", conformance::DolbyVision_Element_Missing, {{"path", Child_Path}});
         else if (Child_Info.Max && Counts[i] > Child_Info.Max)
-            Messages.Add(Child_Path + " count", Child_Path + " element count " + std::to_string(Counts[i]) + " is not permitted, max is " + std::to_string(Child_Info.Max));
+            Messages.Add(Child_Path + " count", conformance::DolbyVision_ElementCount_MoreThanMaximum, {{"path", Child_Path}, {"actual", Counts[i]}, {"expected", Child_Info.Max}});
     }
     if ((Info.Flags & XSD_Choice) && !Choice_Name)
-        Messages.Add(Path + " empty", Path + " element is empty, one child element is expected");
+        Messages.Add(Path + " empty", conformance::DolbyVision_Element_Empty, {{"path", Path}});
 }
 
 //---------------------------------------------------------------------------
@@ -2281,7 +2282,7 @@ static void Schema_Check_V6(const XMLElement* Root, const string& Root_Name, xsd
         const auto IsGlobal = Type && !strcmp(Type, "GlobalDolbyVision");
         const auto IsDynamic = Type && !strcmp(Type, "DynamicDolbyVision");
         if (IsFW && !IsDynamic)
-            Messages.Add(Track_Path + "@type fw", Track_Path + "@type value \"" + (Type ? Type : "") + "\" is not permitted, \"DynamicDolbyVision\" is expected");
+            Messages.Add(Track_Path + "@type fw", conformance::DolbyVision_TrackType_NotPermitted, {{"track_path", Track_Path}, {"actual", Type ? Type : ""}});
         if (auto UniversalData = Child(Track, "UniversalData"))
         {
             static const char* const Global_Only[] = { "ColorEncoding", "FrameRate", "DefaultEncodingTrack", "DefaultContentMappingTrack", nullptr };
@@ -2291,7 +2292,7 @@ static void Schema_Check_V6(const XMLElement* Root, const string& Root_Name, xsd
                 const char* Name = Local(Item->Name());
                 for (auto List = IsGlobal ? Dynamic_Only : (IsDynamic ? Global_Only : nullptr); List && *List; List++)
                     if (!strcmp(Name, *List))
-                        Messages.Add(Track_Path + "/UniversalData/" + Name + " type", Track_Path + "/UniversalData/" + Name + " element is not permitted in a " + Type + " track");
+                        Messages.Add(Track_Path + "/UniversalData/" + Name + " type", conformance::DolbyVision_UniversalDataElement_NotPermittedInTrack, {{"track_path", Track_Path}, {"name", Name}, {"type", Type}});
             }
         }
         for (auto Channel = Child(Track, "Channel"); Channel; Channel = Next(Channel, "Channel"))
@@ -2302,14 +2303,14 @@ static void Schema_Check_V6(const XMLElement* Root, const string& Root_Name, xsd
                 const auto Item_Path = Track_Path + "/Channel/" + Name;
                 const auto IsGlobalChannel = Name == "History" || Name == "MasteringDisplay";
                 if ((IsGlobal && !IsGlobalChannel) || (IsDynamic && IsGlobalChannel))
-                    Messages.Add(Item_Path + " type", Item_Path + " element is not permitted in a " + Type + " track");
+                    Messages.Add(Item_Path + " type", conformance::DolbyVision_Element_NotPermittedInTrack, {{"path", Item_Path}, {"type", Type}});
                 static const char* const GSP_NotPermitted[] = { "L1", "L2", "L3", "L4", "L5", "L8", "L9", "L11x", "L15", "L16", "L18", nullptr };
                 static const char* const FW_NotPermitted[] = { "History", "MasteringDisplay", "CreationProfile", "SDRDefinition", "AnchorTarget", "L0", "L6", "L10", "L11", "L254", nullptr };
                 for (auto List = IsGSP ? GSP_NotPermitted : (IsFW ? FW_NotPermitted : nullptr); List && *List; List++)
                     if (Name == *List)
-                        Messages.Add(Item_Path + " root", Item_Path + " element is not permitted in " + Root_Name);
+                        Messages.Add(Item_Path + " root", conformance::DolbyVision_Element_NotPermittedInRoot, {{"path", Item_Path}, {"root_name", Root_Name}});
                 if ((IsMDF || IsGSP) && !Item->Attribute("f"))
-                    Messages.Add(Item_Path + "@f missing", Item_Path + "@f attribute is missing");
+                    Messages.Add(Item_Path + "@f missing", conformance::DolbyVision_fAttribute_Missing, {{"path", Item_Path}});
                 if (Name == "SDRDefinition")
                 {
                     // Either the SDR definition or SDRDerivationNotAllowed
@@ -2318,7 +2319,7 @@ static void Schema_Check_V6(const XMLElement* Root, const string& Root_Name, xsd
                         if (Child(Item, Definition_Item))
                             Count++;
                     if ((Count && Count != 4) || (Count && Child(Item, "SDRDerivationNotAllowed")))
-                        Messages.Add(Item_Path + " choice", Item_Path + " element is not permitted, ID, Gamut, Luminance and Transfer elements or only SDRDerivationNotAllowed element are expected");
+                        Messages.Add(Item_Path + " choice", conformance::DolbyVision_Element_NotPermittedInChoice, {{"path", Item_Path}});
                 }
             }
         }
@@ -2365,11 +2366,15 @@ bool File_DolbyVisionMetadata::Conformance_Schema(XMLElement* Root, const string
     Schema_Check(Root, Root_Info, Version_Flag, Root_Name, Messages);
     if (Version[0] == '6')
         Schema_Check_V6(Root, Root_Name, Messages);
+    #if MEDIAINFO_CONFORMANCE
     for (const auto& Key : Messages.Keys)
     {
-        const auto& Item = Messages.Items[Key];
-        Fill_Conformance("DolbyVision Schema", Item.Message + (Item.Count > 1 ? " (" + std::to_string(Item.Count) + " times)" : string()), {}, Conformance_Error, Stream_Video, 0);
+        auto& Item = Messages.Items[Key];
+        if (Item.Count > 1)
+            Item.Args.emplace_back("count", Item.Count);
+        Fill_Conformance(Item.Id, std::move(Item.Args), {}, Stream_Video, 0);
     }
+    #endif //MEDIAINFO_CONFORMANCE
     return true;
 }
 
@@ -2383,20 +2388,20 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
     // Version, attribute in version 2.x, element in version 4.x or more
     if (Version.empty())
     {
-        Fill_Conformance("DolbyVision Version", "Version is missing", {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_Version_Missing, {}, {}, Stream_Video, 0);
         static const char Namespace_Prefix[] = "http://www.dolby.com/schemas/dvmd/";
         if (const char* Namespace = Root->Attribute("xmlns"))
             if (!strncmp(Namespace, Namespace_Prefix, sizeof(Namespace_Prefix) - 1))
             {
                 string Namespace_Version(Namespace + sizeof(Namespace_Prefix) - 1);
                 if (!Version_IsSupported(Namespace_Version))
-                    Fill_Conformance("DolbyVision Namespace", "Namespace " + string(Namespace) + " is not supported", {}, Conformance_Warning, Stream_Video, 0);
+                    Fill_Conformance(conformance::DolbyVision_Namespace_NotSupported, {{"namespace", string(Namespace)}}, {}, Stream_Video, 0);
             }
         return;
     }
     if (!Version_IsSupported(Version))
     {
-        Fill_Conformance("DolbyVision Version", "Version " + Version + " is not supported", {}, Conformance_Warning, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_Version_NotSupported, {{"version", Version}}, {}, Stream_Video, 0);
         return;
     }
     const int Version_Major = atoi(Version.c_str());
@@ -2406,9 +2411,9 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
     if (XMLElement* Version_Item = Child(Root, "Version"))
         Version_Element = Version_Item->GetText();
     if (!HasSchema && Version_Attribute && Version_Element && strcmp(Version_Attribute, Version_Element))
-        Fill_Conformance("DolbyVision Version", "version attribute (" + string(Version_Attribute) + ") and Version element (" + Version_Element + ") differ", {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_VersionAttribute_MismatchVersionElement, {{"version_attribute", string(Version_Attribute)}, {"version_element", Version_Element}}, {}, Stream_Video, 0);
     if (!HasSchema && (IsV2 ? Version_Element != nullptr : Version_Attribute != nullptr))
-        Fill_Conformance("DolbyVision Version", IsV2 ? "Version element is not expected in version 2.x, version attribute is expected" : "version attribute is not expected in version 4.x or more, Version element is expected", {}, Conformance_Warning, Stream_Video, 0);
+        (IsV2?Fill_Conformance(conformance::DolbyVision_VersionElement_NotExpected, {}, {}, Stream_Video, 0):Fill_Conformance(conformance::DolbyVision_VersionAttribute_NotExpected, {}, {}, Stream_Video, 0));
 
     // Namespace
     if (const char* Namespace = Root->Attribute("xmlns"))
@@ -2421,7 +2426,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
                 if (Character == '.')
                     Character = '_';
             if (Namespace_Expected != Namespace + sizeof(Namespace_Prefix) - 1)
-                Fill_Conformance("DolbyVision Namespace", "Namespace " + string(Namespace) + " does not match version " + Version, {}, Conformance_Error, Stream_Video, 0);
+                Fill_Conformance(conformance::DolbyVision_Namespace_MismatchVersion, {{"namespace", string(Namespace)}, {"version", Version}}, {}, Stream_Video, 0);
         }
     }
 
@@ -2438,7 +2443,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
             return;
         bool HasComma = strchr(Text, ',') != nullptr;
         if (IsV2 ? (!HasComma && strchr(Text, ' ')) : HasComma)
-            Fill_Conformance("DolbyVision Structure", string(Local(Element->Name())) + " values are separated by " + (IsV2 ? "space" : "comma") + ", " + (IsV2 ? "comma" : "space") + " is expected in version " + Version, {}, Conformance_Error, Stream_Video, 0);
+            Fill_Conformance(conformance::DolbyVision_ValueSeparator_NotExpected, {{"name", string(Local(Element->Name()))}, {"actual", IsV2 ? "space" : "comma"}, {"expected", IsV2 ? "comma" : "space"}, {"version", Version}}, {}, Stream_Video, 0);
     };
     if (XMLElement* ColorEncoding = Child(Track, "ColorEncoding"))
     {
@@ -2476,7 +2481,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
         for (XMLElement* PluginNode_Item = PluginNode->FirstChildElement(); PluginNode_Item; PluginNode_Item = PluginNode_Item->NextSiblingElement())
         {
             if (!HasSchema && Is(PluginNode_Item, GlobalData_Unexpected))
-                Fill_Conformance("DolbyVision Structure", string(GlobalData_Unexpected) + " element is not expected in version " + Version, {}, Conformance_Error, Stream_Video, 0);
+                Fill_Conformance(conformance::DolbyVision_GlobalDataElement_NotExpected, {{"name", string(GlobalData_Unexpected)}, {"version", Version}}, {}, Stream_Video, 0);
             if (Is(PluginNode_Item, "DVGlobalData") || Is(PluginNode_Item, "DolbyEDR"))
             {
                 // Same places as for the display of the displays, also if the element name does not match the version
@@ -2491,19 +2496,19 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
 
     // Level 254
     if (IsV2 && Level254)
-        Fill_Conformance("DolbyVision Level254", "Level254 is not expected in version " + Version, {}, Conformance_Warning, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_Level254_NotExpected, {{"version", Version}}, {}, Stream_Video, 0);
     if (!IsV2 && !Level254 && !HasSchema)
-        Fill_Conformance("DolbyVision Level254", "Level254 is missing", {}, Conformance_Warning, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_Level254_Missing, {}, {}, Stream_Video, 0);
     if (!IsV2 && Level254)
     {
         if (XMLElement* CMVersion = Child(Level254, "CMVersion"))
         {
             if (const char* Text = CMVersion->GetText())
                 if (atoi(Text) != 4)
-                    Fill_Conformance("DolbyVision Level254", "CMVersion " + string(Text) + " does not match version " + Version + " (actual " + std::to_string(atoi(Text)) + ", expected 4)", {}, Conformance_Warning, Stream_Video, 0);
+                    Fill_Conformance(conformance::DolbyVision_CMVersion_MismatchVersion, {{"cm_version", string(Text)}, {"version", Version}, {"actual", atoi(Text)}}, {}, Stream_Video, 0);
         }
         else if (!HasSchema)
-            Fill_Conformance("DolbyVision Level254", "CMVersion is missing", {}, Conformance_Warning, Stream_Video, 0);
+            Fill_Conformance(conformance::DolbyVision_CMVersion_Missing, {}, {}, Stream_Video, 0);
     }
 
     // Level 6
@@ -2512,7 +2517,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
             if (XMLElement* MaxCLL = Child(Level6, "MaxCLL"))
                 if (const char* Text = MaxCLL->GetText())
                     if (Ztring().From_UTF8(Text).To_float64() > Ztring().From_UTF8(MasteringDisplay_Peak).To_float64())
-                        Fill_Conformance("DolbyVision Level6", "MaxCLL is more than mastering display peak brightness (actual " + string(Text) + ", expected <= " + MasteringDisplay_Peak + ")", {}, Conformance_Warning, Stream_Video, 0);
+                        Fill_Conformance(conformance::DolbyVision_MaxCLL_MoreThanMasteringDisplayPeak, {{"actual", string(Text)}, {"expected", MasteringDisplay_Peak}}, {}, Stream_Video, 0);
 
     // Shots
     std::set<string> TIDs;
@@ -2525,7 +2530,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
             if (XMLElement* PluginNode = Child(Shot, "PluginNode"))
                 if (Child(PluginNode, DynamicData_Unexpected))
                 {
-                    Fill_Conformance("DolbyVision Structure", string(DynamicData_Unexpected) + " element in Shot is not expected in version " + Version, {}, Conformance_Error, Stream_Video, 0);
+                    Fill_Conformance(conformance::DolbyVision_ShotElement_NotExpected, {{"name", string(DynamicData_Unexpected)}, {"version", Version}}, {}, Stream_Video, 0);
                     DynamicData_Unexpected_Found = true;
                 }
 
@@ -2536,7 +2541,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
         const char* Duration_Text = Duration ? Duration->GetText() : nullptr;
         if (!In_Text || !Duration_Text)
         {
-            Fill_Conformance("DolbyVision Shot", "Record In or Duration is missing", {}, Conformance_Error, Stream_Video, 0);
+            Fill_Conformance(conformance::DolbyVision_ShotRecordInOrDuration_Missing, {}, {}, Stream_Video, 0);
             continue;
         }
         Shots.emplace_back(Ztring().From_UTF8(In_Text).To_int64u(), Ztring().From_UTF8(Duration_Text).To_int64u());
@@ -2546,7 +2551,7 @@ void File_DolbyVisionMetadata::Conformance_MDF(XMLElement* Root, XMLElement* Tra
     // Trims must reference a declared target display
     for (const auto& TID : TIDs)
         if (TargetDisplay_IDs.find(TID) == TargetDisplay_IDs.end())
-            Fill_Conformance("DolbyVision TID", "TID " + TID + " does not match any TargetDisplay ID", {}, Conformance_Error, Stream_Video, 0);
+            Fill_Conformance(conformance::DolbyVision_TID_Mismatch, {{"tid", TID}}, {}, Stream_Video, 0);
 }
 
 
@@ -2588,11 +2593,11 @@ void File_DolbyVisionMetadata::Conformance_Shots(const std::vector<std::pair<int
         Previous_Out = In_Value + Duration_Value;
     }
     if (Gap_Count)
-        Fill_Conformance("DolbyVision Shot", std::to_string(Gap_Count) + " gap(s) between shots, " + std::to_string(Gap_Frames) + " frame(s) not covered, first gap at frame " + std::to_string(Gap_First), {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_ShotGap_Present, {{"count", Gap_Count}, {"frames", Gap_Frames}, {"first", Gap_First}}, {}, Stream_Video, 0);
     if (Overlap_Count)
-        Fill_Conformance("DolbyVision Shot", std::to_string(Overlap_Count) + " overlap(s) between shots, " + std::to_string(Overlap_Frames) + " frame(s) covered more than once, first overlap at frame " + std::to_string(Overlap_First), {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_ShotOverlap_Present, {{"count", Overlap_Count}, {"frames", Overlap_Frames}, {"first", Overlap_First}}, {}, Stream_Video, 0);
     if (Empty_Count)
-        Fill_Conformance("DolbyVision Shot", std::to_string(Empty_Count) + " shot(s) with a duration of 0, first at frame " + std::to_string(Empty_First), {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_ShotDuration_Wrong, {{"count", Empty_Count}, {"first", Empty_First}}, {}, Stream_Video, 0);
 }
 
 //---------------------------------------------------------------------------
@@ -2657,7 +2662,7 @@ void File_DolbyVisionMetadata::Conformance_V6(XMLElement* Root)
     if (MasteringDisplay_Peak)
         for (const auto& MaxCLL : MaxCLLs)
             if (Ztring().From_UTF8(MaxCLL).To_float64() > MasteringDisplay_Peak)
-                Fill_Conformance("DolbyVision Level6", "MaxCLL is more than mastering display peak brightness (actual " + MaxCLL + ", expected <= " + MasteringDisplay_Peak_Text + ")", {}, Conformance_Warning, Stream_Video, 0);
+                Fill_Conformance(conformance::DolbyVision_MaxCLL_MoreThanMasteringDisplayPeak, {{"actual", MaxCLL}, {"expected", MasteringDisplay_Peak_Text}}, {}, Stream_Video, 0);
 
     // Shots
     Conformance_Shots(Shots);
@@ -2666,7 +2671,7 @@ void File_DolbyVisionMetadata::Conformance_V6(XMLElement* Root)
     if (!Target_IDs.empty())
         for (const auto& TID : TIDs)
             if (Target_IDs.find(TID) == Target_IDs.end())
-                Fill_Conformance("DolbyVision TID", "Trim t " + TID + " does not match any Target ID", {}, Conformance_Error, Stream_Video, 0);
+                Fill_Conformance(conformance::DolbyVision_TrimT_Mismatch, {{"tid", TID}}, {}, Stream_Video, 0);
 }
 
 } //NameSpace

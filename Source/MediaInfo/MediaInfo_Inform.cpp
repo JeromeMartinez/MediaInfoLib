@@ -1156,6 +1156,61 @@ Ztring MediaInfo_Internal::Inform (stream_t StreamKind, size_t StreamPos, bool I
                             Valeur.erase(SlashPos);
                     }
 
+                    #if MEDIAINFO_CONFORMANCE
+                    std::vector<conformance::data> ConformanceDatas;
+                    const auto Champ_Pos_More=Champ_Pos-MediaInfoLib::Config.Info_Get(StreamKind).size();
+                    if (MediaInfoLib::Config.Conformance_Structured_Get() && Champ_Pos>=MediaInfoLib::Config.Info_Get(StreamKind).size() && Champ_Pos_More<Stream_More[StreamKind][StreamPos].size())
+                    {
+                        const auto& Line=Stream_More[StreamKind][StreamPos][Champ_Pos_More];
+                        if (Line.size()>Info_Max)
+                            ConformanceDatas=conformance::Data_Parse(Line[Info_Max].To_UTF8());
+                    }
+                    if (!ConformanceDatas.empty())
+                    {
+                        //Structured conformance message: identifier, text, arguments, context and locations
+                        for (const auto& Data : ConformanceDatas)
+                        {
+                            auto Node_Current=new Node(Nom.To_UTF8(), string(), true);
+                            Node_Current->Add_Child("id", Data.Name);
+                            Node_Current->Add_Child("text", Data.Text);
+                            if (!Data.Args.empty())
+                            {
+                                auto Node_Args=Node_Current->Add_Child("args");
+                                for (const auto& Arg : Data.Args)
+                                    Node_Args->Add_Child(Arg.first, Arg.second);
+                            }
+                            if (!Data.Specification.empty())
+                                Node_Current->Add_Child("specification", Data.Specification);
+                            if (!Data.AdditionalConstraint.empty())
+                                Node_Current->Add_Child("additional_constraint", Data.AdditionalConstraint);
+                            if (!Data.StreamID.empty())
+                                Node_Current->Add_Child("stream_id", Data.StreamID);
+                            for (const auto& Location : Data.Locations)
+                            {
+                                auto Node_Location=Node_Current->Add_Child("location", true);
+                                if (Location.IsConfiguration)
+                                    Node_Location->Add_Child("configuration", string("Yes"));
+                                const auto Add=[&](const char* Name, const string& Value)
+                                {
+                                    if (!Value.empty())
+                                        Node_Location->Add_Child(Name, Value);
+                                };
+                                Add("frame", Location.Frame);
+                                Add("frame_last", Location.Frame_Last);
+                                Add("subframe", Location.SubFrame);
+                                Add("subframe_last", Location.SubFrame_Last);
+                                Add("time", Location.Time);
+                                Add("time_last", Location.Time_Last);
+                                Add("offset", Location.Offset);
+                                Add("offset_last", Location.Offset_Last);
+                            }
+                            if (Data.Locations_More)
+                                Node_Current->Add_Child("location_more", string("Yes"));
+                            Fields_Current->push_back(Node_Current);
+                        }
+                    }
+                    else
+                    #endif //MEDIAINFO_CONFORMANCE
                     if (IsXmlAttributeConformance)
                     {
                         auto Valeur_Parenthesis_Begin = Valeur.find(__T(" ("));

@@ -2542,15 +2542,6 @@ enum class E {
     Permitted,
     Size
 };
-static const char* E_Strings[] = {
-    "is not present",
-    "is present",
-    "count {} is not permitted, max is 1",
-    "value \"{}\" is malformed",
-    "value \"{}\" is not permitted",
-};
-static_assert(sizeof(E_Strings) / sizeof(E_Strings[0]) == (size_t)E::Size, "");
-
 enum class e {
     Magic, // 0
     ErrorType,
@@ -2559,41 +2550,71 @@ enum class e {
     Max
 };
 
+//---------------------------------------------------------------------------
+// An error is a conformance message (identifier and arguments) at a path (":item0:element:")
+// The path is the field of the message in the catalog, after the path of the item the error is added to
+// Errors about the presence or the value of an attribute or of an element have a compact path instead (first byte 0, see the "e" enum), their message is known when they are filled
+struct adm_error {
+    string              Path;
+    conformance::id     Id = conformance::None;
+    conformance::args   Args;
+};
+static adm_error Adm_Message(conformance::id Id, conformance::args Args) {
+    adm_error Error;
+    Error.Path = ':';
+    Error.Id = Id;
+    Error.Args = std::move(Args);
+    #if MEDIAINFO_CONFORMANCE
+    for (const auto C : conformance::Format(conformance::Message_Get(Id).Field, Error.Args)) {
+        Error.Path += C == ' ' ? ':' : C;
+    }
+    if (Error.Path.size() > 1) {
+        Error.Path += ':';
+    }
+    #endif //MEDIAINFO_CONFORMANCE
+    return Error;
+}
+static adm_error operator+(string Path, adm_error Error) { // Path computed by the caller instead of the field of the catalog
+    Error.Path = std::move(Path);
+    return Error;
+}
+
 struct Item_Struct {
     vector<string> Attributes;
     bitset<64> Attributes_Present;
     vector<vector<string> > Elements;
-    vector<string> Errors[error_Type_Max][source_Max];
+    vector<adm_error> Errors[error_Type_Max][source_Max];
 
-    void AddError(error_Type Type, const string& NewValue, source Source = Source_ADM)
+    void AddError(error_Type Type, adm_error NewValue, source Source = Source_ADM)
     {
         auto& Error = Errors[Type][Source];
         if (Error.size() < 9) {
-            Error.push_back(NewValue);
+            Error.push_back(std::move(NewValue));
         }
         else if (Error.size() == 9) {
-            if (!NewValue.empty() && NewValue[0] == ':') {
-                auto Space = NewValue.find(' ');
-                auto End = NewValue.rfind(':', Space);
-                if (End != string::npos) {
-                    Error.push_back(NewValue.substr(0, End + 1) + "[...]");
-                }
+            if (!NewValue.Path.empty() && NewValue.Path[0] == ':') {
+                //More errors are not listed, only their place
+                NewValue.Path += "[...]";
+                NewValue.Id = conformance::None;
+                NewValue.Args.clear();
+                Error.push_back(std::move(NewValue));
             }
         }
     }
-    void AddError(error_Type Error_Type, item Item_Type, size_t i, const string& NewValue, source Source = Source_ADM) {
-        AddError(Error_Type, ':' + CraftName(item_Infos[Item_Type].Name) + (i != -1 ? to_string(i) : "") + NewValue, Source);
+    void AddError(error_Type Error_Type, item Item_Type, size_t i, adm_error NewValue, source Source = Source_ADM) {
+        NewValue.Path.insert(0, ':' + CraftName(item_Infos[Item_Type].Name) + (i != -1 ? to_string(i) : ""));
+        AddError(Error_Type, std::move(NewValue), Source);
     }
-    void AddError(error_Type Error_Type, size_t Item_Type, size_t i, const string& NewValue, source Source = Source_ADM) {
-        AddError(Error_Type, (item)Item_Type, i, NewValue, Source);
+    void AddError(error_Type Error_Type, size_t Item_Type, size_t i, adm_error NewValue, source Source = Source_ADM) {
+        AddError(Error_Type, (item)Item_Type, i, std::move(NewValue), Source);
     }
     void AddError(error_Type Error_Type, int8u AttEle, E Error_Value, int8u Opt0, source Source = Source_ADM) {
-        string NewValue;
-        NewValue.resize((size_t)e::Max);
-        NewValue[(size_t)e::ErrorType] = (char)Error_Value;
-        NewValue[(size_t)e::AttEle] = (char)AttEle;
-        NewValue[(size_t)e::Opt0] = (char)Opt0;
-        AddError(Error_Type, NewValue, Source);
+        adm_error NewValue;
+        NewValue.Path.resize((size_t)e::Max);
+        NewValue.Path[(size_t)e::ErrorType] = (char)Error_Value;
+        NewValue.Path[(size_t)e::AttEle] = (char)AttEle;
+        NewValue.Path[(size_t)e::Opt0] = (char)Opt0;
+        AddError(Error_Type, std::move(NewValue), Source);
     }
     void AddError(error_Type Error_Type, int8u AttEle, E Error_Value, file_adm_private* File_Adm_Private, const string& Opt0, source Source = Source_ADM);
 };
@@ -2668,7 +2689,6 @@ static void Apply_SubStreams(File__Analyze& F, const string& P_And_LinkedTo, Ite
             auto LinkedTo_Pos = P_And_LinkedTo.find(" LinkedTo_TrackUID_Pos");
             auto HasTransport = !F.Retrieve_Const(Stream_Audio, 0, "Transport0").empty();
             if (!NoError && HasTransport && LinkedTo_Pos != string::npos) { // TODO: better way to avoid common definitions
-                string Message;
                 if (LinkedTo_Pos) {
                     auto Sub_Pos = P_And_LinkedTo.rfind(' ', LinkedTo_Pos - 1);
                     if (Sub_Pos != string::npos) {
@@ -2679,10 +2699,7 @@ static void Apply_SubStreams(File__Analyze& F, const string& P_And_LinkedTo, Ite
                             Target_Found = Start == Not0; // Fake: ID 00000000 means not available, we don't raise an error for them
                         }
                         if (!Target_Found) {
-                            Message += ":transportTrackFormat:audioTrack:audioTrackUIDRef:\"";
-                            Message += ID;
-                            Message += "\" is referenced but its description is missing";
-                            Source.Errors[Warning][Source_ADM].push_back(Message);
+                            Source.Errors[Warning][Source_ADM].push_back(Adm_Message(conformance::Adm_audioTrackUIDRef_MissingDescription, {{"id", ID}}));
                         }
                     }
                 }
@@ -2707,10 +2724,10 @@ void CheckInt(const string& Value, size_t Min, size_t Max, Item_Struct& Item, co
     char* End;
     auto Value_Int = strtoul(Value.c_str(), &End, 10);
     if (to_string(Value_Int) != Value) {
-        Item.AddError(Error, string(1, ':') + Name + ':' + Name + " attribute value \"" + Value + "\" is malformed", Source);
+        Item.AddError(Error, Adm_Message(conformance::Adm_AttributeNumber_Malformed, {{"name", Name}, {"actual", Value}}), Source);
     }
     else if (Min <= Max && (Value_Int < Min || Value_Int > Max)) {
-        Item.AddError(Error, string(1, ':') + Name + ':' + Name + " attribute value \"" + Value + "\" is not permitted, permitted value is " + to_string(Min) + (Min != Max ? (" to " + to_string(Max)) : string()), Source);
+        Item.AddError(Error, Adm_Message(Min != Max ? conformance::Adm_AttributeNumber_NotPermittedRange : conformance::Adm_AttributeNumber_NotPermitted, {{"name", Name}, {"actual", Value}, {"min", Min}, {"max", Max}}), Source);
     }
 }
 
@@ -2721,10 +2738,10 @@ void CheckInt(const vector<string>& Values, size_t Min, size_t Max, Item_Struct&
         char* End;
         auto Value_Int = strtoul(Value.c_str(), &End, 10);
         if (to_string(Value_Int) != Value) {
-            Item.AddError(Error, string(1, ':') + Name + ':' + Name + " element value \"" + Value + "\" is malformed", Source);
+            Item.AddError(Error, Adm_Message(conformance::Adm_ElementNumber_Malformed, {{"name", Name}, {"actual", Value}}), Source);
         }
         else if (Min <= Max && (Value_Int < Min || Value_Int > Max)) {
-            Item.AddError(Error, string(1, ':') + Name + ':' + Name + " element value \"" + Value + "\" is not permitted, permitted value is " + to_string(Min) + (Min != Max ? (" to " + to_string(Max)) : string()), Source);
+            Item.AddError(Error, Adm_Message(Min != Max ? conformance::Adm_ElementNumber_NotPermittedRange : conformance::Adm_ElementNumber_NotPermitted, {{"name", Name}, {"actual", Value}, {"min", Min}, {"max", Max}}), Source);
         }
     }
 }
@@ -2736,7 +2753,7 @@ void CheckInt(const vector<string>& Values, const int8u* List, Item_Struct& Item
         char* End;
         auto Value_Int = strtoul(Value.c_str(), &End, 10);
         if (to_string(Value_Int) != Value) {
-            Item.AddError(Error, string(1, ':') + Name + ':' + Name + " element value \"" + Value + "\" is malformed", Source);
+            Item.AddError(Error, Adm_Message(conformance::Adm_ElementNumber_Malformed, {{"name", Name}, {"actual", Value}}), Source);
             return;
         }
         auto IsValid = false;
@@ -2758,7 +2775,7 @@ void CheckInt(const vector<string>& Values, const int8u* List, Item_Struct& Item
             }
             ListString.pop_back();
             ListString.pop_back();
-            Item.AddError(Error, string(1, ':') + Name + ':' + Name + " element value \"" + Value + "\" is not permitted, permitted values are " + ListString, Source);
+            Item.AddError(Error, Adm_Message(conformance::Adm_ElementNumber_NotPermittedList, {{"name", Name}, {"actual", Value}, {"expected", ListString}}), Source);
         }
     }
 }
@@ -2952,12 +2969,12 @@ public:
 
     void Check_Attributes_NotPartOfSpecs(size_t Type, size_t Pos, const tfsxml_string& b, Item_Struct& Content, const char* SubElement = nullptr)
     {
-        Content.AddError(Warning, ':' + CraftName(item_Infos[Type].Name) + to_string(Pos) + (SubElement ? (string(":") + SubElement) : "") + ":GeneralCompliance:\"" + tfsxml_decode(b) + "\" attribute is not part of specs");
+        Content.AddError(Warning, Adm_Message(conformance::Adm_Attribute_NotExpected, {{"item", CraftName(item_Infos[Type].Name)}, {"pos", Pos}, {"x", (SubElement ? (string(":") + SubElement) : "")}, {"name", tfsxml_decode(b)}}));
     }
 
     void Check_Elements_NotPartOfSpecs(size_t Type, size_t Pos, const tfsxml_string& b, Item_Struct& Content)
     {
-        Content.AddError(Warning, ':' + CraftName(item_Infos[Type].Name) + to_string(Pos) + ":GeneralCompliance:\"" + tfsxml_decode(b) + "\" element is not part of specs");
+        Content.AddError(Warning, Adm_Message(conformance::Adm_Element_NotExpected, {{"item", CraftName(item_Infos[Type].Name)}, {"pos", Pos}, {"name", tfsxml_decode(b)}}));
     }
 
 //private:
@@ -3131,18 +3148,21 @@ static void MoveErrors (file_adm_private* File_Adm_Private, item Up_Type) {
                 auto& Item = Sources[k];
                 for (size_t Error_Type = 0; Error_Type < error_Type_Max; Error_Type++) {
                     for (size_t Source = 0; Source < source_Max; Source++) {
-                        for (const auto& Error : Item.Errors[Error_Type][Source]) {
-                            if (!Error[0]) {
-                                Up.AddError((error_Type)Error_Type, Error + (char)Up_Info.LinkedItem + (char)(k - k_Start), (source)Source);
+                        for (auto& Error : Item.Errors[Error_Type][Source]) {
+                            if (!Error.Path[0]) {
+                                Error.Path += (char)Up_Info.LinkedItem;
+                                Error.Path += (char)(k - k_Start);
                             }
                             else {
+                                //The element and its index are added if the path does not start with them
                                 string Intermediate;
                                 string Intermediate2 = ':' + CraftName(Up_Info.Name);
-                                if (Error.rfind(Intermediate2, 0) || (Error.size() > Intermediate2.size() && !isdigit(Error[Intermediate2.size()]))) {
+                                if (Error.Path.rfind(Intermediate2, 0) || Error.Path.size() <= Intermediate2.size() || !isdigit(Error.Path[Intermediate2.size()])) {
                                     Intermediate = Intermediate2 + to_string(k - k_Start);
                                 }
-                                Up.AddError((error_Type)Error_Type, ':' + CraftName(item_Infos[Up_Type].Name) + to_string(i) + Intermediate + Error, (source)Source);
+                                Error.Path.insert(0, ':' + CraftName(item_Infos[Up_Type].Name) + to_string(i) + Intermediate);
                             }
+                            Up.AddError((error_Type)Error_Type, std::move(Error), (source)Source);
                         }
                         Item.Errors[Error_Type][Source].clear();
                     }
@@ -3213,35 +3233,31 @@ static bool CheckErrors_ID(file_adm_private* File_Adm_Private, const string& ID,
             }
             Message += ':';
         }
-        Message += '"';
-        Message += ID;
-        Message += '"';
-        Message += " is not a valid form (";
+        string Form;
         if (BeginSize) {
-            Message.append(ID_Start.ID_Begin, BeginSize);
+            Form.append(ID_Start.ID_Begin, BeginSize);
         }
-        Message += '_';
+        Form += '_';
         if (!Middle.empty()) {
-            Message += Middle;
+            Form += Middle;
         }
         if (!Middle.empty() && !End.empty()) {
-            Message += '_';
+            Form += '_';
         }
         if (!End.empty()) {
-            Message += End;
+            Form += End;
         }
-        Message += " form, ";
+        string Digits;
         if (!Middle.empty()) {
-            Message += Middle;
+            Digits += Middle;
         }
         if (!Middle.empty() && !End.empty()) {
-            Message += " and ";
+            Digits += " and ";
         }
         if (!End.empty()) {
-            Message += End;
+            Digits += End;
         }
-        Message += " being hexadecimal digits)";
-        Items->back().Errors[Error][Source_ADM].push_back(Message);
+        Items->back().Errors[Error][Source_ADM].push_back(Message + Adm_Message(conformance::Adm_ID_MalformedForm, {{"actual", ID}, {"form", Form}, {"digits", Digits}}));
     }
     return true;
 }
@@ -3256,7 +3272,7 @@ static void CheckErrors_ID_Additions(file_adm_private* File_Adm_Private, item it
         if (Flags[item_info::Flags_ID_YX]) {
             auto xxxx = ID.substr(strlen(item_Infos[item_Type].ID_Begin) + 5, 4);
             if (xxxx[0] == '0' || xxxx == "1000") {
-                Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[item_Type].Name, true) + "ID:" + CraftName(item_Infos[item_Type].Name, true) + "ID attribute xxxx value \"" + xxxx + "\" is not permitted, permitted values are \"1001\" to \"FFFF\"", Source_Atmos_1_0);
+                Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_IDxxxx_NotPermitted, {{"name", CraftName(item_Infos[item_Type].Name, true)}, {"actual", xxxx}}), Source_Atmos_1_0);
             }
         }
         if (Flags[item_info::Flags_ID_W]) {
@@ -3279,18 +3295,18 @@ static void CheckErrors_ID_Additions(file_adm_private* File_Adm_Private, item it
             auto min_int = strtoul(min, nullptr, 16);
             auto max_int = strtoul(max, nullptr, 16);
             if ((!i || i - 1 < max_int - min_int) && (wwww_int <= 0x1000 || wwww_int < min_int || wwww_int > max_int)) {
-                Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[item_Type].Name, true) + "ID:" + CraftName(item_Infos[item_Type].Name, true) + "ID attribute wwww value \"" + wwww + "\" is not permitted" + (min_int == 0x100b ? " due to the Objects typed object" : "") + ", permitted values are \"" + min + "\" to \"" + max + "\"", Source_Atmos_1_0);
+                Item.AddError(Error, item_Type, i, Adm_Message(min_int == 0x100b ? conformance::Adm_IDwwww_NotPermittedForObjects : conformance::Adm_IDwwww_NotPermitted, {{"name", CraftName(item_Infos[item_Type].Name, true)}, {"actual", wwww}, {"min", min}, {"max", max}}), Source_Atmos_1_0);
             }
         }
         if (Flags[item_info::Flags_ID_Z1] && !Flags[item_info::Flags_ID_Z2]) {
             if (ID[12] != '0' || ID[13] != '1') { // zz != 01
-                Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[item_Type].Name, true) + "ID:" + CraftName(item_Infos[item_Type].Name, true) + "ID attribute zz value \"" + ID.substr(12, 2) + "\" is not permitted, permitted value is \"01\"", Source_Atmos_1_0);
+                Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_IDzz_NotPermitted, {{"name", CraftName(item_Infos[item_Type].Name, true)}, {"actual", ID.substr(12, 2)}}), Source_Atmos_1_0);
             }
         }
         if (Flags[item_info::Flags_ID_V]) {
             auto vvvvvvvv = ID.substr(strlen(item_Infos[item_Type].ID_Begin) + 1, 8);
             if (vvvvvvvv == "00000000") {
-                Item.AddError(Error, item_Type, i, ":" + (item_Type == item_audioTrackUID ? "U" : ("" + CraftName(item_Infos[item_Type].Name, true))) + "ID:" + (item_Type == item_audioTrackUID ? "U" : ("" + CraftName(item_Infos[item_Type].Name))) + "ID attribute vvvvvvvv value \"" + vvvvvvvv + "\" is not permitted, permitted values are \"00000001\" to \"FFFFFFFF\"", Source_Atmos_1_0);
+                Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_IDvvvvvvvv_NotPermitted, {{"x", (item_Type == item_audioTrackUID ? "U" : ("" + CraftName(item_Infos[item_Type].Name, true)))}, {"name", item_Type == item_audioTrackUID ? "U" : ("" + CraftName(item_Infos[item_Type].Name))}, {"actual", vvvvvvvv}}), Source_Atmos_1_0);
             }
         }
     }
@@ -3314,18 +3330,18 @@ static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private
 
     if (Label_Present) {
         if (Label.size() != 4 || !IsHexaDigit(Label, 0, 4)) {
-            Item.AddError(Error, item_Type, i, ":formatLabel:formatLabel attribute value \"" + Label + "\" is not a valid form (yyyy form, yyyy being hexadecimal digits)");
+            Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_formatLabel_Malformed, {{"actual", Label}}));
         }
         else {
             formatLabel_Int = strtoul(Label.c_str(), nullptr, 16);
             if (formatLabel_Int && formatLabel_Int > List_Size) {
-                Item.AddError(Warning, item_Type, i, ":formatLabel:formatLabel attribute value \"" + Label + "\" is not a known value");
+                Item.AddError(Warning, item_Type, i, Adm_Message(conformance::Adm_formatLabel_NotExpected, {{"actual", Label}}));
             }
             else if (Definition_Present && List && formatLabel_Int && formatLabel_Int <= List_Size && Definition != List[formatLabel_Int - 1]) {
-                Item.AddError(Error, item_Type, i, ":formatDefinition:formatDefinition attribute value \"" + Definition + "\" shall be \"" + List[formatLabel_Int - 1] + "\" in order to match the term corresponding to formatLabel attribute value \"" + Label + "\"");
+                Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_formatDefinition_MismatchFormatLabel, {{"actual", Definition}, {"expected", List[formatLabel_Int - 1]}, {"formatLabel", Label}}));
             }
             if (IsAtmos && ((Style == Style_Format && formatLabel_Int != 1) || (Style == Style_Type && formatLabel_Int != 1 && formatLabel_Int != 3))) {
-                Item.AddError(Error, item_Type, i, ":formatLabel:formatLabel attribute value \"" + Label + "\" is not permitted, permitted value is \"0001\"", Source_Atmos_1_0);
+                Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_formatLabel_NotPermitted, {{"actual", Label}}), Source_Atmos_1_0);
             }
         }
     }
@@ -3340,17 +3356,17 @@ static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private
                     formatLabel_Int = j;
                 }
                 else if (formatLabel_Int != j) {
-                    Item.AddError(Error, item_Type, i, ":formatLabel:formatLabel attribute value \"" + Label + "\" shall be \"" + Hex2String(j, 4) + "\" in order to match the term corresponding to formatDefinition attribute value \"" + Definition + "\"");
+                    Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_formatLabel_MismatchFormatDefinition, {{"actual", Label}, {"expected", Hex2String(j, 4)}, {"formatDefinition", Definition}}));
                 }
                 IsKnown = true;
                 break;
             }
         }
         if (!IsKnown) {
-            Item.AddError(Warning, item_Type, i, ":formatDefinition:formatDefinition attribute value \"" + Definition + "\" is not a known value");
+            Item.AddError(Warning, item_Type, i, Adm_Message(conformance::Adm_formatDefinition_NotExpected, {{"actual", Definition}}));
         }
         if (IsAtmos && ((Style == Style_Format && Definition != List[0]) || (Style == Style_Type && Definition != List[0] && Definition != List[2]))) {
-            Item.AddError(Error, item_Type, i, ":formatDefinition:formatDefinition attribute value \"" + Definition + "\" is not permitted, permitted value is \"PCM\"", Source_Atmos_1_0);
+            Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_formatDefinition_NotPermitted, {{"actual", Definition}}), Source_Atmos_1_0);
         }
     }
 
@@ -3359,7 +3375,7 @@ static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private
         if (item_Infos[item_Type].ID_Flags[item_info::Flags_ID_YX] && !CheckErrors_ID(File_Adm_Private, Item_ID, item_Infos[item_Type])) {
             const auto Item_ID_yyyy = Item_ID.substr(strlen(item_Infos[item_Type].ID_Begin) + 1, 4);
             if ((Label_Present && Item_ID_yyyy != Label) || (Definition_Present && formatLabel_Int != strtoul(Item_ID_yyyy.c_str(), nullptr, 16))) {
-                Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[item_Type].Name, true) + "ID:" + CraftName(item_Infos[item_Type].Name, true) + "ID attribute yyyy value \"" + Item_ID_yyyy + "\" does not match " + (Label_Present ? ("formatLabel \"" + Label) : ("formatDefinition \"" + Definition)) + '\"');
+                Item.AddError(Error, item_Type, i, Adm_Message(Label_Present ? conformance::Adm_IDyyyy_MismatchFormatLabel : conformance::Adm_IDyyyy_MismatchFormatDefinition, {{"name", CraftName(item_Infos[item_Type].Name, true)}, {"actual", Item_ID_yyyy}, {"formatLabel", Label}, {"formatDefinition", Definition}}));
             }
         }
     }
@@ -3384,7 +3400,7 @@ static void CheckErrors_Attributes(file_adm_private* File_Adm_Private, item Item
         const auto Count = Attributes_Counts[j];
         auto Count_Max1 = Count ? 1 : Count;
         if (Count > 1) {
-            Item.AddError(Error, ':' + CraftName(item_Infos[Item_Type].Name) + to_string(i) + ":" + CraftName(Attribute_Infos[j].Name) + ":" + string(Attribute_Infos[j].Name) + " attribute shall be unique");
+            Item.AddError(Error, Adm_Message(conformance::Adm_Attribute_Duplicate, {{"item", CraftName(item_Infos[Item_Type].Name)}, {"i", i}, {"attribute", CraftName(Attribute_Infos[j].Name)}, {"name", string(Attribute_Infos[j].Name)}}));
         }
         if (!Count_Max1 || Info.Flags[Atmos1] || (/*File_Adm_Private->Schema != Schema_ebuCore_2014 ||*/ strcmp(Info.Name, "typeLabel") && strcmp(Info.Name, "typeDefinition"))) {
             // Handling generic errors from arrays
@@ -3401,13 +3417,13 @@ static void CheckErrors_Attributes(file_adm_private* File_Adm_Private, item Item
             if (Attribute.size() > 64) {
                 auto Attribute_Unicode = Ztring().From_UTF8(Attribute).To_Unicode();
                 if (Attribute_Unicode.size() > 64) {
-                    Item.AddError(Warning, Item_Type, i, ':' + string(Info.Name) + ':' + string(Info.Name) + " attribute value \"" + Attribute + "\" is long");
+                    Item.AddError(Warning, Item_Type, i, Adm_Message(conformance::Adm_AttributeValue_NotRecommendedLength, {{"name", string(Info.Name)}, {"actual", Attribute}}));
                 }
             }
             else if (Attribute.empty()) {
                 const auto& Attribute_Present = Item.Attributes_Present[j];
                 if (Attribute_Present) {
-                    Item.AddError(Warning, Item_Type, i, ':' + string(Info.Name) + ':' + string(Info.Name) + " attribute is present but empty");
+                    Item.AddError(Warning, Item_Type, i, Adm_Message(conformance::Adm_Attribute_Empty, {{"name", string(Info.Name)}}));
                 }
             }
         }
@@ -3454,7 +3470,7 @@ static void CheckErrors_Elements(file_adm_private* File_Adm_Private, item Item_T
             if (Elem.size() > 64) {
                 auto Elem_Unicode = Ztring().From_UTF8(Elem).To_Unicode();
                 if (Elem_Unicode.size() > 64) {
-                    Item.AddError(Warning, Item_Type, i, ':' + string(Info.Name) + ':' + string(Info.Name) + " element value \"" + Elem + "\" is long");
+                    Item.AddError(Warning, Item_Type, i, Adm_Message(conformance::Adm_ElementValue_NotRecommendedLength, {{"name", string(Info.Name)}, {"actual", Elem}}));
                 }
             }
             else if (Elem.empty() && Item_Type) {
@@ -3468,7 +3484,7 @@ static void CheckErrors_Elements(file_adm_private* File_Adm_Private, item Item_T
                 #undef ITEM_ELEM
                     break;
                 default:
-                    Item.AddError(Warning, Item_Type, i, ':' + string(Info.Name) + ':' + string(Info.Name) + " element is present but empty");
+                    Item.AddError(Warning, Item_Type, i, Adm_Message(conformance::Adm_Element_Empty, {{"name", string(Info.Name)}}));
                 }
             }
         }
@@ -3490,7 +3506,7 @@ static void CheckErrors_Element_Target(file_adm_private* File_Adm_Private, item 
                 const auto Item_ID_yyyyxxxx = Item_ID.substr(3, 8);
                 const auto TargetIDRef_yyyyxxxx = TargetIDRef.substr(3, 8);
                 if (Item_ID_yyyyxxxx != TargetIDRef_yyyyxxxx) {
-                    Item.AddError(IsAtmos ? Error : Warning, item_Type, i, ':' + CraftName(item_Infos[Target_Type].Name) + "IDRef:" + CraftName(item_Infos[Target_Type].Name) + "IDRef subelement with yyyyxxxx value \"" + TargetIDRef_yyyyxxxx + "\" not same as " + CraftName(item_Infos[item_Type].Name, true) + "ID attribute yyyyxxxx value \"" + Item_ID_yyyyxxxx + "\"" + (IsAtmos ? ADM_Atmos_1_0 : ""));
+                    Item.AddError(IsAtmos ? Error : Warning, item_Type, i, Adm_Message(conformance::Adm_IDRefyyyyxxxx_MismatchID, {{"name", CraftName(item_Infos[Target_Type].Name)}, {"actual", TargetIDRef_yyyyxxxx}, {"target", CraftName(item_Infos[item_Type].Name, true)}, {"expected", Item_ID_yyyyxxxx}, {"suffix", IsAtmos ? ADM_Atmos_1_0 : ""}}));
                 }
             }
         }
@@ -3513,7 +3529,7 @@ static void CheckErrors_Element_Target(file_adm_private* File_Adm_Private, item 
         if (Ref_Int < 0x1000) {
             if (Ref_Int > item_Infos[Target_Type].MaxKnown && Ref_Int_NotKnown.find(Ref_Int) == Ref_Int_NotKnown.end()) {
                 Ref_Int_NotKnown.insert(Ref_Int);
-                Item.AddError(Warning, item_Type, i, ":" + CraftName(item_Infos[Target_Type].Name) + "IDRef:" + CraftName(item_Infos[Target_Type].Name) + "IDRef value \"" + TargetIDRef + "\" is not a known value");
+                Item.AddError(Warning, item_Type, i, Adm_Message(conformance::Adm_IDRef_NotExpected, {{"name", CraftName(item_Infos[Target_Type].Name)}, {"actual", TargetIDRef}}));
             }
         }
         else {
@@ -3555,7 +3571,7 @@ static void CheckErrors_Element_Target(file_adm_private* File_Adm_Private, item 
                 }
             }
             if (!Target_Found) {
-                Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[Target_Type].Name) + "IDRef:" + CraftName(item_Infos[Target_Type].Name) + "IDRef value \"" + TargetIDRef + "\" shall match the " + CraftName(item_Infos[Target_Type].Name, true) + "ID attribute of an " + CraftName(item_Infos[Target_Type].Name) + " element");
+                Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_IDRef_Mismatch, {{"name", CraftName(item_Infos[Target_Type].Name)}, {"actual", TargetIDRef}, {"target", CraftName(item_Infos[Target_Type].Name, true)}, {"target_element", CraftName(item_Infos[Target_Type].Name)}}));
             }
         }
     }
@@ -3663,7 +3679,7 @@ void loudnessMetadata_Check(file_adm_private* File_Adm_Private, item Item_Type) 
     size_t j = Programme.Elements[Item_Type == item_audioProgramme ? (size_t)audioProgramme_loudnessMetadata : (size_t)audioContent_loudnessMetadata].size() - 1;
 
     if (loudnessMetadata.Elements[loudnessMetadata_integratedLoudness].empty() && loudnessMetadata.Elements[loudnessMetadata_dialogueLoudness].empty())
-        Programme.AddError(Error, string(":") + item_Infos[Item_Type].Name + to_string(i) + ":loudnessMetadata" + to_string(j) + ":integratedLoudness is not present", Source_AdvSSE_1);
+        Programme.AddError(Error, Adm_Message(conformance::Adm_integratedLoudness_Missing, {{"name", item_Infos[Item_Type].Name}, {"i", i}, {"j", j}}), Source_AdvSSE_1);
 
     MoveErrors(File_Adm_Private, item_loudnessMetadata);
 }
@@ -3701,10 +3717,10 @@ void screenWidth_Check(file_adm_private* File_Adm_Private) {
         char* End;
         auto Value = strtof(Element.c_str(), &End);
         if (End - Element.c_str() != Element.size()) {
-            screenWidth.AddError(Error, ":X:X attribute value \"" + Element + "\" is malformed");
+            screenWidth.AddError(Error, Adm_Message(conformance::Adm_X_Malformed, {{"actual", Element}}));
         }
         else if (Value < 0 || Value > 2) {
-            screenWidth.AddError(Error, ":X:X attribute value \"" + Element + "\" is not permitted, permitted values are [0 - 2]");
+            screenWidth.AddError(Error, Adm_Message(conformance::Adm_X_NotPermitted, {{"actual", Element}}));
         }
     }
 }
@@ -3750,7 +3766,7 @@ void audioProgramme_Check(file_adm_private* File_Adm_Private) {
                     || Name[11] != ' '
                     || Name[12] != '('
                     || Name[Name.size() - 1] != ')'))) {
-            Programme.AddError(Error, string(1, ':') + item_Infos[item_audioProgramme].Attribute_Infos[audioProgramme_audioProgrammeName].Name + ':' + item_Infos[item_audioProgramme].Attribute_Infos[audioProgramme_audioProgrammeName].Name + " attribute value \"" + Name + "\" is not in the form \"Programme n\" or \"Programme n (description)\" (n = 1 to 4)", Source_DolbyE_1_2);
+            Programme.AddError(Error, Adm_Message(conformance::Adm_ProgrammeName_Malformed, {{"name", item_Infos[item_audioProgramme].Attribute_Infos[audioProgramme_audioProgrammeName].Name}, {"actual", Name}}), Source_DolbyE_1_2);
         }
     }
 
@@ -3777,7 +3793,7 @@ void audioContent_Check(file_adm_private* File_Adm_Private) {
             || Name.rfind("Content ", 0) != 0
             || Name[8] < '1'
             || Name[8] > '4') {
-            Content.AddError(Error, string(1, ':') + item_Infos[item_audioContent].Attribute_Infos[audioContent_audioContentName].Name + ':' + item_Infos[item_audioContent].Attribute_Infos[audioContent_audioContentName].Name + " attribute value \"" + Name + "\" is not in the form \"Content n\" (n = 1 to 4)", Source_DolbyE_1_2);
+            Content.AddError(Error, Adm_Message(conformance::Adm_ContentName_Malformed, {{"name", item_Infos[item_audioContent].Attribute_Infos[audioContent_audioContentName].Name}, {"actual", Name}}), Source_DolbyE_1_2);
         }
     }
 
@@ -3790,7 +3806,7 @@ void audioContent_Check(file_adm_private* File_Adm_Private) {
                 const auto ID_wwww = ID.substr(4);
                 const auto audioObjectIDRef_wwww = audioObjectIDRef.substr(3);
                 if (ID_wwww != audioObjectIDRef_wwww) {
-                    Content.AddError(Error, ":audioContent" + to_string(i) + ":audioObjectIDRef:audioObjectIDRef wwww value " + audioObjectIDRef_wwww + " is not same as audioContentID wwww value " + ID_wwww, Source_AdvSSE_1);
+                    Content.AddError(Error, Adm_Message(conformance::Adm_audioObjectIDRefwwww_MismatchAudioContentID, {{"i", i}, {"actual", audioObjectIDRef_wwww}, {"expected", ID_wwww}}), Source_AdvSSE_1);
                 }
             }
         }
@@ -3802,7 +3818,7 @@ void audioContent_Check(file_adm_private* File_Adm_Private) {
     for (size_t k = audioContentLabel_Start; k < ContentLabels.size(); k++) {
         const auto& language = ContentLabels[k].Attributes[audioContentLabel_language];
         if (PreviousLanguages.find(language) != PreviousLanguages.end()) {
-            ContentLabels[k].AddError(Error, item_audioContentLabel, k - audioContentLabel_Start, ":language:language attribute value \"" + language + "\" shall be unique");
+            ContentLabels[k].AddError(Error, item_audioContentLabel, k - audioContentLabel_Start, Adm_Message(conformance::Adm_language_Duplicate, {{"actual", language}}));
         }
         else {
             PreviousLanguages.insert(language);
@@ -3843,7 +3859,7 @@ void audioObject_Check(file_adm_private* File_Adm_Private) {
             || Name.rfind("Object ", 0) != 0
             || Name[7] < '1'
             || Name[7] > '4') {
-            Object.AddError(Error, string(1, ':') + item_Infos[item_audioObject].Attribute_Infos[audioObject_audioObjectName].Name + ':' + item_Infos[item_audioObject].Attribute_Infos[audioObject_audioObjectName].Name + " attribute value \"" + Name + "\" is not in the form \"Object n\" (n = 1 to 4)", Source_DolbyE_1_2);
+            Object.AddError(Error, Adm_Message(conformance::Adm_ObjectName_Malformed, {{"name", item_Infos[item_audioObject].Attribute_Infos[audioObject_audioObjectName].Name}, {"actual", Name}}), Source_DolbyE_1_2);
         }
     }
 }
@@ -3914,12 +3930,12 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                     const auto& frameFormat = frameFormats[k];
                     TimeCode frameFormat_start_TC = frameFormat.Attributes[frameFormat_start];
                     if (frameFormat_start_TC.IsValid() && frameFormat_start_TC != Start_TC) {
-                        BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + ':' + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + " attribute value does not match the frameFormat start attribute value", Source_AdvSSE_1);
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_AttributeValue_MismatchFrameFormatStart, {{"name", item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name}}), Source_AdvSSE_1);
                     }
                 }
                 static const TimeCode Zero_TC(0, 0, 0, 0, 0);
                 if (Start_TC != Zero_TC) {
-                    BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + ':' + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + " attribute value is not 0", Source_AdvSSE_1);
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_AttributeValue_WrongNot0, {{"name", item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name}}), Source_AdvSSE_1);
                 }
             }
             return Start_TC;
@@ -3941,7 +3957,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
             if (Duration_TC.IsValid()) {
                 const auto Duration_ms = Duration_TC.ToMilliseconds();
                 if (Duration_ms && Duration_ms < 5) {
-                    BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + ':' + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + " attribute value is not permitted, permitted values are 0 or > 5 ms", Source_AdvSSE_1);
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_AttributeValue_NotPermittedDuration, {{"name", item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name}}), Source_AdvSSE_1);
                 }
             }
             return Duration_TC;
@@ -3953,7 +3969,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
     };
     auto CheckTimeOffset = [&](size_t Element_Pos, TimeCode& LastBlockFormatEnd, const TimeCode& Start, const TimeCode& Duration) {
         if (audioBlockFormat_Count != 1 && LastBlockFormatEnd.IsValid() && Start.IsValid() && LastBlockFormatEnd != Start) {
-            BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + ':' + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + " attribute value does not match the previous audioBlockFormat", Source_AdvSSE_1);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_AttributeValue_MismatchPreviousBlock, {{"name", item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name}}), Source_AdvSSE_1);
         }
         if (Start.IsValid() && Duration.IsValid()) {
             LastBlockFormatEnd = Start + Duration;
@@ -3984,7 +4000,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
     for (size_t k = 0; k < channelLocks.size(); k++) {
         const auto& channelLock = channelLocks[k];
         if (channelLock != "0" && channelLock != "1") {
-            BlockFormat.AddError(Error, ":channelLock" + to_string(k) + ":GeneralCompliance:channelLock element value " + channelLock + " is not permitted, permitted value are \"0\" or \"1\"");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_channelLock_NotPermitted, {{"k", k}, {"actual", channelLock}}));
         }
     }
 
@@ -3994,25 +4010,25 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         char* End;
         auto Value = strtof(Element.c_str(), &End);
         if (End - Element.c_str() != Element.size()) {
-            BlockFormat.AddError(Error, ":diffuse" + to_string(k) + ":GeneralCompliance:diffuse element value \"" + Element + "\" is malformed");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_diffuse_Malformed, {{"k", k}, {"actual", Element}}));
         }
         else if (Value < 0 || Value > 1) {
-            BlockFormat.AddError(Error, ":diffuse" + to_string(k) + ":GeneralCompliance:diffuse element value \"" + Element + "\" is not permitted, permitted values are [0 - 1]");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_diffuse_NotPermittedRange, {{"k", k}, {"actual", Element}}));
         }
         else if (Value != 0 && Value != 1) {
-            BlockFormat.AddError(Error, ":diffuse" + to_string(k) + ":GeneralCompliance:diffuse element value \"" + Element + "\" is not permitted, permitted values are 0 or 1", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_diffuse_NotPermitted, {{"k", k}, {"actual", Element}}), Source_Atmos_1_0);
         }
     }
 
     string Gains_Not0;
-    size_t Gains_Not0_Pos;
+    size_t Gains_Not0_Pos = 0;
     auto gains = BlockFormat.Elements[audioBlockFormat_gain];
     for (size_t k = 0; k < gains.size(); k++) {
         const auto& Element = gains[k];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
         if (End - Element.c_str() != Element.size()) {
-            BlockFormat.AddError(Error, ":gain:gain attribute value \"" + Element + "\" is malformed");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_gainAttribute_Malformed, {{"actual", Element}}));
         }
         else if (Value){
             Gains_Not0 = Element;
@@ -4026,17 +4042,17 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         char* End;
         auto Value = strtof(Element.c_str(), &End);
         if (End - Element.c_str() != Element.size()) {
-            BlockFormat.AddError(Error, ":importance:importance element value \"" + Element + "\" is malformed");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_importance_Malformed, {{"actual", Element}}));
         }
         else if (Value < 0 || Value > 10) {
-            BlockFormat.AddError(Error, ":importance:importance element value \"" + Element + "\" is not permitted, permitted values are [0 - 10]");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_importance_NotPermitted, {{"actual", Element}}));
         }
         else if (Value == 0) {
             if (BlockFormat.Elements[audioBlockFormat_gain].empty()) {
-                BlockFormat.AddError(Error, ":gain element is not present", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_gain_Missing, {}), Source_Atmos_1_0);
             }
             else {
-                BlockFormat.AddError(Error, ":gain" + to_string(Gains_Not0_Pos) + ":gain element value \"" + Gains_Not0 + "\" is not permitted, permitted value is 0 due to importance element value not 0", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_gain_NotPermittedWithImportance, {{"index", Gains_Not0_Pos}, {"actual", Gains_Not0}}), Source_Atmos_1_0);
             }
         }
     }
@@ -4045,14 +4061,14 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
     for (size_t k = 0; k < jumpPositions.size(); k++) {
         const auto& jumpPosition = jumpPositions[k];
         if (jumpPosition != "0" && jumpPosition != "1") {
-            BlockFormat.AddError(Error, ":jumpPosition" + to_string(k) + ":GeneralCompliance:jumpPosition element value " + jumpPosition + " is not permitted, permitted value are \"0\" or  \"1\"");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_jumpPosition_NotPermitted, {{"k", k}, {"actual", jumpPosition}}));
         }
     }
     switch (jumpPositions.size()) {
     case 0:
         switch (Type) {
         case Type_Objects:
-            BlockFormat.AddError(Error, ":jumpPosition:jumpPosition element is not present", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_jumpPosition_Missing, {}), Source_Atmos_1_0);
             break;
         default:;
         }
@@ -4060,7 +4076,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
     default:
         switch (Type) {
         case Type_DirectSpeakers:
-            BlockFormat.AddError(Error, ":GeneralCompliance:jumpPosition subelement count " + to_string(jumpPositions.size()) + " is not permitted, max is 1", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_jumpPositionCount_MoreThan1, {{"actual", jumpPositions.size()}}), Source_Atmos_1_0);
             break;
         default:;
         }
@@ -4075,17 +4091,17 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 char* End;
                 auto Value = strtof(interpolationLength.c_str(), &End);
                 if (End - interpolationLength.c_str() != interpolationLength.size()) {
-                    BlockFormat.AddError(Error, ":jumpPosition0:interpolationLength:interpolationLength attribute value \"" + interpolationLength + "\" is malformed");
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_interpolationLength_Malformed, {{"actual", interpolationLength}}));
                 }
                 else {
                     float ValidValue = j ? 0.005208 : 0;
                     if (Value != ValidValue) {
-                        BlockFormat.AddError(Error, ":jumpPosition0:interpolationLength:interpolationLength attribute value \"" + interpolationLength + "\" is not permitted, permitted value is " + (j ? "0.005208" : "0"), Source_Atmos_1_0);
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_interpolationLength_NotPermitted, {{"actual", interpolationLength}, {"expected", j ? "0.005208" : "0"}}), Source_Atmos_1_0);
                     }
                 }
             }
             else {
-                BlockFormat.AddError(Error, ":jumpPosition0:interpolationLength attribute is not present", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_interpolationLength_Missing, {}), Source_Atmos_1_0);
             }
             break;
         }
@@ -4096,18 +4112,18 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
 
     if (Type == Type_DirectSpeakers) {
         if (BlockFormat.Attributes_Present[audioBlockFormat_rtime]) {
-            BlockFormat.AddError(Error, ":rtime:rtime attribute is present", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_rtime_Present, {}), Source_Atmos_1_0);
         }
         if (BlockFormat.Attributes_Present[audioBlockFormat_duration]) {
-            BlockFormat.AddError(Error, ":duration:duration attribute is present", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_duration_Present, {}), Source_Atmos_1_0);
         }
     }
     if (Type == Type_Objects) {
         if (!BlockFormat.Attributes_Present[audioBlockFormat_rtime]) {
-            BlockFormat.AddError(Error, ":rtime:rtime attribute is not present", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_rtime_Missing, {}), Source_Atmos_1_0);
         }
         if (!BlockFormat.Attributes_Present[audioBlockFormat_duration]) {
-            BlockFormat.AddError(Error, ":duration:duration attribute is not present", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_duration_Missing, {}), Source_Atmos_1_0);
         }
     }
 
@@ -4134,7 +4150,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 Found = ID_Block_yyyyxxxx_Up == ID_yyyyxxxx_Up;
             }
             if (!Found) {
-                ChannelFormat.AddError(File_Adm_Private->IsAtmos ? Error : Warning, ":audioChannelFormat" + to_string(i) + ":audioBlockFormat" + to_string(j) + ":audioBlockFormatID:audioBlockFormatID attribute with yyyyxxxx value \"" + ID_Block_yyyyxxxx + "\" not same as audioChannelFormatID attribute yyyyxxxx value \"" + ID_yyyyxxxx + "\"", File_Adm_Private->IsAtmos ? Source_Atmos_1_0 : Source_ADM);
+                ChannelFormat.AddError(File_Adm_Private->IsAtmos ? Error : Warning, Adm_Message(conformance::Adm_audioBlockFormatIDyyyyxxxx_Mismatch, {{"i", i}, {"j", j}, {"actual", ID_Block_yyyyxxxx}, {"expected", ID_yyyyxxxx}}), File_Adm_Private->IsAtmos ? Source_Atmos_1_0 : Source_ADM);
             }
         }
         const auto ID_Block_zzzzzzzz = ID_Block.substr(12, 8);
@@ -4142,7 +4158,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         auto ID_Block_zzzzzzzz_Expected = j + HasNoInit;
         if ((HasNoInit || !j) && ID_Block_zzzzzzzz_Int != ID_Block_zzzzzzzz_Expected) {
             const auto ID_Block_Expected = ID_Block.substr(0, 12) + Hex2String(ID_Block_zzzzzzzz_Expected, 8);
-            BlockFormat.AddError(Error, ":audioBlockFormatID:audioBlockFormatID attribute value \"" + ID_Block + "\" shall be \"" + ID_Block_Expected + "\" in order to match the audioBlockFormat index");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_audioBlockFormatID_MismatchIndex, {{"actual", ID_Block}, {"expected", ID_Block_Expected}}));
         }
     }
 
@@ -4158,7 +4174,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 }
             }
             if (!IsInList) {
-                BlockFormat.AddError(Error, string(":GeneralConformance:") + item_Infos[item_audioBlockFormat].Element_Infos[l].Name + " subelement is present");
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_BlockFormatSubelement_Present, {{"name", item_Infos[item_audioBlockFormat].Element_Infos[l].Name}}));
             }
         }
         };
@@ -4168,17 +4184,17 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         const audioBlockFormat_Element BlockFormat_DirectSpeakers_List[] = { audioBlockFormat_cartesian, audioBlockFormat_speakerLabel, audioBlockFormat_position }; // TODO: cartesian is not in specs but lot of files have it
         List_Check((audioBlockFormat_Element*)&BlockFormat_DirectSpeakers_List, sizeof(BlockFormat_DirectSpeakers_List) / sizeof(*BlockFormat_DirectSpeakers_List));
         if (BlockFormat.Elements[audioBlockFormat_speakerLabel].empty()) {
-            BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Element_Infos[audioBlockFormat_speakerLabel].Name + ':' + item_Infos[item_audioBlockFormat].Element_Infos[audioBlockFormat_speakerLabel].Name + " element is not present");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_BlockFormatElement_Missing, {{"name", item_Infos[item_audioBlockFormat].Element_Infos[audioBlockFormat_speakerLabel].Name}}));
         }
         else {
             const auto& speakerLabel = BlockFormat.Elements[audioBlockFormat_speakerLabel].back();
             speakerLabel_ChannelAssignment = Atmos_audioChannelFormat_Pos(speakerLabel, true);
             if (speakerLabel_ChannelAssignment == (atmos_audioChannelFormatName)-1) {
-                BlockFormat.AddError(Error, ":speakerLabel:speakerLabel element value " + speakerLabel + " is not permitted", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_speakerLabel_NotPermitted, {{"actual", speakerLabel}}), Source_Atmos_1_0);
             }
             else {
                 if (ChannelAssignment != (atmos_audioChannelFormatName)-1 && speakerLabel_ChannelAssignment != ChannelAssignment) {
-                    BlockFormat.AddError(Error, ":speakerLabel:speakerLabel element value " + speakerLabel + " is not permitted, permitted value is " + Atmos_audioChannelFormat_Content[ChannelAssignment].SpeakerLabel + "", Source_Atmos_1_0);
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_speakerLabel_NotPermittedExpected, {{"actual", speakerLabel}, {"expected", Atmos_audioChannelFormat_Content[ChannelAssignment].SpeakerLabel}}), Source_Atmos_1_0);
                 }
             }
         }
@@ -4196,15 +4212,15 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         char* End;
         is_cartesian = strtoul(cartesian.c_str(), &End, 10);
         if (to_string(is_cartesian) != cartesian) {
-            BlockFormat.AddError(Error, ":cartesian:cartesian element value \"" + cartesian + "\" is malformed");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_cartesian_Malformed, {{"actual", cartesian}}));
             is_cartesian = (unsigned long)-1;
         }
         else if (is_cartesian > 1) {
-            BlockFormat.AddError(Error, ":cartesian:cartesian element value \"" + cartesian + "\" is not permitted, permitted values are 0 or 1");
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_cartesian_NotPermitted, {{"actual", cartesian}}));
         }
         else {
             if (!is_cartesian) {
-                BlockFormat.AddError(Error, ":cartesian:cartesian element value is not 1", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_cartesian_Wrong, {}), Source_Atmos_1_0);
             }
         }
     }
@@ -4218,7 +4234,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 if (Position.Attributes[position_coordinate].size() == 1 && Position.Attributes[position_coordinate][0] >= 'X' && Position.Attributes[position_coordinate][0] <= 'Z') {
                     auto Pos = Position.Attributes[position_coordinate][0] - 'X';
                     if (HasXYZ[Pos]) {
-                        BlockFormat.AddError(Error, ":coordinate:coordinate@position=\"" + Position.Attributes[position_coordinate] + "\" element is not unique");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_positionCoordinate_Duplicate, {{"position_coordinate", Position.Attributes[position_coordinate]}}));
                     }
                     else {
                         HasXYZ.set(Pos);
@@ -4229,7 +4245,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 }
                 if (Pos < 3) {
                     if (HasAED[Pos]) {
-                        BlockFormat.AddError(Error, ":coordinate:coordinate@position=\"" + Position.Attributes[position_coordinate] + "\" element is not unique");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_positionCoordinate_Duplicate, {{"position_coordinate", Position.Attributes[position_coordinate]}}));
                     }
                     else {
                         HasAED.set(Pos);
@@ -4239,10 +4255,10 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         }
         if (HasXYZ.count() > HasAED.count()) {
             if (Type == Type_Objects) {
-                BlockFormat.AddError(Error, ":cartesian:cartesian element is not present");
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_cartesian_Missing, {}));
             }
             else {
-                BlockFormat.AddError(Error, ":cartesian:cartesian element is not present", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_cartesian_Missing, {}), Source_Atmos_1_0);
             }
 
             is_cartesian = 1;
@@ -4256,7 +4272,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
 
         if (Type == Type_Objects) {
             if (is_cartesian == 0) {
-                BlockFormat.AddError(Error, ":position:position element use polar attributes", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_position_NotPermittedPolar, {}), Source_Atmos_1_0);
             }
         }
     }
@@ -4272,7 +4288,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 }
                 if (Pos < 3) {
                     if (HasAED[Pos]) {
-                        BlockFormat.AddError(Error, ":coordinate:coordinate@position=\"" + Position.Attributes[position_coordinate] + "\" element is not unique");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_positionCoordinate_Duplicate, {{"position_coordinate", Position.Attributes[position_coordinate]}}));
                     }
                     else {
                         HasAED.set(Pos);
@@ -4281,20 +4297,20 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                     char* End;
                     auto Value = strtof(Element.c_str(), &End);
                     if (End - Element.c_str() != Element.size()) {
-                        BlockFormat.AddError(Error, ":position" + to_string(k) + ":GeneralCompliance:position element value \"" + BlockFormat.Elements[audioBlockFormat_position][k] + "\" is malformed");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_position_Malformed, {{"k", k}, {"actual", BlockFormat.Elements[audioBlockFormat_position][k]}}));
                     }
                     else if (Value < Cartesian_0_Limits[Pos][0] || Value > Cartesian_0_Limits[Pos][1]) {
-                        BlockFormat.AddError(Error, ":position" + to_string(k) + ":GeneralCompliance:position element value \"" + BlockFormat.Elements[audioBlockFormat_position][k] + "\" is not permitted, permitted values are [" + to_string(Cartesian_0_Limits[Pos][0]) + " - " + to_string(Cartesian_0_Limits[Pos][1]) + "]");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_position_NotPermitted, {{"k", k}, {"actual", BlockFormat.Elements[audioBlockFormat_position][k]}, {"min", to_string(Cartesian_0_Limits[Pos][0])}, {"max", to_string(Cartesian_0_Limits[Pos][1])}}));
                     }
                 }
                 else {
-                    BlockFormat.AddError(Error, ":position" + to_string(k) + ":coordinate:coordinate attribute \"" + Position.Attributes[position_coordinate] + "\" is present");
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_coordinate_Present, {{"k", k}, {"position_coordinate", Position.Attributes[position_coordinate]}}));
                 }
             }
         }
         for (size_t k = 0; k < 2; k++) {
             if (!HasAED[k]) {
-                BlockFormat.AddError(Error, ":position" + to_string(k) + ":coordinate:coordinate==\"" + Cartesian_0_Names[k] + "\" element is not present");
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_coordinate_Missing, {{"k", k}, {"coordinate", Cartesian_0_Names[k]}}));
             }
         }
 
@@ -4318,7 +4334,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 if (Position.Attributes[position_coordinate].size() == 1 && Position.Attributes[position_coordinate][0] >= 'X' && Position.Attributes[position_coordinate][0] <= 'Z') {
                     auto Pos = Position.Attributes[position_coordinate][0] - 'X';
                     if (HasXYZ[Pos]) {
-                        BlockFormat.AddError(Error, ":coordinate:coordinate@position=\"" + Position.Attributes[position_coordinate] + "\" element is not unique");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_positionCoordinate_Duplicate, {{"position_coordinate", Position.Attributes[position_coordinate]}}));
                     }
                     HasXYZ.set(Pos);
                     const auto& Element = BlockFormat.Elements[audioBlockFormat_position][k];
@@ -4326,30 +4342,30 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                     Values[Pos] = strtof(Element.c_str(), &End);
                     if (End - Element.c_str() != Element.size()) {
                         ValuesAreNok = true;
-                        BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + ':' + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + " element value \"" + Element + "\" is malformed");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_ElementNumber_Malformed, {{"name", item_Infos[item_audioBlockFormat].Element_Infos[k].Name}, {"actual", Element}}));
                     }
                     else if (Values[Pos] < -1 || Values[Pos] > 1) {
                         ValuesAreNok = true;
-                        BlockFormat.AddError(Error, ":position" + to_string(k) + ":coordinate:coordinate=\"" + Position.Attributes[position_coordinate] + "\" element value \"" + BlockFormat.Elements[audioBlockFormat_position][k] + "\" is not permitted, permitted values are [-1,1]");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_coordinateValue_NotPermitted, {{"k", k}, {"coordinate", Position.Attributes[position_coordinate]}, {"actual", BlockFormat.Elements[audioBlockFormat_position][k]}}));
                     }
                 }
                 else {
-                    BlockFormat.AddError(Error, ":position" + to_string(k) + ":coordinate:coordinate attribute \"" + Position.Attributes[position_coordinate] + "\" is present");
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_coordinate_Present, {{"k", k}, {"position_coordinate", Position.Attributes[position_coordinate]}}));
                 }
             }
         }
         for (size_t l = 0; l < 2; l++) {
             if (!HasXYZ[l]) {
-                BlockFormat.AddError(Error, ":position:coordinate:coordinate==\"" + string(1, 'X' + l) + "\" element is not present");
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_coordinate_MissingXYZ, {{"coordinate", string(1, 'X' + l)}}));
             }
         }
         if (!ValuesAreNok && speakerLabel_ChannelAssignment != (atmos_audioChannelFormatName)-1) {
             auto position_ChannelAssignment = Atmos_audioChannelFormat_Pos(Values[0], Values[1], Values[2], speakerLabel_ChannelAssignment);
             if (position_ChannelAssignment == (atmos_audioChannelFormatName)-1) {
-                BlockFormat.AddError(Error, ":position:position@coordinate=\"X\" \"Y\" \"Z\" element value \"" + Ztring::ToZtring(Values[0], (Values[0] - (int)Values[0]) ? 5 : 0).To_UTF8() + "\" \"" + Ztring::ToZtring(Values[1], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8() + "\" \"" + Ztring::ToZtring(Values[2], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8() + "\" is not valid", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_positionXYZ_NotPermitted, {{"x", Ztring::ToZtring(Values[0], (Values[0] - (int)Values[0]) ? 5 : 0).To_UTF8()}, {"y", Ztring::ToZtring(Values[1], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8()}, {"z", Ztring::ToZtring(Values[2], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8()}}), Source_Atmos_1_0);
             }
             else if (position_ChannelAssignment != speakerLabel_ChannelAssignment) {
-                BlockFormat.AddError(Error, ":position:position@coordinate=\"X\" \"Y\" \"Z\" element value \"" + Ztring::ToZtring(Values[0], (Values[0] - (int)Values[0]) ? 5 : 0).To_UTF8() + "\" \"" + Ztring::ToZtring(Values[1], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8() + "\" \"" + Ztring::ToZtring(Values[2], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8() + "\" so \"" + Atmos_audioChannelFormat_Content[position_ChannelAssignment].SpeakerLabel + "\" does not match corresponding speakerLabel element value \"" + Atmos_audioChannelFormat_Content[speakerLabel_ChannelAssignment].SpeakerLabel + "\"", Source_Atmos_1_0);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_positionXYZ_MismatchSpeakerLabel, {{"x", Ztring::ToZtring(Values[0], (Values[0] - (int)Values[0]) ? 5 : 0).To_UTF8()}, {"y", Ztring::ToZtring(Values[1], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8()}, {"z", Ztring::ToZtring(Values[2], (Values[2] - (int)Values[2]) ? 5 : 0).To_UTF8()}, {"position_label", Atmos_audioChannelFormat_Content[position_ChannelAssignment].SpeakerLabel}, {"speakerLabel", Atmos_audioChannelFormat_Content[speakerLabel_ChannelAssignment].SpeakerLabel}}), Source_Atmos_1_0);
             }
         }
 
@@ -4377,22 +4393,22 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 }
                 else if (Element != Value_Ref && !AreNotSame) {
                     AreNotSame = true;
-                    BlockFormat.AddError(Error, ":GeneralCompliance:width/height/depth element values are not same", Source_Atmos_1_0);
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_widthHeightDepth_Mismatch, {}), Source_Atmos_1_0);
                 }
                 auto Max = (is_cartesian || k == audioBlockFormat_depth) ? 1 : 360;
                 char* End;
                 auto Value = strtof(Element.c_str(), &End);
                 if ((size_t)(End - Element.c_str()) < Element.size()) {
-                    BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + ':' + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + " element value \"" + Element + "\" is malformed");
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_ElementNumber_Malformed, {{"name", item_Infos[item_audioBlockFormat].Element_Infos[k].Name}, {"actual", Element}}));
                 }
                 else if (Value < 0 || Value > Max) {
-                    BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + ':' + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + " element value \"" + Element + "\" is not permitted, permitted values are [0," + to_string(Max) + "]");
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_BlockFormatElementValue_NotPermitted, {{"name", item_Infos[item_audioBlockFormat].Element_Infos[k].Name}, {"actual", Element}, {"max", Max}}));
                 }
                 Count++;
             }
         }
         if (Count && Count != 3) {
-            BlockFormat.AddError(Error, ":GeneralCompliance:width/height/depth element values are not all present", Source_Atmos_1_0);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_widthHeightDepth_MissingOne, {}), Source_Atmos_1_0);
         }
     }
 
@@ -4407,7 +4423,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
             break;
         default:
             if (is_cartesian != File_Adm_Private->CartesianAlreadyNotCoherent - cartesian_0) {
-                BlockFormat.AddError(Error, ":cartesian:cartesian element values are not consistant between audioBlockFormat elements", Source_AdvSSE_1);
+                BlockFormat.AddError(Error, Adm_Message(conformance::Adm_cartesian_NotConstant, {}), Source_AdvSSE_1);
                 File_Adm_Private->CartesianAlreadyNotCoherent = cartesian_alreadyincoherent;
             }
         }
@@ -4466,7 +4482,7 @@ void gain_Check(file_adm_private* File_Adm_Private) {
     else if (Unit >= 0) {
         static const double Linear_10dB = 3.1622776601683793319988935444327; // 10 ^ ( dB / 20)
         if ((Unit == 0 && Float > Linear_10dB) || (Unit == 1 && Float > 10)) {
-            BlockFormat.AddError(Error, ":gain:gain element value \"" + Value + "\" is not permitted", Source_AdvSSE_1);
+            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_gain_NotPermitted, {{"actual", Value}}), Source_AdvSSE_1);
         }
     }
 }
@@ -4509,13 +4525,13 @@ void coefficient_Check(file_adm_private* File_Adm_Private) {
         else if (Unit >= 0) {
             static const int Linear_20dB = 10; // 10 ^ ( dB / 20)
             if ((Unit == 0 && Float > Linear_20dB) || (Unit == 1 && Float > 20)) {
-                Coefficient.AddError(Error, ":gain:gain attribute value \"" + Value + "\" is not permitted", Source_AdvSSE_1);
+                Coefficient.AddError(Error, Adm_Message(conformance::Adm_gainAttribute_NotPermitted, {{"actual", Value}}), Source_AdvSSE_1);
             }
         }
     }
 
     if (!File_Adm_Private->coefficients_Unique.insert(coefficient).second) {
-        Matrix.AddError(Error, item_matrix, 0, ":coefficient" + to_string(Matrix_Coefficients.size() - 1) + ":coefficient value \"" + coefficient + "\" shall be unique");
+        Matrix.AddError(Error, item_matrix, 0, Adm_Message(conformance::Adm_coefficient_Duplicate, {{"matrix_coefficients", Matrix_Coefficients.size() - 1}, {"actual", coefficient}}));
     }
     else {
         File_Adm_Private->coefficients.push_back(coefficient);
@@ -4571,7 +4587,7 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
             objectDivergence.AddError(Error, 0x80 | (int8u)objectDivergence_azimuthRange, E::Form, File_Adm_Private, Element);
         }
         else if (Value < 0 || Value > 1) {
-            objectDivergence.AddError(Error, ":azimuthRange" + to_string(k) + ":GeneralCompliance:azimuthRange attribute value \"" + Element + "\" is not permitted, permitted values are [0,180]");
+            objectDivergence.AddError(Error, Adm_Message(conformance::Adm_azimuthRange_NotPermitted, {{"k", k}, {"actual", Element}}));
         }
     }
 
@@ -4584,7 +4600,7 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
             objectDivergence.AddError(Error, 0x80 | (int8u)objectDivergence_positionRange, E::Form, File_Adm_Private, Element);
         }
         else if (Value < 0 || Value > 1) {
-            objectDivergence.AddError(Error, ":positionRange" + to_string(k) + ":GeneralCompliance:positionRange attribute value \"" + Element + "\" is not permitted, permitted values are [0,1]");
+            objectDivergence.AddError(Error, Adm_Message(conformance::Adm_positionRange_NotPermitted, {{"k", k}, {"actual", Element}}));
         }
     }
 
@@ -4595,7 +4611,7 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
         BlockFormat.AddError(Error, (char)audioBlockFormat_objectDivergence, E::Form, File_Adm_Private, Element);
     }
     else if (Value < 0 || Value > 1) {
-        BlockFormat.AddError(Error, ":objectDivergence" + to_string(k) + ":GeneralCompliance:objectDivergence element value \"" + Element + "\" is not permitted, permitted values are [0,1]");
+        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_objectDivergence_NotPermitted, {{"k", k}, {"actual", Element}}));
     }
 }
 
@@ -4661,25 +4677,25 @@ void zoneExclusion_Check(file_adm_private* File_Adm_Private) {
                         if (End - Attribute.c_str() != Attribute.size()) {
                             ValuesAreNok = true;
                             const auto& Info = item_Infos[item_zone].Attribute_Infos[m];
-                            BlockFormat.AddError(Error, ":zoneExclusion" + to_string(k) + ":zone" + to_string(l) + ':' + Info.Name + ':' + Info.Name + " attribute value \"" + Attribute + "\" is malformed");
+                            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_ZoneAttributeValue_Malformed, {{"k", k}, {"l", l}, {"name", Info.Name}, {"actual", Attribute}}));
                         }
                         else if (Values.Values[m] < -1 || Values.Values[m] > 1) {
                             ValuesAreNok = true;
                             const auto& Info = item_Infos[item_zone].Attribute_Infos[m];
-                            BlockFormat.AddError(Error, ":zoneExclusion" + to_string(k) + ":zone" + to_string(l) + ':' + Info.Name + ':' + Info.Name + " attribute value \"" + Attribute + "\" is not permitted, permitted values are [-1,1]");
+                            BlockFormat.AddError(Error, Adm_Message(conformance::Adm_ZoneAttributeValue_NotPermitted, {{"k", k}, {"l", l}, {"name", Info.Name}, {"actual", Attribute}}));
                         }
                     }
                 }
                 for (size_t m = 0; m < 6; m++) {
                     if (!HasXYZ[m]) {
                         const auto& Info = item_Infos[item_zone].Attribute_Infos[m];
-                        BlockFormat.AddError(Error, ":zoneExclusion" + to_string(k) + ":zone" + to_string(l) + ':' + Info.Name + ':' + Info.Name + " attribute is not present");
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_ZoneAttribute_Missing, {{"k", k}, {"l", l}, {"name", Info.Name}}));
                     }
                 }
                 if (!ValuesAreNok) {
                     auto position_Channezone_PoslAssignment = Atmos_zone_Pos(Values.Name, Values.Values);
                     if (position_Channezone_PoslAssignment == -1) {
-                        BlockFormat.AddError(Error, ":zoneExclusion" + to_string(k) + ":zone" + to_string(l) + ":GeneralCompliance:zone@minX maxX minY maxY minZ maxZ attributes and element value \"" + Zone.Attributes[zone_minX] + "\" \"" + Zone.Attributes[zone_maxX] + "\" \"" + Zone.Attributes[zone_minY] + "\" \"" + Zone.Attributes[zone_maxY] + "\" \"" + Zone.Attributes[zone_minZ] + "\" \"" + Zone.Attributes[zone_maxZ] + "\" \"" + ZoneExclusion.Elements[zoneExclusion_zone][l] + "\" is not valid", Source_Atmos_1_0);
+                        BlockFormat.AddError(Error, Adm_Message(conformance::Adm_Zone_NotPermitted, {{"k", k}, {"l", l}, {"zone_minX", Zone.Attributes[zone_minX]}, {"zone_maxX", Zone.Attributes[zone_maxX]}, {"zone_minY", Zone.Attributes[zone_minY]}, {"zone_maxY", Zone.Attributes[zone_maxY]}, {"zone_minZ", Zone.Attributes[zone_minZ]}, {"zone_maxZ", Zone.Attributes[zone_maxZ]}, {"value", ZoneExclusion.Elements[zoneExclusion_zone][l]}}), Source_Atmos_1_0);
                     }
                 }
             }
@@ -4709,7 +4725,7 @@ void audioChannelFormat_Check(file_adm_private* File_Adm_Private) {
                 TimeCode frameFormat_start_TC = frameFormat.Attributes[frameFormat_start];
                 TimeCode frameFormat_duration_TC = frameFormat.Attributes[frameFormat_duration];
                 if (frameFormat_start_TC.IsValid() && frameFormat_duration_TC.IsValid() && frameFormat_start_TC + frameFormat_duration_TC != LastBlockFormatEnd) {
-                    BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + ':' + item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name + " attribute value does not match the frameFormat start+duration attribute value", Source_AdvSSE_1);
+                    BlockFormat.AddError(Error, Adm_Message(conformance::Adm_AttributeValue_MismatchFrameFormatEnd, {{"name", item_Infos[item_audioBlockFormat].Attribute_Infos[Element_Pos].Name}}), Source_AdvSSE_1);
                 }
             }
         };
@@ -4739,7 +4755,7 @@ void profileList_Check(file_adm_private* File_Adm_Private) {
             if (Profile2.Attributes[profile_profileName] == Profile.Attributes[profile_profileName]
                 && Profile2.Attributes[profile_profileVersion] == Profile.Attributes[profile_profileVersion]
                 && Profile2.Attributes[profile_profileLevel] == Profile.Attributes[profile_profileLevel]) {
-                ProfileList.AddError(Error, ":profileList" + to_string(i) + ":profile" + to_string(j) + ":GeneralCompliance:profile attributes are identical to a previous profile element", Source_AdvSSE_1);
+                ProfileList.AddError(Error, Adm_Message(conformance::Adm_profile_Duplicate, {{"i", i}, {"j", j}}), Source_AdvSSE_1);
                 break;
             }
         }
@@ -4772,7 +4788,7 @@ void dolbyE_Check(file_adm_private* File_Adm_Private) {
         TimeCode TC(Value);
         if (!TC.IsValid()) {
             const auto Name = dolbyE_Elements[dolbyE_smpteTimeCode].Name;
-            dolbyE.AddError(Error, string(1, ':') + Name + ':' + Name + " element value \"" + Value + "\" is malformed", Source_DolbyE_1_2);
+            dolbyE.AddError(Error, Adm_Message(conformance::Adm_ElementNumber_Malformed, {{"name", Name}, {"actual", Value}}), Source_DolbyE_1_2);
         }
     }
 
@@ -4802,7 +4818,7 @@ void ac3Program_Check(file_adm_private* File_Adm_Private) {
         const auto& Value = ac3Program.Elements[ac3Program_programDescriptionText][i];
         if (Value.size() > 32) {
             const auto Name = ac3Program_Elements[ac3Program_programDescriptionText].Name;
-            ac3Program.AddError(Error, string(1, ':') + Name + ':' + Name + " element value \"" + Value + "\" length is more than 32", Source_DolbyE_1_2);
+            ac3Program.AddError(Error, Adm_Message(conformance::Adm_ElementValueLength_MoreThan32, {{"name", Name}, {"actual", Value}}), Source_DolbyE_1_2);
         }
     }
     
@@ -5040,7 +5056,7 @@ void transportTrackFormat_Check(file_adm_private* File_Adm_Private) {
         if (TransportTrackFormat.Attributes_Present[transportTrackFormat_numTracks]) {
             const auto& numTracks = TransportTrackFormat.Attributes[transportTrackFormat_numTracks];
             if (numTracks != numIDs) {
-                TransportTrackFormat.AddError(Error, ":transportTrackFormat" + to_string(i) + ":numIDs:numIDs attribute value \"" + numIDs + "\" is not same as numTracks attribute value \"" + numTracks + "\"", Source_AdvSSE_1);
+                TransportTrackFormat.AddError(Error, Adm_Message(conformance::Adm_numIDs_MismatchNumTracks, {{"i", i}, {"actual", numIDs}, {"expected", numTracks}}), Source_AdvSSE_1);
             }
         }
     }
@@ -5055,17 +5071,17 @@ void transportTrackFormat_Check(file_adm_private* File_Adm_Private) {
         if (Track.Attributes_Present[audioTrack_trackID]) {
             const auto& ID = Track.Attributes[audioTrack_trackID];
             if (PreviousIDs.find(ID) != PreviousIDs.end()) {
-                Track.AddError(Error, item_audioTrack, j, ':' + CraftName(item_Infos[item_audioTrack].Name, true) + "ID:" + CraftName(item_Infos[item_audioTrack].Name, true) + "ID value \"" + ID + "\" shall be unique");
+                Track.AddError(Error, item_audioTrack, j, Adm_Message(conformance::Adm_ID_Duplicate, {{"name", CraftName(item_Infos[item_audioTrack].Name, true)}, {"actual", ID}}));
             }
             else {
                 PreviousIDs.insert(ID);
                 char* End;
                 auto ID_Int = strtoul(ID.c_str(), &End, 10);
                 if (to_string(ID_Int) != ID) {
-                    Track.AddError(Error, item_audioTrack, j, ':' + CraftName(item_Infos[item_audioTrack].Name, true) + "ID:" + CraftName(item_Infos[item_audioTrack].Name, true) + "ID attribute value \"" + ID + "\" is malformed");
+                    Track.AddError(Error, item_audioTrack, j, Adm_Message(conformance::Adm_ID_Malformed, {{"name", CraftName(item_Infos[item_audioTrack].Name, true)}, {"actual", ID}}));
                 }
                 else if (!ID_Int) {
-                    Track.AddError(Error, item_audioTrack, j, ':' + CraftName(item_Infos[item_audioTrack].Name, true) + "ID:" + CraftName(item_Infos[item_audioTrack].Name, true) + "ID attribute value \"" + ID + "\" is not permitted, permitted values are [1...]");
+                    Track.AddError(Error, item_audioTrack, j, Adm_Message(conformance::Adm_ID_NotPermitted, {{"name", CraftName(item_Infos[item_audioTrack].Name, true)}, {"actual", ID}}));
                 }
             }
         }
@@ -5077,11 +5093,11 @@ void transportTrackFormat_Check(file_adm_private* File_Adm_Private) {
                 auto& TransportTrackFormat = TransportTrackFormats.back();
                 const auto& Track_Items = TransportTrackFormat.Elements[transportTrackFormat_audioTrack];
                 const auto Tracks_Pos = Tracks.size() - Track_Items.size();
-                Track.AddError(Error, item_audioTrack, i - Tracks_Pos, ":audioTrackUIDRef:audioTrackUIDRef element value \"ATU_00000000\" is not permitted");
+                Track.AddError(Error, item_audioTrack, i - Tracks_Pos, Adm_Message(conformance::Adm_audioTrackUIDRef_NotPermitted0, {}));
             }
             else {
                 if (PreviousaudioTrackUIDRef_Itemss.find(ID) != PreviousaudioTrackUIDRef_Itemss.end()) {
-                    Track.AddError(Error, item_audioTrack, j, ':' + CraftName(item_Infos[item_audioTrack].Name, true) + "ID:" + CraftName(item_Infos[item_audioTrack].Name, true) + "ID value \"" + ID + "\" shall be unique");
+                    Track.AddError(Error, item_audioTrack, j, Adm_Message(conformance::Adm_ID_Duplicate, {{"name", CraftName(item_Infos[item_audioTrack].Name, true)}, {"actual", ID}}));
                 }
                 else {
                     PreviousaudioTrackUIDRef_Itemss.insert(ID);
@@ -6141,7 +6157,8 @@ int file_adm_private::frameHeader()
 }
 
 //---------------------------------------------------------------------------
-static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type, size_t i, const char* Name, vector<string>* Errors_Field, vector<string>* Errors_Value, bool WarningError, size_t* Error_Count_Per_Type, bool IsAdvSSE, bool IsDolbyE)
+#if MEDIAINFO_CONFORMANCE
+static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type, size_t i, const char* Name, vector<string>* Errors_Field, vector<string>* Errors_Value, vector<string>* Errors_Data, bool WarningError, size_t* Error_Count_Per_Type, bool IsAdvSSE, bool IsDolbyE)
 {
     const bool IsAtmos = File_Adm_Private->IsAtmos;
     for (size_t k = 0; k < error_Type_Max; k++) {
@@ -6155,7 +6172,16 @@ static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type,
         if (!Item.Items[i].Errors[k][l].empty()) {
             for (size_t j = 0; j < Item.Items[i].Errors[k][l].size(); j++) {
                 string Field = Name ? string(Name) : string();
-                string Value = Item.Items[i].Errors[k][l][j];
+                const auto& Item_Error = Item.Items[i].Errors[k][l][j];
+                string Value = Item_Error.Path; // Path then text
+                auto Message_Id = Item_Error.Id;
+                auto Message_Args = Item_Error.Args;
+                if (Message_Id) {
+                    Value += conformance::Text_Get(Message_Id, Message_Args);
+                }
+                else if (!Value.empty() && Value[0] && Value.size() >= 5 && !Value.compare(Value.size() - 5, 5, "[...]")) {
+                    Message_Id = conformance::Adm_Messages_MoreThanLimit;
+                }
                 if (!Value.empty() && Value[0] == '!') {
                     auto End = Value.find('!', 1);
                     if (End != string::npos)
@@ -6207,43 +6233,71 @@ static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type,
                         }
                         const auto& item_Info = item_Infos[item_Type2];
                         const auto Info_Name = IsAttribute ? item_Info.Attribute_Infos[Element_Pos].Name : item_Info.Element_Infos[Element_Pos].Name;
-                        Field += Info_Name;
-                        Value = Info_Name;
-                        Value += ' ';
-                        if (ErrorType == 2) {
-                            Value += "sub";
+
+                        //Message of the catalog for this kind of error, its field is the path then the name of the attribute or element
+                        if (!Field.empty()) {
+                            Field.pop_back();
                         }
-                        Value += IsAttribute ? "attribute" : "element";
-                        Value += ' ';
-                        Value += E_Strings[ErrorType];
-                        auto Pos = Value.find("{}");
-                        if (Pos != string::npos) {
-                            Value.erase(Pos, 2);
-                            switch ((E)ErrorType) {
-                            case E::Form:
-                            case E::Permitted:
-                                if ((size_t)Opt0 < File_Adm_Private->Errors_Tips[k][l].size()) {
-                                    Value.insert(Pos, File_Adm_Private->Errors_Tips[k][l][Opt0]);
-                                }
-                                break;
-                            default:
-                                Value.insert(Pos, to_string(Opt0));
-                            }
+                        Message_Args = {{"path", Field}, {"name", Info_Name}};
+                        const auto& Tips = File_Adm_Private->Errors_Tips[k][l];
+                        switch ((E)ErrorType) {
+                        case E::Present0: Message_Id = IsAttribute ? conformance::Adm_Attribute_Missing : conformance::Adm_Element_Missing; break;
+                        case E::Present1: Message_Id = IsAttribute ? conformance::Adm_Attribute_Present : conformance::Adm_Element_Present; break;
+                        case E::Present2:
+                            Message_Id = IsAttribute ? conformance::Adm_SubattributeCount_MoreThan1 : conformance::Adm_SubelementCount_MoreThan1;
+                            Message_Args.emplace_back("actual", (int8u)Opt0);
+                            break;
+                        case E::Form:
+                            Message_Id = IsAttribute ? conformance::Adm_AttributeValue_Malformed : conformance::Adm_ElementValue_Malformed;
+                            Message_Args.emplace_back("actual", (int8u)Opt0 < Tips.size() ? Tips[(int8u)Opt0] : string());
+                            break;
+                        case E::Permitted:
+                            Message_Id = IsAttribute ? conformance::Adm_AttributeValue_NotPermitted : conformance::Adm_ElementValue_NotPermitted;
+                            Message_Args.emplace_back("actual", (int8u)Opt0 < Tips.size() ? Tips[(int8u)Opt0] : string());
+                            break;
+                        default:;
+                        }
+                        if (Message_Id) {
+                            Field = conformance::Field_Get(Message_Id, Message_Args);
+                            Value = conformance::Text_Get(Message_Id, Message_Args);
                         }
                     }
                     Errors_Field[ErrorType].push_back(Field);
                     Errors_Value[ErrorType].push_back(Value + Source_Strings[l]);
+                    string Data;
+                    if (Message_Id) {
+                        conformance::data Message_Data;
+                        Message_Data.Name = conformance::Message_Get(Message_Id).Name;
+                        Message_Data.Text = Value;
+                        for (const auto& Arg : Message_Args)
+                            Message_Data.Args.emplace_back(Arg.Name, Arg.To_String());
+                        if (Source_Strings[l][0]) {
+                            // " (additional constraint from <specification>)"
+                            string Source(Source_Strings[l]);
+                            auto From = Source.find(" from ");
+                            if (From != string::npos && Source.back() == ')') {
+                                Message_Data.AdditionalConstraint = Source.substr(From + 6, Source.size() - (From + 6) - 1);
+                            }
+                        }
+                        Data = conformance::Data_Serialize(Message_Data);
+                    }
+                    Errors_Data[ErrorType].push_back(Data);
                 }
                 else if (Error_Count_Per_Type[ErrorType] == 9)
                 {
                     Errors_Field[ErrorType].push_back(Field);
                     Errors_Value[ErrorType].push_back("[...]");
+                    conformance::data Message_Data;
+                    Message_Data.Name = conformance::Message_Get(conformance::Adm_Messages_MoreThanLimit).Name;
+                    Message_Data.Text = Errors_Value[ErrorType].back();
+                    Errors_Data[ErrorType].push_back(conformance::Data_Serialize(Message_Data));
                 }
             }
         }
     }
     }
 }
+#endif //MEDIAINFO_CONFORMANCE
 
 //***************************************************************************
 // Constructor/Destructor
@@ -6418,7 +6472,7 @@ void File_Adm::Streams_Fill()
                 IsAdvSSE_Versions.push_back(strtoul(Profile_Item.Attributes[profile_profileVersion].c_str(), nullptr, 10));
                 IsAdvSSE_Levels.push_back(strtoul(Profile_Item.Attributes[profile_profileLevel].c_str(), nullptr, 10));
                 if (IsAdvSSE_Levels.back() > 2 && (Profile == "ITU-R BS.[ADM-NGA-EMISSION]-0")) {
-                    Profiles.back().AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + to_string(i) + ":profileLevel:profileLevel attribute value " + Profile_Item.Attributes[profile_profileLevel] + " is not permitted, max is 2", Source_AdvSSE_1);
+                    Profiles.back().AddError(Error, Adm_Message(conformance::Adm_profileLevel_MoreThan2, {{"name", CraftName(item_Infos[item_profile].Name)}, {"i", i}, {"actual", Profile_Item.Attributes[profile_profileLevel]}}), Source_AdvSSE_1);
                 }
             }
             else if (Profile_Item.Attributes[profile_profileName] == "Dolby E ADM and S-ADM Profile for emission"
@@ -6426,13 +6480,13 @@ void File_Adm::Streams_Fill()
                 ProfileInfo.Strings[0] = "Dolby E Emission";
                 IsDolbyE = true;
                 if (ProfileList_Item.Elements[profileList_profile][j] != "Dolby E ADM and S-ADM Profile for emission") {
-                    Profile_Item.AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + to_string(j) + ":profile element value \"" + ProfileList_Item.Elements[profileList_profile][i] + "\" is not permitted", Source_DolbyE_1_2);
+                    Profile_Item.AddError(Error, Adm_Message(conformance::Adm_profile_NotPermitted, {{"name", CraftName(item_Infos[item_profile].Name)}, {"j", j}, {"actual", ProfileList_Item.Elements[profileList_profile][i]}}), Source_DolbyE_1_2);
                 }
                 if (Profile_Item.Attributes[profile_profileName] != "Dolby E ADM and S-ADM Profile for emission") {
-                    Profile_Item.AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + to_string(j) + ":profileName attribute value \"" + Profile_Item.Attributes[profile_profileName] + "\" is not permitted", Source_DolbyE_1_2);
+                    Profile_Item.AddError(Error, Adm_Message(conformance::Adm_profileName_NotPermitted, {{"name", CraftName(item_Infos[item_profile].Name)}, {"j", j}, {"actual", Profile_Item.Attributes[profile_profileName]}}), Source_DolbyE_1_2);
                 }
                 if (!Profile_Item.Attributes[profile_profileLevel].empty() && Profile_Item.Attributes[profile_profileLevel] != "1") {
-                    Profile_Item.AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + to_string(j) + ":profileLevel:profileLevel attribute value " + Profile_Item.Attributes[profile_profileLevel] + " is not permitted, permitted value is 1", Source_DolbyE_1_2);
+                    Profile_Item.AddError(Error, Adm_Message(conformance::Adm_profileLevel_NotPermitted, {{"name", CraftName(item_Infos[item_profile].Name)}, {"j", j}, {"actual", Profile_Item.Attributes[profile_profileLevel]}}), Source_DolbyE_1_2);
                 }
             }
             else {
@@ -6470,14 +6524,14 @@ void File_Adm::Streams_Fill()
                 }
             }
             if (!Found) {
-                Profiles_audioFormatExtended[i].AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + to_string(i) + ":No profile \"" + Profile1.Attributes[profile_profileName] + "\" found in frameHeader", Source_DolbyE_1_2);
+                Profiles_audioFormatExtended[i].AddError(Error, Adm_Message(conformance::Adm_profile_MissingInFrameHeader, {{"name", CraftName(item_Infos[item_profile].Name)}, {"i", i}, {"profile", Profile1.Attributes[profile_profileName]}}), Source_DolbyE_1_2);
             }
         }
         auto Checked = Profiles_frameHeader_Checked.begin();
         for (size_t j = 0; j < Profiles_frameHeader.size(); j++) {
             auto Profile_frameHeader = Profiles_frameHeader[j];
             if (Checked == Profiles_frameHeader_Checked.end() || j != *Checked) {
-                Profile_frameHeader.AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + to_string(j) + ":No profile \"" + Profile_frameHeader.Attributes[profile_profileName] + "\" found in audioFormatExtended", Source_DolbyE_1_2);
+                Profile_frameHeader.AddError(Error, Adm_Message(conformance::Adm_profile_MissingInAudioFormatExtended, {{"name", CraftName(item_Infos[item_profile].Name)}, {"j", j}, {"profile", Profile_frameHeader.Attributes[profile_profileName]}}), Source_DolbyE_1_2);
             }
             else {
                 ++Checked;
@@ -6485,7 +6539,7 @@ void File_Adm::Streams_Fill()
         }
     }
     if (IsDolbyE && !IsAdvSSE) {
-        Profiles.back().AddError(Error, ':' + CraftName(item_Infos[item_profile].Name) + ":Dolby E Emission profile requires AdvSS Emission profile", Source_DolbyE_1_2);
+        Profiles.back().AddError(Error, Adm_Message(conformance::Adm_AdvSSEmissionProfile_Missing, {{"name", CraftName(item_Infos[item_profile].Name)}}), Source_DolbyE_1_2);
     }
     if (!profileInfos.empty())
     {
@@ -6663,6 +6717,7 @@ void File_Adm::Streams_Fill()
     #if MEDIAINFO_CONFORMANCE
     vector<string> Errors_Field[error_Type_Max];
     vector<string> Errors_Value[error_Type_Max];
+    vector<string> Errors_Data[error_Type_Max]; //Structured data of the messages
     MediaInfo_Config::adm_profile Config_AdmProfile=MediaInfoLib::Config.AdmProfile();
     bool WarningError=MediaInfoLib::Config.WarningError();
     #endif
@@ -6738,8 +6793,12 @@ void File_Adm::Streams_Fill()
             const string& audioProgrammeName = File_Adm_Private->Items[item_audioProgramme].Items[i].Attributes[audioProgramme_audioProgrammeName];
             if (Ztring().From_UTF8(audioProgrammeName).size() > 32)
             {
-                Errors_Field[Error].push_back("audioProgramme");
-                Errors_Value[Error].push_back("audioProgrammeName length is more than EBU Tech 3392 constraint");
+                Errors_Field[Error].push_back(conformance::Field_Get(conformance::Adm_audioProgrammeNameLength_MoreThanEbu3392, {}));
+                Errors_Value[Error].push_back(conformance::Text_Get(conformance::Adm_audioProgrammeNameLength_MoreThanEbu3392, {}));
+                conformance::data Message_Data;
+                Message_Data.Name = conformance::Message_Get(conformance::Adm_audioProgrammeNameLength_MoreThanEbu3392).Name;
+                Message_Data.Text = Errors_Value[Error].back();
+                Errors_Data[Error].push_back(conformance::Data_Serialize(Message_Data));
             }
         }
         #endif // MEDIAINFO_CONFORMANCE
@@ -7029,30 +7088,30 @@ void File_Adm::Streams_Fill()
                 };
                 Level--;
                 if (Level < sizeof(MaxCounts) / sizeof(MaxCounts[0]) && item_Type < sizeof(MaxCounts[0]) / sizeof(MaxCounts[0][0]) && MaxCounts[Level][item_Type] && Items.size() > MaxCounts[Level][item_Type]) {
-                    Items[MaxCounts[Level][item_Type]].AddError(Error, ':' + CraftName(item_Infos[item_Type].Name) + to_string(MaxCounts[Level][item_Type]) + ":GeneralCompliance:" + CraftName(item_Infos[item_Type].Name) + " element count " + to_string(Items.size()) + " is not permitted, max is " + to_string(MaxCounts[Level][item_Type]) + "", Source_AdvSSE_1);
+                    Items[MaxCounts[Level][item_Type]].AddError(Error, Adm_Message(conformance::Adm_ElementCount_MoreThanMaximum, {{"item_Type", MaxCounts[Level][item_Type]}, {"name", CraftName(item_Infos[item_Type].Name)}, {"actual", Items.size()}, {"expected", MaxCounts[Level][item_Type]}}), Source_AdvSSE_1);
                 }
             }
         }
         if (IsAtmos) {
             static const int8u MaxCounts[] = { 0, 0, 1, 123, 123, 123, 128, 128, 128, 128 };
             if (item_Type < sizeof(MaxCounts) / sizeof(MaxCounts[0]) && MaxCounts[item_Type] && Items.size() > MaxCounts[item_Type]) {
-                Items[MaxCounts[item_Type]].AddError(Error, ':' + CraftName(item_Infos[item_Type].Name) + to_string(MaxCounts[item_Type]) + ":GeneralCompliance:" + CraftName(item_Infos[item_Type].Name) + " element count " + to_string(Items.size()) + " is not permitted, max is " + to_string(MaxCounts[item_Type]) + "", Source_Atmos_1_0);
+                Items[MaxCounts[item_Type]].AddError(Error, Adm_Message(conformance::Adm_ElementCount_MoreThanMaximum, {{"item_Type", MaxCounts[item_Type]}, {"name", CraftName(item_Infos[item_Type].Name)}, {"actual", Items.size()}, {"expected", MaxCounts[item_Type]}}), Source_Atmos_1_0);
             }
         }
         if (IsDolbyE) {
             static const int8u MinCounts[] = { 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2 };
             if (item_Type < sizeof(MinCounts) / sizeof(MinCounts[0]) && MinCounts[item_Type] && !Items.empty() && Items.size() < MinCounts[item_Type]) {
-                Items[Items.size() - 1].AddError(Error, ':' + CraftName(item_Infos[item_Type].Name) + to_string(MinCounts[item_Type] - 1) + ":GeneralCompliance:" + CraftName(item_Infos[item_Type].Name) + " element count " + to_string(Items.size()) + " is not permitted, min is " + to_string(MinCounts[item_Type]) + "", Source_DolbyE_1_2);
+                Items[Items.size() - 1].AddError(Error, Adm_Message(conformance::Adm_ElementCount_LessThanMinimum, {{"item_Type", MinCounts[item_Type] - 1}, {"name", CraftName(item_Infos[item_Type].Name)}, {"actual", Items.size()}, {"expected", MinCounts[item_Type]}}), Source_DolbyE_1_2);
             }
             static const int8u MaxCounts[] = { 0, 0, 4, 4, 4, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 8 };
             if (item_Type < sizeof(MaxCounts) / sizeof(MaxCounts[0]) && MaxCounts[item_Type] && Items.size() > MaxCounts[item_Type]) {
-                Items[MaxCounts[item_Type]].AddError(Error, ':' + CraftName(item_Infos[item_Type].Name) + to_string(MaxCounts[item_Type]) + ":GeneralCompliance:" + CraftName(item_Infos[item_Type].Name) + " element count " + to_string(Items.size()) + " is not permitted, max is " + to_string(MaxCounts[item_Type]) + "", Source_DolbyE_1_2);
+                Items[MaxCounts[item_Type]].AddError(Error, Adm_Message(conformance::Adm_ElementCount_MoreThanMaximum, {{"item_Type", MaxCounts[item_Type]}, {"name", CraftName(item_Infos[item_Type].Name)}, {"actual", Items.size()}, {"expected", MaxCounts[item_Type]}}), Source_DolbyE_1_2);
             }
             if (item_Type == item_audioObject) {
                 for (auto& Object : Items) {
                     auto TrackUIDRef_Count = Object.Elements[audioObject_audioTrackUIDRef].size();
                     if (TrackUIDRef_Count <= 1 || TrackUIDRef_Count > 6) {
-                        Object.AddError(Error, ':' + CraftName(item_Infos[item_Type].Name) + to_string(MaxCounts[item_Type]) + ":GeneralCompliance:" + "audioTrackUIDRef" + " element count " + to_string(TrackUIDRef_Count) + " is not permitted, min is 2 and max is 6", Source_DolbyE_1_2);
+                        Object.AddError(Error, Adm_Message(conformance::Adm_audioTrackUIDRefCount_NotPermitted, {{"name", CraftName(item_Infos[item_Type].Name)}, {"item_Type", MaxCounts[item_Type]}, {"actual", TrackUIDRef_Count}}), Source_DolbyE_1_2);
                     }
                 }
             }
@@ -7060,7 +7119,7 @@ void File_Adm::Streams_Fill()
                 for (auto& transportTrackFormat : Items) {
                     auto TrackUIDRef_Count = transportTrackFormat.Elements[transportTrackFormat_audioTrack].size();
                     if (TrackUIDRef_Count <= 1 || TrackUIDRef_Count > 8) {
-                        transportTrackFormat.AddError(Error, ':' + CraftName(item_Infos[item_Type].Name) + to_string(MaxCounts[item_Type]) + ":GeneralCompliance:" + "audioTrack" + " element count " + to_string(TrackUIDRef_Count) + " is not permitted, min is 2 and max is 8", Source_DolbyE_1_2);
+                        transportTrackFormat.AddError(Error, Adm_Message(conformance::Adm_audioTrackCount_NotPermitted, {{"name", CraftName(item_Infos[item_Type].Name)}, {"item_Type", MaxCounts[item_Type]}, {"actual", TrackUIDRef_Count}}), Source_DolbyE_1_2);
                     }
                 }
             }
@@ -7073,7 +7132,7 @@ void File_Adm::Streams_Fill()
                         auto& Elements = Item.Elements[j];
                         if (!Elements.empty()) {
                             if (ChoiceCount) {
-                                Items[0].AddError(Error, ':' + CraftName(item_Infos[item_metadataSegment].Name) + to_string(i) + ":GeneralCompliance:" + "only one of encodeParameters, ac3Program, dolbyE is permitted", Source_DolbyE_1_2);
+                                Items[0].AddError(Error, Adm_Message(conformance::Adm_metadataSegmentKind_NotPermittedSeveral, {{"name", CraftName(item_Infos[item_metadataSegment].Name)}, {"i", i}}), Source_DolbyE_1_2);
                                 break;
                             }
                             ChoiceCount = true;
@@ -7081,11 +7140,11 @@ void File_Adm::Streams_Fill()
                             case metadataSegment_encodeParameters:
                             case metadataSegment_ac3Program:
                                 if (Elements.size() > 8) {
-                                    Items[0].AddError(Error, ':' + CraftName(item_Infos[item_metadataSegment].Name) + to_string(i) + ":GeneralCompliance:" + metadataSegment_Elements[j].Name + " element count " + to_string(Elements.size()) + " is not permitted, max is 8", Source_DolbyE_1_2);
+                                    Items[0].AddError(Error, Adm_Message(conformance::Adm_ElementCount_MoreThan8, {{"item", CraftName(item_Infos[item_metadataSegment].Name)}, {"i", i}, {"name", metadataSegment_Elements[j].Name}, {"actual", Elements.size()}}), Source_DolbyE_1_2);
                                 }
                             }
                             if (metadataSegmentPerElement[j]) {
-                                Items[0].AddError(Error, ':' + CraftName(item_Infos[item_metadataSegment].Name) + to_string(i) + ":GeneralCompliance:" + "only one metadataSegment element with encodeParameters, ac3Program, dolbyE is permitted", Source_DolbyE_1_2);
+                                Items[0].AddError(Error, Adm_Message(conformance::Adm_metadataSegment_NotPermittedSeveral, {{"name", CraftName(item_Infos[item_metadataSegment].Name)}, {"i", i}}), Source_DolbyE_1_2);
                             }
                             metadataSegmentPerElement[j] = true;
                         }
@@ -7095,7 +7154,7 @@ void File_Adm::Streams_Fill()
                     if (!metadataSegmentPerElement[j]) {
                         if (Items.empty())
                             Items.resize(1);
-                        Items[0].AddError(Error, ':' + CraftName(item_Infos[item_metadataSegment].Name) + ":GeneralCompliance:" + metadataSegment_Elements[j].Name + " is missing", Source_DolbyE_1_2);
+                        Items[0].AddError(Error, Adm_Message(conformance::Adm_Item_Missing, {{"item", CraftName(item_Infos[item_metadataSegment].Name)}, {"name", metadataSegment_Elements[j].Name}}), Source_DolbyE_1_2);
                     }
                 }
             }
@@ -7107,10 +7166,10 @@ void File_Adm::Streams_Fill()
             if (item_Infos[item_Type].ID_Pos != (int8u)-1) {
                 const auto& ID = Item.Attributes[item_Infos[item_Type].ID_Pos];
                 if (PreviousIDs.find(ID) != PreviousIDs.end()) {
-                    Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[item_Type].Name, true) + "ID:" + CraftName(item_Infos[item_Type].Name, true) + "ID value \"" + ID + "\" shall be unique");
+                    Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_ID_Duplicate, {{"name", CraftName(item_Infos[item_Type].Name, true)}, {"actual", ID}}));
                 }
                 else if (PreviousIDs_Forbidden.find(ID) != PreviousIDs_Forbidden.end()) {
-                    Item.AddError(Error, item_Type, i, ':' + CraftName(item_Infos[item_Type].Name, true) + "ID:" + CraftName(item_Infos[item_Type].Name, true) + "ID value \"" + ID + "\" is not permitted due to the ID of the DirectSpeakers typed object", Source_Atmos_1_0);
+                    Item.AddError(Error, item_Type, i, Adm_Message(conformance::Adm_ID_NotPermittedForDirectSpeakers, {{"name", CraftName(item_Infos[item_Type].Name, true)}, {"actual", ID}}), Source_Atmos_1_0);
                 }
                 else {
                     PreviousIDs.insert(ID);
@@ -7150,7 +7209,7 @@ void File_Adm::Streams_Fill()
         for (auto Version : IsAdvSSE_Versions) {
             if (Version == 1) {
                 if (File_Adm_Private->Version != 3 && !File_Adm_Private->Items[item_audioFormatExtended].Items.empty()) {
-                    Root[0].AddError(Error, ":GeneralCompliance:ADM version " + to_string(File_Adm_Private->Version) + " is not permitted, permitted version is 3", Source_AdvSSE_1);
+                    Root[0].AddError(Error, Adm_Message(conformance::Adm_Version_NotPermitted, {{"actual", File_Adm_Private->Version}}), Source_AdvSSE_1);
                 }
             }
         }
@@ -7194,7 +7253,7 @@ void File_Adm::Streams_Fill()
                             }
                             if (Programme.Elements[j].size() > MaxCount) {
                                 const auto ElementName = item_Infos[item_audioProgramme].Element_Infos[j].Name;
-                                Programme.AddError(Error, ":audioProgramme" + to_string(i) + ':' + ElementName + ':' + ElementName + " element count " + to_string(Programme.Elements[j].size()) + " is not permitted, max is " + to_string(MaxCount), Source_AdvSSE_1);
+                                Programme.AddError(Error, Adm_Message(conformance::Adm_audioProgrammeElementCount_MoreThanMaximum, {{"i", i}, {"name", ElementName}, {"actual", Programme.Elements[j].size()}, {"expected", MaxCount}}), Source_AdvSSE_1);
                             }
                         }
                     }
@@ -7203,10 +7262,10 @@ void File_Adm::Streams_Fill()
         }
         if (IsAtmos) {
             if (Container_Duration && duration && (duration <= Container_Duration * 0.998 || duration >= Container_Duration * 1.002)) {
-                Programme.AddError(Error, ":audioProgramme" + to_string(i) + ":end:start attribute value \"" + start + "\" and end attribute value \"" + end + "\" don't match content duration " + Ztring::ToZtring(Container_Duration, 3).To_UTF8() + " s", Source_Atmos_1_0);
+                Programme.AddError(Error, Adm_Message(conformance::Adm_audioProgrammeDuration_MismatchContent, {{"i", i}, {"start", start}, {"end", end}, {"container_duration", Ztring::ToZtring(Container_Duration, 3).To_UTF8()}}), Source_Atmos_1_0);
             }
             if (Programme.Elements[audioProgramme_audioContentIDRef].size() > 123) {
-                Programme.AddError(Error, ":audioProgramme" + to_string(i) + ":audioContentIDRef:audioContentIDRef element count " + to_string(Programme.Elements[audioProgramme_audioContentIDRef].size()) + " is not permitted, max is 123", Source_Atmos_1_0);
+                Programme.AddError(Error, Adm_Message(conformance::Adm_audioContentIDRefCount_MoreThan123, {{"i", i}, {"actual", Programme.Elements[audioProgramme_audioContentIDRef].size()}}), Source_Atmos_1_0);
             }
         }
         if (IsDolbyE) {
@@ -7215,7 +7274,7 @@ void File_Adm::Streams_Fill()
                 auto audioProgrammeID_wwww = audioProgrammeID.substr(4, 4);
                 auto Value = strtoul(audioProgrammeID_wwww.c_str(), nullptr, 16);
                 if (Value != 0x1001 + i) {
-                    Programme.AddError(Error, ":audioProgramme" + to_string(i) + ":audioProgrammeID:audioProgrammeID attribute wwww value \"" + audioProgrammeID_wwww + "\" is not permitted, permitted value is \"" + Ztring().From_CC2(0x1001 + i).To_UTF8() + '\"', Source_DolbyE_1_2);
+                    Programme.AddError(Error, Adm_Message(conformance::Adm_audioProgrammeIDwwww_NotPermitted, {{"i", i}, {"actual", audioProgrammeID_wwww}, {"expected", Ztring().From_CC2(0x1001 + i).To_UTF8()}}), Source_DolbyE_1_2);
                 }
             }
         }
@@ -7232,11 +7291,11 @@ void File_Adm::Streams_Fill()
             auto dialogues_Copy = dialogues;
             if (IsAtmos) {
                 if (dialogue != "2") {
-                    Content.AddError(Error, ":audioObject" + to_string(i) + ":dialogue" + to_string(j) + ":dialogue element value \"" + dialogue + "\" is not permitted, permitted value is \"2\"", Source_Atmos_1_0);
+                    Content.AddError(Error, Adm_Message(conformance::Adm_dialogue_NotPermitted, {{"i", i}, {"j", j}, {"actual", dialogue}}), Source_Atmos_1_0);
                 }
                 auto kind = File_Adm_Private->Items[item_dialogue].Items[dialogue_Pos].Attributes[dialogue_mixedContentKind];
                 if (kind != "0") {
-                    Content.AddError(Error, ":audioObject" + to_string(i) + ":dialogue" + to_string(j) + ":dialogue@mixedContentKind attribute value \"" + kind + "\" is not permitted, permitted value is \"0\"", Source_Atmos_1_0);
+                    Content.AddError(Error, Adm_Message(conformance::Adm_mixedContentKind_NotPermitted, {{"i", i}, {"j", j}, {"actual", kind}}), Source_Atmos_1_0);
                 }
             }
             dialogue_Pos++;
@@ -7258,7 +7317,7 @@ void File_Adm::Streams_Fill()
                             }
                             if (Content.Elements[j].size() > MaxCount) {
                                 const auto ElementName = item_Infos[item_audioContent].Element_Infos[j].Name;
-                                Content.AddError(Error, ":audioContent" + to_string(i) + ':' + ElementName + ':' + ElementName + " element count " + to_string(Content.Elements[j].size()) + " is not permitted, max is " + to_string(MaxCount), Source_AdvSSE_1);
+                                Content.AddError(Error, Adm_Message(conformance::Adm_audioContentElementCount_MoreThanMaximum, {{"i", i}, {"name", ElementName}, {"actual", Content.Elements[j].size()}, {"expected", MaxCount}}), Source_AdvSSE_1);
                             }
                         }
                     }
@@ -7270,8 +7329,8 @@ void File_Adm::Streams_Fill()
             if (!CheckErrors_ID(File_Adm_Private, Item_ID, item_Infos[item_audioContent])) {
                 auto Value = strtoul(Item_ID.c_str() + 4, nullptr, 16);
                 if (Value != 0x1001 + i) {
-                    Content.AddError(Error, ":audioContent" + to_string(i) + ":audioContentID:audioContentID attribute wwww value \"" + Item_ID.substr(4) + "\" is not permitted, permitted value is \"" + Ztring().From_CC2(0x1001 + i).To_UTF8() + "\"", Source_Atmos_1_0);
-                    Content.AddError(Error, ":audioContent" + to_string(i) + ":audioContentID:audioContentID attribute wwww value \"" + Item_ID.substr(4) + "\" is not permitted, permitted value is \"" + Ztring().From_CC2(0x1001 + i).To_UTF8() + "\"", Source_DolbyE_1_2);
+                    Content.AddError(Error, Adm_Message(conformance::Adm_audioContentIDwwww_NotPermitted, {{"i", i}, {"actual", Item_ID.substr(4)}, {"expected", Ztring().From_CC2(0x1001 + i).To_UTF8()}}), Source_Atmos_1_0);
+                    Content.AddError(Error, Adm_Message(conformance::Adm_audioContentIDwwww_NotPermitted, {{"i", i}, {"actual", Item_ID.substr(4)}, {"expected", Ztring().From_CC2(0x1001 + i).To_UTF8()}}), Source_DolbyE_1_2);
                 }
             }
         }
@@ -7288,7 +7347,7 @@ void File_Adm::Streams_Fill()
             if (!ChannelFormatIDRefs.empty()) {
                 auto ChannelFormatIDRefs_Size = ChannelFormatIDRefs.size();
                 if ((Type == Type_DirectSpeakers && ChannelFormatIDRefs_Size > 10) || (Type == Type_Objects && ChannelFormatIDRefs_Size > 1)) {
-                    Object.AddError(Error, ":audioObject" + to_string(i) + ":audioTrackUIDRef:audioTrackUIDRef element count " + to_string(ChannelFormatIDRefs_Size) + " is not permitted, max is " + to_string(Type == Type_DirectSpeakers ? 10 : 1) + "", Source_Atmos_1_0);
+                    Object.AddError(Error, Adm_Message(conformance::Adm_audioTrackUIDRefCount_MoreThanMaximum, {{"i", i}, {"actual", ChannelFormatIDRefs_Size}, {"expected", Type == Type_DirectSpeakers ? 10 : 1}}), Source_Atmos_1_0);
                 }
             }
         }
@@ -7296,7 +7355,7 @@ void File_Adm::Streams_Fill()
         const auto& startTime = Object.Attributes[audioObject_startTime];
         const auto RealStart = start.empty() ? &startTime : &start;
         if (!start.empty() && !startTime.empty() && start != startTime) {
-            Object.AddError(Warning, ":audioObject" + to_string(i) + ":start:startTime attribute should be same as start attribute");
+            Object.AddError(Warning, Adm_Message(conformance::Adm_startTime_MismatchStart, {{"i", i}}));
         }
         static const size_t MaxCount_Size = audioObject_alternativeValueSet + 1;
         for (auto Level : IsAdvSSE_Levels) {
@@ -7315,7 +7374,7 @@ void File_Adm::Streams_Fill()
                             }
                             if (Object.Elements[j].size() > MaxCount) {
                                 const auto ElementName = item_Infos[item_audioObject].Element_Infos[j].Name;
-                                Object.AddError(Error, ":audioObject" + to_string(i) + ':' + ElementName + ':' + ElementName + " element count " + to_string(Object.Elements[j].size()) + " is not permitted, max is " + to_string(MaxCount), Source_AdvSSE_1);
+                                Object.AddError(Error, Adm_Message(conformance::Adm_audioObjectElementCount_MoreThanMaximum, {{"i", i}, {"name", ElementName}, {"actual", Object.Elements[j].size()}, {"expected", MaxCount}}), Source_AdvSSE_1);
                             }
                         }
                     }
@@ -7327,21 +7386,21 @@ void File_Adm::Streams_Fill()
                 const auto& alternativeValueSets = Object.Elements[audioObject_alternativeValueSet];
                 const auto& positionOffsets = Object.Elements[audioObject_positionOffset];
                 for (size_t j = 0; j < positionOffsets.size(); j++) {
-                    Object.AddError(Error, ":audioObject" + to_string(i) + ":positionOffset:positionOffset element is present but this is not a top-level audioObject", Source_AdvSSE_1);
+                    Object.AddError(Error, Adm_Message(conformance::Adm_positionOffset_NotPermittedNotTopLevel, {{"i", i}}), Source_AdvSSE_1);
                 }
                 for (size_t j = 0; j < alternativeValueSets.size(); j++) {
-                    Object.AddError(Error, ":audioObject" + to_string(i) + ":alternativeValueSet:alternativeValueSet element is present but this is not a top-level audioObject", Source_AdvSSE_1);
+                    Object.AddError(Error, Adm_Message(conformance::Adm_alternativeValueSet_NotPermittedNotTopLevel, {{"i", i}}), Source_AdvSSE_1);
                 }
             }
         }
         if (IsAtmos) {
             if (!Object.Attributes_Present[audioObject_start] && !Object.Attributes_Present[audioObject_startTime]) {
-                Object.AddError(Error, ":audioObject" + to_string(i) + ":start:start attribute is not present", Source_Atmos_1_0);
+                Object.AddError(Error, Adm_Message(conformance::Adm_audioObjectStart_Missing, {{"i", i}}), Source_Atmos_1_0);
             }
             if (RealStart->empty()) {
             }
             else if (*RealStart != "00:00:00.00000") {
-                Object.AddError(Error, ":audioObject" + to_string(i) + ":start:start attribute value \"" + *RealStart + "\" is not permitted, permitted value is \"00:00:00.00000\"", Source_Atmos_1_0);
+                Object.AddError(Error, Adm_Message(conformance::Adm_audioObjectStart_NotPermitted, {{"i", i}, {"actual", *RealStart}}), Source_Atmos_1_0);
             }
             if (Programme0_duration && Object.Attributes_Present[audioObject_duration]) {
                 const auto& duration = Object.Attributes[audioObject_duration];
@@ -7349,23 +7408,23 @@ void File_Adm::Streams_Fill()
                 if (duration_TC.IsValid()) {
                     const auto& Object_duration = duration_TC.ToSeconds();
                     if (Object_duration && (Object_duration <= Programme0_duration * 0.998 || Object_duration >= Programme0_duration * 1.002)) {
-                        Object.AddError(Error, ":audioObject" + to_string(i) + ":duration:duration attribute value \"" + duration + "\" doesn't match programme start attribute value \"" + Programmes[0].Attributes[audioProgramme_start] + "\" and end attribute value \"" + Programmes[0].Attributes[audioProgramme_end] + "\"", Source_Atmos_1_0);
+                        Object.AddError(Error, Adm_Message(conformance::Adm_audioObjectDuration_MismatchProgramme, {{"i", i}, {"duration", duration}, {"audioProgramme_start", Programmes[0].Attributes[audioProgramme_start]}, {"audioProgramme_end", Programmes[0].Attributes[audioProgramme_end]}}), Source_Atmos_1_0);
                     }
                 }
             }
             const auto& interact = Object.Attributes[audioObject_interact];
             if (!interact.empty() && interact != "0") {
-                Object.AddError(Error, ":audioObject" + to_string(i) + ":interact:interact attribute value \"" + interact + "\" is not permitted, permitted value is \"0\"", Source_Atmos_1_0);
+                Object.AddError(Error, Adm_Message(conformance::Adm_interact_NotPermitted, {{"i", i}, {"actual", interact}}), Source_Atmos_1_0);
             }
             const auto& disableDucking = Object.Attributes[audioObject_disableDucking];
             if (!disableDucking.empty() && disableDucking != "1") {
-                Object.AddError(Error, ":audioObject" + to_string(i) + ":disableDucking:disableDucking attribute value \"" + disableDucking + "\" is not permitted, permitted value is \"1\"", Source_Atmos_1_0);
+                Object.AddError(Error, Adm_Message(conformance::Adm_disableDucking_NotPermitted, {{"i", i}, {"actual", disableDucking}}), Source_Atmos_1_0);
             }
         }
         if (IsDolbyE) {
             const auto& interact = Object.Attributes[audioObject_interact];
             if (!interact.empty() && interact != "0") {
-                Object.AddError(Error, ":audioObject" + to_string(i) + ":interact:interact attribute value \"" + interact + "\" is not permitted, permitted value is \"0\"", Source_DolbyE_1_2);
+                Object.AddError(Error, Adm_Message(conformance::Adm_interact_NotPermitted, {{"i", i}, {"actual", interact}}), Source_DolbyE_1_2);
             }
         }
         for (const auto& audioPackFormatIDRef : Object.Elements[audioObject_audioPackFormatIDRef]) {
@@ -7387,13 +7446,13 @@ void File_Adm::Streams_Fill()
             if (!CheckErrors_ID(File_Adm_Private, Item_ID, item_Infos[item_audioObject])) {
                 auto Value = strtoul(Item_ID.c_str() + 3, nullptr, 16);
                 if (Value != 0x1001 + i) {
-                    Object.AddError(Error, ":audioObject" + to_string(i) + ":audioObjectID:audioObjectID attribute wwww value \"" + Item_ID.substr(3) + "\" is not permitted, permitted value is \"" + Ztring().From_CC2(0x1001 + i).To_UTF8() + "\"", Source_DolbyE_1_2);
+                    Object.AddError(Error, Adm_Message(conformance::Adm_audioObjectIDwwww_NotPermitted, {{"i", i}, {"actual", Item_ID.substr(3)}, {"expected", Ztring().From_CC2(0x1001 + i).To_UTF8()}}), Source_DolbyE_1_2);
                 }
             }
         }
     }
     if (Object_Objects_Count > 118) {
-        Objects[0].AddError(Error, ":audioObject:audioObject pointing to audioChannelFormat@typeDefinition==\"Objects\" element count " + to_string(Object_Objects_Count) + " is not permitted, max is 118", Source_Atmos_1_0);
+        Objects[0].AddError(Error, Adm_Message(conformance::Adm_ObjectsAudioObjectCount_MoreThan118, {{"actual", Object_Objects_Count}}), Source_Atmos_1_0);
     }
 
     // Errors - audioPackFormat
@@ -7406,7 +7465,7 @@ void File_Adm::Streams_Fill()
             if (!ChannelFormatIDRefs.empty()) {
                 auto ChannelFormatIDRefs_Size = ChannelFormatIDRefs.size();
                 if ((Type == Type_DirectSpeakers && ChannelFormatIDRefs_Size > 10) || (Type == Type_Objects && ChannelFormatIDRefs_Size > 1)) {
-                    PackFormat.AddError(Error, ":audioPackFormat" + to_string(i) + ":audioChannelFormatIDRef:audioChannelFormatIDRef subelement count " + to_string(ChannelFormatIDRefs_Size) + " is not permitted, max is " + to_string(Type == Type_DirectSpeakers ? 10 : 1) + "", Source_Atmos_1_0);
+                    PackFormat.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatIDRefCount_MoreThanMaximum, {{"i", i}, {"actual", ChannelFormatIDRefs_Size}, {"expected", Type == Type_DirectSpeakers ? 10 : 1}}), Source_Atmos_1_0);
                 }
                 if (Type == Type_DirectSpeakers) {
                     vector<atmos_audioChannelFormatName> List;
@@ -7429,7 +7488,7 @@ void File_Adm::Streams_Fill()
                             }
                             List_Strings_Flat += Item;
                         }
-                        PackFormat.AddError(Error, ":audioPackFormat" + to_string(i) + ":audioChannelFormatIDRef:audioChannelFormatIDRef order \"" + List_Strings_Flat + "\" is not permitted", Source_Atmos_1_0);
+                        PackFormat.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatIDRefOrder_NotPermitted, {{"i", i}, {"actual", List_Strings_Flat}}), Source_Atmos_1_0);
                     }
                 }
             }
@@ -7459,7 +7518,7 @@ void File_Adm::Streams_Fill()
                             for (size_t l = 0; l < coefficients.List.size(); l++) {
                                 const auto& coefficient = coefficients.List[l];
                                 if (audioChannelFormatIDRefs.find(coefficient) == audioChannelFormatIDRefs.end()) {
-                                    ChannelFormat.AddError(Error, ":audioChannelFormat" + to_string(j) + ":audioBlockFormat" + to_string(coefficients.BlockPos) + ":matrix" + to_string(0) + ":coefficient" + to_string(l) + ":coefficient value \"" + coefficient + "\" is not in corresponding inputPackFormatIDRef \"" + inputPackFormatIDRef + '\"', Source_AdvSSE_1);
+                                    ChannelFormat.AddError(Error, Adm_Message(conformance::Adm_coefficient_MissingInInputPackFormat, {{"j", j}, {"block_pos", coefficients.BlockPos}, {"x", 0}, {"l", l}, {"coefficient", coefficient}, {"inputPackFormatIDRef", inputPackFormatIDRef}}), Source_AdvSSE_1);
                                 }
                             }
                         }
@@ -7499,11 +7558,11 @@ void File_Adm::Streams_Fill()
                                 const auto& outputChannelFormatIDRef = outputChannelFormatIDRefs.List[l];
                                 if (audioChannelFormatIDRefs.find(outputChannelFormatIDRef) == audioChannelFormatIDRefs.end()) {
                                     if (CommonDefIsInvalid) {
-                                        ChannelFormat.AddError(Information, ":audioChannelFormat" + to_string(j) + ":audioBlockFormat" + to_string(outputChannelFormatIDRefs.BlockPos) + ":outputChannelFormatIDRef" + to_string(0) + ":outputChannelFormatIDRef value \"" + outputPackFormatIDRef.substr(7) + "\" is not allocated in ITU-R BS.2094-1");
+                                        ChannelFormat.AddError(Information, Adm_Message(conformance::Adm_outputChannelFormatIDRef_NotExpected, {{"j", j}, {"block_pos", outputChannelFormatIDRefs.BlockPos}, {"x", 0}, {"actual", outputPackFormatIDRef.substr(7)}}));
                                         break;
                                     }
                                     else {
-                                        ChannelFormat.AddError(Error, ":audioChannelFormat" + to_string(j) + ":audioBlockFormat" + to_string(outputChannelFormatIDRefs.BlockPos) + ":matrix" + to_string(0) + ":outputChannelFormatIDRef" + to_string(l) + ":Value \"" + outputChannelFormatIDRef + "\" is not in corresponding outputPackFormatIDRef \"" + outputPackFormatIDRef + '\"', Source_AdvSSE_1);
+                                        ChannelFormat.AddError(Error, Adm_Message(conformance::Adm_outputChannelFormatIDRef_MissingInOutputPackFormat, {{"j", j}, {"block_pos", outputChannelFormatIDRefs.BlockPos}, {"x", 0}, {"l", l}, {"outputChannelFormatIDRef", outputChannelFormatIDRef}, {"outputPackFormatIDRef", outputPackFormatIDRef}}), Source_AdvSSE_1);
                                     }
                                 }
                             }
@@ -7530,7 +7589,7 @@ void File_Adm::Streams_Fill()
                     break;
                 }
                 if (!inputPackFormatIDRefs.empty() && !outputPackFormatIDRefs.empty() && inputPackFormatIDRefs[0] == outputPackFormatIDRefs[0]) {
-                    PackFormat.AddError(Error, ":audioPackFormat" + to_string(i) + ":outputPackFormatIDRef0:outputPackFormatIDRef is same as inputPackFormatIDRef", Source_AdvSSE_1);
+                    PackFormat.AddError(Error, Adm_Message(conformance::Adm_outputPackFormatIDRef_DuplicateOfInput, {{"i", i}}), Source_AdvSSE_1);
                 }
                 if (!inputPackFormatIDRefs.empty() && !CheckErrors_ID(File_Adm_Private, inputPackFormatIDRefs[0], item_Infos[item_audioPackFormat])) {
                     auto Value = strtoul(inputPackFormatIDRefs[0].c_str() + 3, nullptr, 16);
@@ -7551,7 +7610,7 @@ void File_Adm::Streams_Fill()
                             }
                         }
                         if (IsNotValid) {
-                            PackFormat.AddError(Error, ":audioPackFormat" + to_string(i) + ":inputPackFormatIDRef0:inputPackFormatIDRef " + inputPackFormatIDRefs[0] + " is not permitted", Source_AdvSSE_1);
+                            PackFormat.AddError(Error, Adm_Message(conformance::Adm_inputPackFormatIDRef_NotPermitted, {{"i", i}, {"inputPackFormatIDRefs", inputPackFormatIDRefs[0]}}), Source_AdvSSE_1);
                         }
                     }
                 }
@@ -7574,7 +7633,7 @@ void File_Adm::Streams_Fill()
                             }
                         }
                         if (IsNotValid) {
-                            PackFormat.AddError(Error, ":audioPackFormat" + to_string(i) + ":outputPackFormatIDRef0:outputPackFormatIDRef " + outputPackFormatIDRefs[0] + " is not permitted", Source_AdvSSE_1);
+                            PackFormat.AddError(Error, Adm_Message(conformance::Adm_outputPackFormatIDRef_NotPermitted, {{"i", i}, {"outputPackFormatIDRefs", outputPackFormatIDRefs[0]}}), Source_AdvSSE_1);
                         }
                     }
                 }
@@ -7605,16 +7664,16 @@ void File_Adm::Streams_Fill()
                     }
                 }
                 if (!Found) {
-                    PackFormat.AddError(Error, ":audioPackFormat" + to_string(i) + ":GeneralCompliance:this audioPackFormat is not referenced by any audioObject", Source_AdvSSE_1);
+                    PackFormat.AddError(Error, Adm_Message(conformance::Adm_audioPackFormat_NotReferenced, {{"i", i}}), Source_AdvSSE_1);
                 }
             }
             if (PackFormat.Elements[audioPackFormat_audioChannelFormatIDRef].size() > 24) {
-                PackFormat.AddError(Error, ":audioPackFormat:audioChannelFormatIDRef24:audioChannelFormatIDRef element count " + to_string(PackFormat.Elements[audioPackFormat_audioChannelFormatIDRef].size()) + " is not permitted, max is 24", Source_AdvSSE_1);
+                PackFormat.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatIDRefCount_MoreThan24, {{"actual", PackFormat.Elements[audioPackFormat_audioChannelFormatIDRef].size()}}), Source_AdvSSE_1);
             }
         }
     }
     if (PackFormat_Objects_Count > 118) {
-        PackFormats[0].AddError(Error, ":audioPackFormat0:GeneralCompliance:audioPackFormat@typeDefinition==\"Objects\" element count " + to_string(PackFormat_Objects_Count) + " is not permitted, max is 118", Source_Atmos_1_0);
+        PackFormats[0].AddError(Error, Adm_Message(conformance::Adm_ObjectsAudioPackFormatCount_MoreThan118, {{"actual", PackFormat_Objects_Count}}), Source_Atmos_1_0);
     }
 
     // Errors - audioChannelFormat
@@ -7653,7 +7712,7 @@ void File_Adm::Streams_Fill()
                 }
             }
             if (Found != 1) {
-                ChannelFormat.AddError(Error, ":audioChannelFormat" + to_string(i) + ":GeneralCompliance:this audioChannelFormat is referenced by " + to_string(Found) + " audioPackFormat", Source_AdvSSE_1);
+                ChannelFormat.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormat_NotPermittedReferenceCount, {{"i", i}, {"count", Found}}), Source_AdvSSE_1);
             }
         }
 
@@ -7664,7 +7723,7 @@ void File_Adm::Streams_Fill()
                     const auto& ChannelFormatName = ChannelFormat.Attributes[audioChannelFormat_audioChannelFormatName];
                     ChannelAssignment = Atmos_audioChannelFormat_Pos(ChannelFormatName);
                     if (ChannelAssignment == (atmos_audioChannelFormatName)-1) {
-                        ChannelFormat.AddError(Error, ":audioChannelFormat" + to_string(i) + ":audioChannelFormatName:audioChannelFormatName \"" + ChannelFormatName + "\" is not permitted", Source_Atmos_1_0);
+                        ChannelFormat.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatName_NotPermitted, {{"i", i}, {"actual", ChannelFormatName}}), Source_Atmos_1_0);
                     }
                 }
                 auto BlockFormats_Size = ChannelFormat.Elements[audioChannelFormat_audioBlockFormat].size();
@@ -7672,12 +7731,12 @@ void File_Adm::Streams_Fill()
                     BlockFormats_Size += File_Adm_Private->ChannelFormat_BlockFormat_ReduceCount[i];
                 }
                 if (BlockFormats_Size != 1) {
-                    ChannelFormat.AddError(Error, ":audioChannelFormat" + to_string(i) + ":audioBlockFormat1:GeneralCompliance:audioBlockFormat subelement count " + to_string(BlockFormats_Size) + " is not permitted, max is 1", Source_Atmos_1_0);
+                    ChannelFormat.AddError(Error, Adm_Message(conformance::Adm_audioBlockFormatCount_MoreThan1, {{"i", i}, {"actual", BlockFormats_Size}}), Source_Atmos_1_0);
                 }
             }
 
             if (!ChannelFormat.Elements[audioChannelFormat_frequency].empty()) {
-                ChannelFormat.AddError(Warning, ":audioChannelFormat" + to_string(i) + ":frequency:frequency element should not be present", Source_Atmos_1_0);
+                ChannelFormat.AddError(Warning, Adm_Message(conformance::Adm_frequency_NotRecommended, {{"i", i}}), Source_Atmos_1_0);
             }
         }
     }
@@ -7701,10 +7760,10 @@ void File_Adm::Streams_Fill()
             char* End;
             auto Value = strtof(Element.c_str(), &End);
             if ((size_t)(End - Element.c_str()) < Element.size()) {
-                TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":sampleRate:sampleRate attribute value \"" + Element + "\" is malformed");
+                TrackUID.AddError(Error, Adm_Message(conformance::Adm_sampleRate_Malformed, {{"i", i}, {"actual", Element}}));
             }
             else if (IsAtmos && Value != 48000 && Value != 96000) {
-                TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":sampleRate:sampleRate attribute value \"" + Element + "\" is not permitted", Source_Atmos_1_0);
+                TrackUID.AddError(Error, Adm_Message(conformance::Adm_sampleRate_NotPermitted, {{"i", i}, {"actual", Element}}), Source_Atmos_1_0);
             }
         }
 
@@ -7713,10 +7772,10 @@ void File_Adm::Streams_Fill()
             char* End;
             auto Value = strtof(Element.c_str(), &End);
             if ((size_t)(End - Element.c_str()) < Element.size()) {
-                TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":bitDepth:bitDepth attribute value \"" + Element + "\" is malformed");
+                TrackUID.AddError(Error, Adm_Message(conformance::Adm_bitDepth_Malformed, {{"i", i}, {"actual", Element}}));
             }
             else if (IsAtmos && Value != 24) {
-                TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":bitDepth:bitDepth attribute value \"" + Element + "\" is not permitted", Source_Atmos_1_1);
+                TrackUID.AddError(Error, Adm_Message(conformance::Adm_bitDepth_NotPermitted, {{"i", i}, {"actual", Element}}), Source_Atmos_1_1);
             }
         }
 
@@ -7728,7 +7787,7 @@ void File_Adm::Streams_Fill()
                 //TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":GeneralCompliance:this audioTrackUID is not used", Source_AdvSSE_1);
             }
             else if (Found->second > 1) {
-                TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":GeneralCompliance:this audioTrackUID is used " + to_string(Found->second) + " times", Source_AdvSSE_1);
+                TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioTrackUID_NotPermittedUseCount, {{"i", i}, {"count", Found->second}}), Source_AdvSSE_1);
             }
             if (!IsNotUsed) {
                 const auto& audioChannelFormatIDRefs = TrackUID.Elements[audioTrackUID_audioChannelFormatIDRef];
@@ -7742,13 +7801,13 @@ void File_Adm::Streams_Fill()
                         case 3:
                             break;
                         default:
-                            TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":audioChannelFormatIDRef:audioChannelFormatIDRef attribute xxxx value \"" + audioChannelFormatIDRef_xxxx + "\" is not permitted, permitted values are \"0001\" or \"0003\"", Source_AdvSSE_1);
+                            TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatIDRefxxxx_NotPermittedEither, {{"i", i}, {"actual", audioChannelFormatIDRef_xxxx}}), Source_AdvSSE_1);
                         }
                         if (audioChannelFormatIDRef[7] == '0') {
                             auto audioChannelFormatIDRef_yyyy = audioChannelFormatIDRef.substr(7, 4);
                             Value = strtoul(audioChannelFormatIDRef_yyyy.c_str(), nullptr, 16);
                             if (Value > 0x0028) {
-                                TrackUID.AddError(Information, ":audioTrackUID" + to_string(i) + ":audioChannelFormatIDRef:audioChannelFormatIDRef attribute yyyy value \"" + audioChannelFormatIDRef_yyyy + "\" is not allocated in ITU-R BS.2094-1");
+                                TrackUID.AddError(Information, Adm_Message(conformance::Adm_audioChannelFormatIDRefyyyy_NotExpected, {{"i", i}, {"actual", audioChannelFormatIDRef_yyyy}}));
                             }
                         }
                     }
@@ -7764,7 +7823,7 @@ void File_Adm::Streams_Fill()
                         case 3:
                             break;
                         default:
-                            TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":audioPackFormatIDRef:audioPackFormatIDRef attribute xxxx value \"" + audioPackFormatIDRef_xxxx + "\" is not permitted, permitted values are \"0001\" or \"0003\"", Source_AdvSSE_1);
+                            TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioPackFormatIDRefxxxx_NotPermitted, {{"i", i}, {"actual", audioPackFormatIDRef_xxxx}}), Source_AdvSSE_1);
                         }
                     }
                 }
@@ -7777,7 +7836,7 @@ void File_Adm::Streams_Fill()
                 char* End;
                 auto Value = strtoul(Item_ID.c_str() + 8, &End, 16);
                 if (Value != 0x00000001 + i) {
-                    TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":UID:UID attribute vvvvvvvv value \"" + Item_ID.substr(4) + "\" is not permitted, permitted value is \"0000" + Ztring().From_CC2(0x0001 + i).To_UTF8() + "\"", Source_Atmos_1_0);
+                    TrackUID.AddError(Error, Adm_Message(conformance::Adm_UIDvvvvvvvv_NotPermitted, {{"i", i}, {"actual", Item_ID.substr(4)}, {"expected", Ztring().From_CC2(0x0001 + i).To_UTF8()}}), Source_Atmos_1_0);
                 }
             }
         }
@@ -7787,7 +7846,7 @@ void File_Adm::Streams_Fill()
             if (!CheckErrors_ID(File_Adm_Private, Item_ID, item_Infos[item_audioTrackUID])) {
                 auto Value = strtoul(Item_ID.c_str() + 4, nullptr, 16);
                 if (Value != 0x00000001 + i) {
-                    TrackUID.AddError(Error, ":TrackUID" + to_string(i) + ":UID:UID attribute vvvvvvvv value \"" + Item_ID.substr(4) + "\" is not permitted, permitted value is \"0000" + Ztring().From_CC2(0x0001 + i).To_UTF8() + '\"', Source_DolbyE_1_2);
+                    TrackUID.AddError(Error, Adm_Message(conformance::Adm_UIDvvvvvvvv_NotPermittedDolbyE, {{"i", i}, {"actual", Item_ID.substr(4)}, {"expected", Ztring().From_CC2(0x0001 + i).To_UTF8()}}), Source_DolbyE_1_2);
                 }
             }
             const auto& audioChannelFormatIDRefs = TrackUID.Elements[audioTrackUID_audioChannelFormatIDRef];
@@ -7804,12 +7863,12 @@ void File_Adm::Streams_Fill()
                             Value_yyyy -= 0x0800;
                         }
                         if (!Value_yyyy || Value_yyyy > 6) {
-                            TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":audioChannelFormatIDRef:audioChannelFormatIDRef attribute yyyy value \"" + audioChannelFormatIDRef_yyyy + "\" is not permitted, permitted value is \"" + Ztring().From_CC2(0x0001 + i).To_UTF8() + "\" or \"" + Ztring().From_CC2(0x0801 + i).To_UTF8() + "\"", Source_DolbyE_1_2);
+                            TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatIDRefyyyy_NotPermitted, {{"i", i}, {"actual", audioChannelFormatIDRef_yyyy}, {"expected", Ztring().From_CC2(0x0001 + i).To_UTF8()}, {"expected_2", Ztring().From_CC2(0x0801 + i).To_UTF8()}}), Source_DolbyE_1_2);
                         }
                         break;
                     }
                     case 3:
-                        TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":audioChannelFormatIDRef:audioChannelFormatIDRef attribute xxxx value \"" + audioChannelFormatIDRef_xxxx + "\" is not permitted, permitted value is \"0001\"", Source_DolbyE_1_2);
+                        TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioChannelFormatIDRefxxxx_NotPermitted, {{"i", i}, {"actual", audioChannelFormatIDRef_xxxx}}), Source_DolbyE_1_2);
                         break;
                     }
                 }
@@ -7828,12 +7887,12 @@ void File_Adm::Streams_Fill()
                             Value_yyyy -= 0x0800;
                         }
                         if (Value_yyyy - 2 >= 2) {
-                            TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":audioPackFormatIDRef:audioPackFormatIDRef attribute yyyy value \"" + audioPackFormatIDRef_yyyy + "\" is not permitted, permitted value is \"" + Ztring().From_CC2(0x0001 + i).To_UTF8() + "\" or \"" + Ztring().From_CC2(0x0801 + i).To_UTF8() + "\"", Source_DolbyE_1_2);
+                            TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioPackFormatIDRefyyyy_NotPermitted, {{"i", i}, {"actual", audioPackFormatIDRef_yyyy}, {"expected", Ztring().From_CC2(0x0001 + i).To_UTF8()}, {"expected_2", Ztring().From_CC2(0x0801 + i).To_UTF8()}}), Source_DolbyE_1_2);
                         }
                         break;
                     }
                     case 3:
-                        TrackUID.AddError(Error, ":audioTrackUID" + to_string(i) + ":audioPackFormatIDRef:audioPackFormatIDRef attribute xxxx value \"" + audioPackFormatIDRef_xxxx + "\" is not permitted, permitted values are \"0001\" or \"0003\"", Source_DolbyE_1_2);
+                        TrackUID.AddError(Error, Adm_Message(conformance::Adm_audioPackFormatIDRefxxxx_NotPermitted, {{"i", i}, {"actual", audioPackFormatIDRef_xxxx}}), Source_DolbyE_1_2);
                         break;
                     }
                 }
@@ -7850,7 +7909,7 @@ void File_Adm::Streams_Fill()
             if (to_string(numIDs_Int) != numIDs) {
             }
             else if (numIDs_Int < TrackUIDs.size()) {
-                TransportTrackFormat.AddError(Error, ":transportTrackFormat" + to_string(i) + ":numIDs:numIDs attribute value " + numIDs + " is less than audioTrackUID element count " + to_string(TrackUIDs.size()), Source_AdvSSE_1);
+                TransportTrackFormat.AddError(Error, Adm_Message(conformance::Adm_numIDs_LessThanAudioTrackUIDCount, {{"i", i}, {"numIDs", numIDs}, {"count", TrackUIDs.size()}}), Source_AdvSSE_1);
             }
         }
     }   
@@ -7859,7 +7918,7 @@ void File_Adm::Streams_Fill()
     for (size_t t = 0; t < item_Max; t++) {
         size_t Error_Count_Per_Type[error_Type_Max] = {};
         for (size_t i = 0; i < File_Adm_Private->Items[t].Items.size(); i++) {
-            FillErrors(File_Adm_Private, (item)t, i, item_Infos[t].Name, &Errors_Field[0], &Errors_Value[0], WarningError, &Error_Count_Per_Type[0], IsAdvSSE, IsDolbyE);
+            FillErrors(File_Adm_Private, (item)t, i, item_Infos[t].Name, &Errors_Field[0], &Errors_Value[0], &Errors_Data[0], WarningError, &Error_Count_Per_Type[0], IsAdvSSE, IsDolbyE);
         }
     }
 
@@ -7870,25 +7929,7 @@ void File_Adm::Streams_Fill()
             Fill(StreamKind_Last, StreamPos_Last, FieldPrefix.c_str(), Errors_Field[k].size());
             FieldPrefix += ' ';
             for (size_t i = 0; i < Errors_Field[k].size(); i++) {
-                size_t Space = 0;
-                for (;;)
-                {
-                    Space = Errors_Field[k][i].find(' ', Space + 1);
-                    if (Space == string::npos) {
-                        break;
-                    }
-                    const auto Field = FieldPrefix + Errors_Field[k][i].substr(0, Space);
-                    const auto& Value = Retrieve_Const(StreamKind_Last, StreamPos_Last, Field.c_str());
-                    if (Value.empty()) {
-                        Fill(StreamKind_Last, StreamPos_Last, Field.c_str(), "Yes");
-                    }
-                }
-                const auto Field = FieldPrefix + Errors_Field[k][i];
-                const auto& Value = Retrieve_Const(StreamKind_Last, StreamPos_Last, Field.c_str());
-                if (Value == __T("Yes")) {
-                    Clear(StreamKind_Last, StreamPos_Last, Field.c_str());
-                }
-                Fill(StreamKind_Last, StreamPos_Last, Field.c_str(), Errors_Value[k][i]);
+                Fill_Conformance_Text(StreamKind_Last, StreamPos_Last, FieldPrefix + Errors_Field[k][i], Errors_Value[k][i], i < Errors_Data[k].size() ? Errors_Data[k][i] : string(), true);
             }
         }
     }

@@ -264,7 +264,7 @@ void File_Aac::Streams_Finish()
                 audioObjectTypeString += audioObjectTypeTemp;
                 audioObjectTypeString += ')';
             }
-            Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + ProfileLevelString + " does not permit MP4 AudioSpecificConfig audioObjectType " + audioObjectTypeString).c_str(), bitset8().set(Usac).set(BaselineUsac).set(xHEAAC));
+            Fill_Conformance(conformance::Aac_ProfileLevel_NotPermittedAudioObjectType, {{"audioProfileLevelIndication", ProfileLevelString}, {"audioObjectType", audioObjectTypeString}}, bitset8().set(Usac).set(BaselineUsac).set(xHEAAC));
         }
         Streams_Finish_Conformance();
         }

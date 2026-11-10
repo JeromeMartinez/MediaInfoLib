@@ -3051,7 +3051,7 @@ void File__Analyze::Streams_Finish_StreamOnly_General(size_t StreamPos)
     const auto& FileExtension_Invalid = Retrieve(Stream_General, StreamPos, "FileExtension_Invalid");
     if (!FileExtension_Invalid.empty()) {
         Fill(Stream_General, StreamPos, "ConformanceWarnings", "Yes", Unlimited, true, true);
-        Fill(Stream_General, StreamPos, "ConformanceWarnings GeneralCompliance", "File name extension is not expected for this file format (actual " + Retrieve(Stream_General, StreamPos, General_FileExtension).To_UTF8() + ", expected " + FileExtension_Invalid.To_UTF8() + ")", true, true);
+        Fill_Conformance_Field(Stream_General, StreamPos, conformance::General_FileExtension_NotExpected, {{"actual", Retrieve(Stream_General, StreamPos, General_FileExtension)}, {"expected", FileExtension_Invalid}}, true);
     }
 
     //Audio_Channels_Total

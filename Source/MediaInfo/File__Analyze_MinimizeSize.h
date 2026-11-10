@@ -332,8 +332,8 @@ protected :
     #define Element_Info1C(_CONDITION,_A)
     #define Element_Info_From_Milliseconds(_A)
     #define Element_Parser(_A) {}
-    #define Element_Error(_A) {}
-    #define Param_Error(_A) {}
+    #define Element_Error(...) {}
+    #define Param_Error(...) {}
 
     //Elements - End
     inline void Element_End () {Element_End_Common_Flush();}
@@ -1623,44 +1623,51 @@ public :
         int64u              Hash_ParseUpTo;
     #endif //MEDIAINFO_HASH
 
-    //Errors found when testing the compliance with a specification (e.g. a profile or an edition of a standard)
+    //Conformance messages: a parser gives the identifier of a message and the values of its arguments, the catalog (MediaInfo_Conformance_List.h) has its level, its field and its text
+    //Messages found when testing the compliance with a specification (e.g. a profile or an edition of a standard), filled later
     struct conformance_error
     {
-        string  Value;
-        string  StreamID; //ID of the stream the error is about, empty if it is about the whole file
+        conformance::id     Id;
+        conformance::args   Args;
+        string              Value; //Text of the message (empty if conformance is disabled)
+        string              StreamID; //ID of the stream the error is about, empty if it is about the whole file
     };
     struct conformance_errors : vector<conformance_error>
     {
         bool StopAtFirst=false; //Only the first error is needed, e.g. when testing if a file is a candidate before parsing more data
         string StreamID; //ID of the stream the next errors are about, empty if they are about the whole file
-        bool Add(const string& Value); //Adds the error about StreamID if it is not already present for this stream (ignoring the values from " (actual "), returns true if the test must stop
+        bool Add(conformance::id Id, conformance::args Args={}); //Adds the error about StreamID if it is not already present for this stream (ignoring the values from " (actual "), returns true if the test must stop
     };
+    static const int64u Conformance_Offset_Parser=(int64u)-2; //The message is at the position of the parser (frame, time and offset)
+    void                Fill_Conformance_Field(stream_t StreamKind, size_t StreamPos, conformance::id Id, const conformance::args& Args = {}, bool Replace = false); //Conformance field filled directly, without the conformance message list (no location); without conformance support, only for the CONFORMANCE_MESSAGE_ALWAYS messages
 
     #if MEDIAINFO_CONFORMANCE
         void*               Conformance_Data;
-        void                Fill_Conformance(const char* Field, const char* Value, uint8_t Flags = {}, conformance_type Level = Conformance_Error, stream_t StreamKind = Stream_Max, size_t StreamPos = 0);
-        void                Fill_Conformance(const char* Field, const string& Value, uint8_t Flags = {}, conformance_type Level = Conformance_Error, stream_t StreamKind = Stream_Max, size_t StreamPos = 0) { Fill_Conformance(Field, Value.c_str(), Flags, Level, StreamKind, StreamPos); }
-        void                Fill_Conformance_Specification(const char* Field, const string& Specification, const conformance_errors& Errors, conformance_type Level = Conformance_Error); //Errors are about the whole stream, without offset
+        void                Fill_Conformance(conformance::id Id, conformance::args Args = {}, uint8_t Flags = {}, stream_t StreamKind = Stream_Max, size_t StreamPos = 0, int64u Offset = Conformance_Offset_Parser); //Flags: profiles the message is for, all if 0; stream: last stream if Stream_Max; Offset: offset of the item the message is about instead of the position of the parser (no frame or time), (int64u)-1 if the message is about the whole stream
+        void                Fill_Conformance(const conformance_errors& Errors, const string& Specification = {}, const char* Field = nullptr); //Messages about the whole stream, with the specification they come from; Field: field instead of the fields of the catalog, when the same checks are reported at another place
+        void                Fill_Conformance_Text(stream_t StreamKind, size_t StreamPos, const string& Field, const string& Text, const string& Data, bool ReplaceYes = false); //Field of a message with its text and its structured data, "Yes" in its empty parent fields; ReplaceYes: the text replaces the "Yes" of a field which is also a parent field
+        void                Fill_SetConformance(stream_t StreamKind, size_t StreamPos, const char* Parameter, const string& Data, bool Replace = false); //Structured data of a conformance field, added to the current data if not Replace
         void                Clear_Conformance();
         void                Merge_Conformance(bool FromConfig = false);
         void                Merge_Conformance(File__Analyze& Sub); //Items found by a sub-parser parsing a part of the current element
         void                Streams_Finish_Conformance(stream_t StreamKind = Stream_Max, size_t StreamPos = (size_t)-1);
+        void                Conformance_Data_Init();
+        void                Conformance_Position_Update();
         virtual string      CreateElementName();
-        string              BuildConformanceName(const string& ParserName, const char* Prefix, const char* Suffix);
+        string              Conformance_Prefix(const char* Prefix); //Prefix, or parser name if no prefix, with "_" if ending with a digit
         void                IsTruncated(int64u ExpectedSize = (int64u)-1, bool MoreThan = false, const char* Prefix = nullptr);
         void                DurationIssue(int64u ActualDuration, int64u ExpectedDuration = (int64u)-1, bool MoreThan = false, const char* Prefix = nullptr);
         void                RanOutOfData(const char* Prefix = nullptr);
         void                SynchLost(const char* Prefix = nullptr, int64u CountOfBytes = 0, bool AreZero = false);
     #else //MEDIAINFO_CONFORMANCE
-        void                Fill_Conformance(const char* Field, const char* Value, uint8_t Flags = {}, conformance_type Level = Conformance_Error, stream_t StreamKind = Stream_Max, size_t StreamPos = 0) {}
-        void                Fill_Conformance(const char* Field, const string& Value, uint8_t Flags = {}, conformance_type Level = Conformance_Error, stream_t StreamKind = Stream_Max, size_t StreamPos = 0) { Fill_Conformance(Field, Value.c_str(), Flags, Level, StreamKind, StreamPos); }
-        void                Fill_Conformance_Specification(const char* Field, const string& Specification, const conformance_errors& Errors, conformance_type Level = Conformance_Error) {}
+        void                Fill_Conformance(conformance::id, const conformance::args& = {}, uint8_t = {}, stream_t = Stream_Max, size_t = 0, int64u = Conformance_Offset_Parser) {}
+        void                Fill_Conformance(const conformance_errors&, const string& = {}, const char* = nullptr) {}
         void                Clear_Conformance() {}
         void                Merge_Conformance(bool FromConfig = false) {}
         void                Merge_Conformance(File__Analyze&) {}
         void                Streams_Finish_Conformance(stream_t = Stream_Max, size_t = (size_t)-1) {}
         string              CreateElementName() { return {}; }
-        string              BuildConformanceName(const string& ParserName, const char* Prefix, const char* Suffix) { return {}; }
+        string              Conformance_Prefix(const char*) { return {}; }
         void                IsTruncated(int64u ExpectedSize = (int64u)-1, bool MoreThan = false, const char* = nullptr) {}
         void                DurationIssue(int64u ActualDuration, int64u ExpectedDuration = (int64u)-1, bool MoreThan = false, const char* Prefix = nullptr) {}
         void                RanOutOfData(const char* = nullptr) { Trusted_IsNot(); }

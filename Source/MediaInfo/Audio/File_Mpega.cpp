@@ -1141,7 +1141,7 @@ void File_Mpega::Data_Parse()
     auto RealFrameSize = Header_Size + Element_Size;
     if (padding_bit && FrameSize - RealFrameSize == 1)
     {
-        Fill_Conformance(BuildConformanceName(ParserName, "MPEG-Audio", "PaddingBit").c_str(), string("Padding bit is wrong") + (!IsSub && File_Offset + Buffer_Offset + Element_Size == File_Size ? " at end of the file" : "") + " (actual 1, expected 0)", {}, Conformance_Warning);
+        Fill_Conformance(!IsSub && File_Offset + Buffer_Offset + Element_Size == File_Size ? conformance::Mpega_PaddingBit_WrongAtEnd : conformance::Mpega_PaddingBit_Wrong, {{"prefix", Conformance_Prefix("MPEG-Audio")}});
     }
     else if (RealFrameSize < FrameSize)
     {

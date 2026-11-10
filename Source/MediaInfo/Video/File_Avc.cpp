@@ -4920,7 +4920,7 @@ void File_Avc::SPS_PPS()
                             Get_B2 (Size,                       "sequenceParameterSetExtLength");
                             if (!Size || Size>Element_Size-Element_Offset)
                             {
-                                Param_Error("Incoherent sequenceParameterSetExtLength");
+                                Param_Error("Incoherent sequenceParameterSetExtLength", conformance::Avc_sequenceParameterSetExtLength_Wrong);
                                 Element_End0();
                                 break; //There is an error
                             }

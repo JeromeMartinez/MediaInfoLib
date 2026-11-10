@@ -419,8 +419,8 @@ void File_SmpteSt0337::Streams_Finish()
         if (Conformance_DataStreamNumbers && !(Conformance_DataStreamNumbers&1))
         {
             conformance_errors Errors;
-            Errors.Add("No data burst has data_stream_number 0 (main audio service)");
-            Fill_Conformance_Specification("burst_info data_stream_number", string(), Errors);
+            Errors.Add(conformance::SmpteSt0337_data_stream_number_MissingMain);
+            Fill_Conformance(Errors);
         }
         Streams_Finish_Conformance();
     #endif //MEDIAINFO_CONFORMANCE
@@ -1716,46 +1716,46 @@ void File_SmpteSt0337::Conformance_Burst(const burst_preamble& Burst)
 {
     // SMPTE ST 337 burst_info
     if (Burst.data_mode==3)
-        Fill_Conformance("burst_info data_mode", "data_mode is reserved (actual 3)");
+        Fill_Conformance(conformance::SmpteSt0337_data_mode_Reserved, {{"actual", Burst.data_mode}});
     else if (16+4*Burst.data_mode!=Stream_Bits)
-        Fill_Conformance("burst_info data_mode", "data_mode is not the bit depth of the sync words (actual "+std::to_string(16+4*Burst.data_mode)+"-bit, expected "+std::to_string(Stream_Bits)+"-bit)");
+        Fill_Conformance(conformance::SmpteSt0337_data_mode_Mismatch, {{"actual", 16+4*Burst.data_mode}, {"expected", Stream_Bits}});
     if (Burst.Pc_Reserved)
-        Fill_Conformance("burst_info reserved", "Reserved bits of burst_info are not 0");
+        Fill_Conformance(conformance::SmpteSt0337_burst_info_reserved_Wrong);
     if (Burst.data_type==2 && Burst.data_stream_number!=7)
-        Fill_Conformance("burst_info data_stream_number", "data_stream_number of the time stamp data burst is wrong (actual "+std::to_string(Burst.data_stream_number)+", expected 7)");
+        Fill_Conformance(conformance::SmpteSt0337_data_stream_number_WrongTimeStamp, {{"actual", Burst.data_stream_number}});
     else if (Burst.data_type!=2 && Burst.data_stream_number==7)
-        Fill_Conformance("burst_info data_stream_number", "data_stream_number is reserved for time stamp data bursts (actual 7)");
+        Fill_Conformance(conformance::SmpteSt0337_data_stream_number_Reserved, {{"actual", Burst.data_stream_number}});
     if (Burst.data_type)
         Conformance_DataStreamNumbers|=(int8u)(1<<Burst.data_stream_number);
 
     // SMPTE ST 338 data_type, depending on the edition
     const auto data_type_Generation=Smpte_St0337_data_type_Generation[Burst.data_type];
     if (Conformance_DataType_IsChecked && data_type_Generation==(int8u)-1)
-        Fill_Conformance("burst_info data_type", "data_type is reserved (actual "+std::to_string(Burst.data_type)+')');
+        Fill_Conformance(conformance::SmpteSt0337_data_type_Reserved, {{"actual", Burst.data_type}});
     else if (Conformance_DataType_IsChecked && data_type_Generation>Conformance_Generation)
-        Fill_Conformance("burst_info data_type", "data_type is not defined in the checked edition (actual "+std::to_string(Burst.data_type)+", checked edition "+Smpte_St0337_Generation_DataTypes[Conformance_Generation]+')');
+        Fill_Conformance(conformance::SmpteSt0337_data_type_NotExpectedInEdition, {{"actual", Burst.data_type}, {"checked_edition", Smpte_St0337_Generation_DataTypes[Conformance_Generation]}});
 
     // SMPTE ST 337:2015 extended data type
     if (Burst.extended_data_type!=(int32u)-1 && data_type_Generation<=Conformance_Generation)
     {
         if (Burst.Pe_Reserved)
-            Fill_Conformance("extended_data_type", "Higher significance bits of extended_data_type are not 0");
+            Fill_Conformance(conformance::SmpteSt0337_extended_data_type_WrongHighBits);
         if (Burst.Pf)
-            Fill_Conformance("Pf", "Pf is wrong (actual "+std::to_string(Burst.Pf)+", expected 0)");
+            Fill_Conformance(conformance::SmpteSt0337_Pf_Wrong, {{"actual", Burst.Pf}});
         if (Burst.length_code<2*(int32u)Stream_Bits)
-            Fill_Conformance("length_code", "length_code does not count Pe and Pf");
+            Fill_Conformance(conformance::SmpteSt0337_length_code_WrongWithoutPePf);
         int8u extended_data_type_Generation=(int8u)-1; // SMPTE ST 338 extended data types
         if (Burst.extended_data_type==0x0001)
             extended_data_type_Generation=3; // Serial ADM (SMPTE ST 2116)
-        string extended_data_type_String;
+        string extended_data_type_String("0x");
         for (int Shift=12; Shift>=0; Shift-=4)
             extended_data_type_String+="0123456789ABCDEF"[(Burst.extended_data_type>>Shift)&0xF];
         if (Burst.extended_data_type==0x4E1F || Burst.extended_data_type==0xF872)
-            Fill_Conformance("extended_data_type", "extended_data_type is forbidden (actual 0x"+extended_data_type_String+')');
+            Fill_Conformance(conformance::SmpteSt0337_extended_data_type_Forbidden, {{"actual", extended_data_type_String}});
         else if (Conformance_DataType_IsChecked && extended_data_type_Generation==(int8u)-1)
-            Fill_Conformance("extended_data_type", "extended_data_type is reserved (actual 0x"+extended_data_type_String+')');
+            Fill_Conformance(conformance::SmpteSt0337_extended_data_type_Reserved, {{"actual", extended_data_type_String}});
         else if (Conformance_DataType_IsChecked && extended_data_type_Generation>Conformance_Generation)
-            Fill_Conformance("extended_data_type", "extended_data_type is not defined in the checked edition (actual 0x"+extended_data_type_String+", checked edition "+Smpte_St0337_Generation_DataTypes[Conformance_Generation]+')');
+            Fill_Conformance(conformance::SmpteSt0337_extended_data_type_NotExpectedInEdition, {{"actual", extended_data_type_String}, {"checked_edition", Smpte_St0337_Generation_DataTypes[Conformance_Generation]}});
     }
 
     // SMPTE ST 337 burst spacing, a data burst preceded by 4 subframes of 0 is needed at least every 4096 AES3 frames
@@ -1771,7 +1771,7 @@ void File_SmpteSt0337::Conformance_Burst(const burst_preamble& Burst)
             Conformance_Frames_SinceExtendedSync+=(Gap+Frame_Size-1)/Frame_Size+Burst_Frames;
         if (Conformance_Frames_SinceExtendedSync>=4096)
         {
-            Fill_Conformance("Burst spacing", "No data burst is preceded by 4 subframes of 0 during 4096 AES3 frames");
+            Fill_Conformance(conformance::SmpteSt0337_BurstSpacing_MissingZeroSubframes);
             Conformance_Frames_SinceExtendedSync=0;
         }
     }
@@ -1781,13 +1781,13 @@ void File_SmpteSt0337::Conformance_Burst(const burst_preamble& Burst)
     if ((Burst.data_type==1 || Burst.data_type==16) && Burst.data_stream_number<7)
     {
         if (Burst.data_type_dependent&0x07)
-            Fill_Conformance("burst_info data_type_dependent", "Reserved bits of data_type_dependent are not 0");
+            Fill_Conformance(conformance::SmpteSt0337_data_type_dependent_WrongReservedBits);
         auto& Burst_Last=Conformance_Ac3_Burst_Last[Burst.data_stream_number];
         if (Frame_Size && !(Burst.Begin%Frame_Size))
         {
             const auto Burst_Frame=Burst.Begin/Frame_Size;
             if (!(Burst.data_type_dependent&0x08) && Burst_Last!=(int64u)-1 && Burst_Frame-Burst_Last!=1536) // rep_rate_flag is 0
-                Fill_Conformance("Burst spacing", "Data burst spacing is wrong as rep_rate_flag is 0 (actual "+std::to_string(Burst_Frame-Burst_Last)+" AES3 frames, expected 1536)");
+                Fill_Conformance(conformance::SmpteSt0337_BurstSpacing_Wrong, {{"actual", Burst_Frame-Burst_Last}});
             Burst_Last=Burst_Frame;
         }
         else

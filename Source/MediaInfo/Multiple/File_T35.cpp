@@ -473,7 +473,7 @@ void File_T35::itu_t_t35_B5_0031_GA94_09()
     {
         Container->Fill(Stream_Video, 0, "ConformanceErrors", 1, 10, true);
         Container->Fill(Stream_Video, 0, "ConformanceErrors SMPTE_ST_2049_CVT", 1, 10, true);
-        Container->Fill(Stream_Video, 0, "ConformanceErrors SMPTE_ST_2049_CVT Coherency", "Bitstream parsing ran out of data to read before the end of the syntax was reached, most probably the bitstream is malformed", Unlimited, true, true);
+        Container->Fill_Conformance_Field(Stream_Video, 0, conformance::T35_SmpteSt209410_Malformed, {}, true);
     }
 }
 

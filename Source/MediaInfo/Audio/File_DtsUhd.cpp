@@ -516,7 +516,7 @@ int File_DtsUhd::ExtractMDChunkObjIDList(MD01* MD01)
         Get_VR (Table, MD01->NumObjects,                        "NumObjects");
         if (MD01->NumObjects>sizeof(MD01->ObjectList)/sizeof(*MD01->ObjectList))
         {
-            Param_Error("NumObjects");
+            Param_Error("NumObjects", conformance::DtsUhd_NumObjects_MoreThanSupported);
             Element_End0();
             return 1;
         }

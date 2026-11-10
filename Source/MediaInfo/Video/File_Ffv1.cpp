@@ -688,7 +688,7 @@ void File_Ffv1::Read_Buffer_OutOfBand()
     if (Buffer_Size<4)
     {
         Skip_XX(Element_Size,                                   "ConfigurationRecord");
-        Param_Error("FFV1-HEADER-END:1");
+        Param_Error("FFV1-HEADER-END:1", conformance::Ffv1_ConfigurationRecord_LessThanMinimum);
         return;
     }
     int32u CRC_32=FFv1_CRC_Compute(Buffer+Buffer_Offset, (size_t)Element_Size);
@@ -701,7 +701,7 @@ void File_Ffv1::Read_Buffer_OutOfBand()
         Skip_XX(Element_Size-Element_Offset-4,                  "Reserved");
     Skip_B4(                                                    "configuration_record_crc_parity");
     if (CRC_32)
-        Param_Error("FFV1-HEADER-configuration_record_crc_parity:1");
+        Param_Error("FFV1-HEADER-configuration_record_crc_parity:1", conformance::Ffv1_configuration_record_crc_parity_Wrong);
     Element_End0();
 
     Merge_Conformance(true);
@@ -754,7 +754,7 @@ void File_Ffv1::Read_Buffer_Continue()
 
     Get_RB (States, keyframe,                                   "keyframe");
     if (intra && !keyframe)
-        Param_Error("FFV1-FRAME-key_frame-ISNOTINTRA:1");
+        Param_Error("FFV1-FRAME-key_frame-ISNOTINTRA:1", conformance::Ffv1_keyframe_MismatchIntra);
     if (keyframe)
         KeyFramePassed=true;
 
@@ -879,7 +879,7 @@ void File_Ffv1::Read_Buffer_Continue()
         if (Element_Offset<Element_Size)
         {
             Skip_XX(Element_Size-Element_Offset,                "Junk");
-            Param_Error("FFV1-SLICE-JUNK:1");
+            Param_Error("FFV1-SLICE-JUNK:1", conformance::Ffv1_SliceJunk_Present);
         }
 
         //SliceFooter
@@ -891,7 +891,7 @@ void File_Ffv1::Read_Buffer_Continue()
             int32u slice_size;
             Get_B3 (slice_size,                                 "slice_size");
             if (Element_Offset_Begin+slice_size+3!=Element_Offset)
-                Param_Error("FFV1-SLICE-slice_size:1");
+                Param_Error("FFV1-SLICE-slice_size:1", conformance::Ffv1_slice_size_Mismatch);
         }
         {
             if (ec == 1)
@@ -899,11 +899,11 @@ void File_Ffv1::Read_Buffer_Continue()
                 int8u error_status;
                 Get_B1 (error_status,                           "error_status");
                 if (error_status)
-                    Param_Error("FFV1-SLICE-error_status:1");
+                    Param_Error("FFV1-SLICE-error_status:1", conformance::Ffv1_error_status_Wrong);
                 Skip_B4(                                        "slice_crc_parity");
                 if (crc_left)
                 {
-                    Param_Error("FFV1-SLICE-slice_crc_parity:1");
+                    Param_Error("FFV1-SLICE-slice_crc_parity:1", conformance::Ffv1_slice_crc_parity_Wrong);
 
                     #if MEDIAINFO_FIXITY
                         if (Config->TryToFix_Get())
@@ -947,7 +947,7 @@ void File_Ffv1::Read_Buffer_Continue()
         for (size_t i=0; i<SlicesPlaces_Size; i++)
             if (SlicesPlaces[i]!=1)
             {
-                Element_Error("FFV1-FRAME-END:1");
+                Element_Error("FFV1-FRAME-END:1", conformance::Ffv1_SliceCoverage_Wrong);
                 break;
             }
     }
@@ -993,21 +993,21 @@ void File_Ffv1::Parameters()
     Get_RU (States, version,                                    "version");
     if ( ConfigurationRecord_IsPresent && version<=1)
     {
-        Param_Error("FFV1-HEADER-version-OUTOFBAND:1");
+        Param_Error("FFV1-HEADER-version-OUTOFBAND:1", conformance::Ffv1_version_MismatchConfigurationRecord);
         Accept(); //TODO: better check without removing error info in trace
         Element_End0();
         return;
     }
     if (!ConfigurationRecord_IsPresent && version> 1)
     {
-        Param_Error("FFV1-HEADER-version-OUTOFBAND:1");
+        Param_Error("FFV1-HEADER-version-OUTOFBAND:1", conformance::Ffv1_version_MismatchConfigurationRecord);
         Accept(); //TODO: better check without removing error info in trace
         Element_End0();
         return;
     }
     if (version==2 || version>3)
     {
-        Param_Error(version==2?"FFV1-HEADER-version-EXPERIMENTAL:1":"FFV1-HEADER-version-LATERVERSION:1");
+        Param_Error(version==2?"FFV1-HEADER-version-EXPERIMENTAL:1":"FFV1-HEADER-version-LATERVERSION:1", version==2?conformance::Ffv1_version_NotSupportedExperimental:conformance::Ffv1_version_NotSupportedLater);
         if (version==2 || version>4)
         {
             Accept();
@@ -1019,7 +1019,7 @@ void File_Ffv1::Parameters()
         Get_RU (States, micro_version,                          "micro_version");
     if ((version==3 && micro_version<4))
     {
-        Param_Error("FFV1-HEADER-micro_version-EXPERIMENTAL:1");
+        Param_Error("FFV1-HEADER-micro_version-EXPERIMENTAL:1", conformance::Ffv1_micro_version_NotSupportedExperimental);
         Accept();
         Element_End0();
         return;
@@ -1035,7 +1035,7 @@ void File_Ffv1::Parameters()
     Get_RU (States, coder_type,                                 "coder_type");
     if (coder_type>2)
     {
-        Param_Error("FFV1-HEADER-coder_type:1");
+        Param_Error("FFV1-HEADER-coder_type:1", conformance::Ffv1_coder_type_Reserved);
         Element_End0();
         return;
     }
@@ -1050,7 +1050,7 @@ void File_Ffv1::Parameters()
             Param_Info1(state_transition_delta);
             if (state_transition_delta<0x00 || state_transition_delta>0xFF)
             {
-                Param_Error("FFV1-HEADER-state_transition_delta:1");
+                Param_Error("FFV1-HEADER-state_transition_delta:1", conformance::Ffv1_state_transition_delta_NotPermitted);
                 Element_End0();
                 Element_End0();
                 return;
@@ -1062,7 +1062,7 @@ void File_Ffv1::Parameters()
     Get_RU (States, colorspace_type,                            "colorspace_type");
     if (colorspace_type>1)
     {
-        Param_Error("FFV1-HEADER-colorspace_type:1");
+        Param_Error("FFV1-HEADER-colorspace_type:1", conformance::Ffv1_colorspace_type_Reserved);
         Element_End0();
         Element_End0();
         return;
@@ -1072,7 +1072,7 @@ void File_Ffv1::Parameters()
         Get_RU (States, bits_per_raw_sample,                    "bits_per_raw_sample");
         if (bits_per_raw_sample>64)
         {
-            Param_Error("FFV1-HEADER-bits_per_raw_sample:1");
+            Param_Error("FFV1-HEADER-bits_per_raw_sample:1", conformance::Ffv1_bits_per_raw_sample_MoreThan64);
             Element_End0();
             return;
         }
@@ -1093,14 +1093,14 @@ void File_Ffv1::Parameters()
         Get_RU (States, num_h_slices,                           "num_h_slices_minus1");
         if (num_h_slices>=Width)
         {
-            Param_Error("FFV1-HEADER-num_h_slices:1");
+            Param_Error("FFV1-HEADER-num_h_slices:1", conformance::Ffv1_num_h_slices_MoreThanWidth);
             Element_End0();
             return;
         }
         Get_RU (States, num_v_slices,                           "num_v_slices_minus1");
         if (num_v_slices>=Height)
         {
-            Param_Error("FFV1-HEADER-num_v_slices:1");
+            Param_Error("FFV1-HEADER-num_v_slices:1", conformance::Ffv1_num_v_slices_MoreThanHeight);
             Element_End0();
             return;
         }
@@ -1108,14 +1108,14 @@ void File_Ffv1::Parameters()
         num_v_slices++;
         if (num_v_slices && num_h_slices>((size_t)-1)/num_v_slices)
         {
-            Param_Error("FFV1-HEADER-slices:1");
+            Param_Error("FFV1-HEADER-slices:1", conformance::Ffv1_SliceCount_MoreThanSupported);
             Element_End0();
             return;
         }
         Get_RU (States, quant_table_count,                      "quant_table_count");
         if (quant_table_count>8)
         {
-            Param_Error("FFV1-HEADER-quant_table_count:1");
+            Param_Error("FFV1-HEADER-quant_table_count:1", conformance::Ffv1_quant_table_count_MoreThan8);
             Element_End0();
             return;
         }
@@ -1183,7 +1183,7 @@ void File_Ffv1::Parameters()
         Get_RU (States, ec,                                     "ec");
         if (ec>1)
         {
-            Param_Error("FFV1-HEADER-ec:1");
+            Param_Error("FFV1-HEADER-ec:1", conformance::Ffv1_ec_Reserved);
             Element_End0();
             return;
         }
@@ -1192,7 +1192,7 @@ void File_Ffv1::Parameters()
             Get_RU (States, intra,                              "intra");
             if (intra>1)
             {
-                Param_Error("FFV1-HEADER-intra:1");
+                Param_Error("FFV1-HEADER-intra:1", conformance::Ffv1_intra_Reserved);
                 Element_End0();
                 return;
             }
@@ -1367,7 +1367,7 @@ void File_Ffv1::SliceContent(states &States)
     #endif //MEDIAINFO_TRACE
 
     if (BS->BufferUnderRun() || RC->Underrun())
-        Element_Error("FFV1-SLICE-SliceContent:1");
+        Element_Error("FFV1-SLICE-SliceContent:1", conformance::Ffv1_SliceContent_Malformed);
 
     if (coder_type)
         Skip_XX(RC->BytesUsed(),                                "slice_data");
@@ -1392,7 +1392,7 @@ bool File_Ffv1::SliceHeader(states &States)
     Get_RU (States, slice_x,                                "slice_x");
     if (slice_x >= num_h_slices)
     {
-        Param_Error("FFV1-SLICE-slice_xywh:1");
+        Param_Error("FFV1-SLICE-slice_xywh:1", conformance::Ffv1_SliceArea_Wrong);
         Element_End0();
         return false;
     }
@@ -1400,7 +1400,7 @@ bool File_Ffv1::SliceHeader(states &States)
     Get_RU (States, slice_y,                                "slice_y");
     if (slice_y >= num_v_slices)
     {
-        Param_Error("FFV1-SLICE-slice_xywh:1");
+        Param_Error("FFV1-SLICE-slice_xywh:1", conformance::Ffv1_SliceArea_Wrong);
         Element_End0();
         return false;
     }
@@ -1408,7 +1408,7 @@ bool File_Ffv1::SliceHeader(states &States)
     Get_RU (States, slice_width_minus1,                     "slice_width_minus1");
     if (slice_width_minus1 >= num_h_slices-slice_x)
     {
-        Param_Error("FFV1-SLICE-slice_xywh:1");
+        Param_Error("FFV1-SLICE-slice_xywh:1", conformance::Ffv1_SliceArea_Wrong);
         Element_End0();
         return false;
     }
@@ -1416,7 +1416,7 @@ bool File_Ffv1::SliceHeader(states &States)
     Get_RU (States, slice_height_minus1,                    "slice_height_minus1");
     if (slice_height_minus1 >= num_v_slices-slice_y)
     {
-        Param_Error("FFV1-SLICE-slice_xywh:1");
+        Param_Error("FFV1-SLICE-slice_xywh:1", conformance::Ffv1_SliceArea_Wrong);
         Element_End0();
         return false;
     }
@@ -1441,18 +1441,18 @@ bool File_Ffv1::SliceHeader(states &States)
         Get_RU (States, quant_table_index[i],               "quant_table_index");
         if (quant_table_index[i]>=quant_table_count)
         {
-            Param_Error("FFV1-SLICE-quant_table_index:1");
+            Param_Error("FFV1-SLICE-quant_table_index:1", conformance::Ffv1_quant_table_index_NotPermitted);
             Element_End0();
             return false;
         }
     }
     Get_RU (States, picture_structure,                      "picture_structure");
     if (picture_structure>3)
-        Param_Error("FFV1-SLICE-picture_structure:1");
+        Param_Error("FFV1-SLICE-picture_structure:1", conformance::Ffv1_picture_structure_Reserved);
     Get_RU (States, sample_aspect_ratio_num,                "sar_num");
     Get_RU (States, sample_aspect_ratio_den,                "sar_den");
     if ((sample_aspect_ratio_num && !sample_aspect_ratio_den)) // || (!sample_aspect_ratio_num && sample_aspect_ratio_den)) // Second part is deactivated because FFmpeg creates such file when SAR is unknown
-        Param_Error("FFV1-SLICE-sar_den:1");
+        Param_Error("FFV1-SLICE-sar_den:1", conformance::Ffv1_sar_den_NotPermitted0);
     if (version > 3)
     {
         //TODO
@@ -1869,7 +1869,7 @@ bool File_Ffv1::QuantizationTablePerContext(size_t i, size_t j, FFV1::pixel_t &s
 
         if (k+len_minus1 >= 128)
         {
-            Param_Error("FFV1-HEADER-QuantizationTable-len:1");
+            Param_Error("FFV1-HEADER-QuantizationTable-len:1", conformance::Ffv1_QuantizationTableLen_MoreThanPermitted);
             Element_End0();
             return false;
         }
@@ -1890,7 +1890,7 @@ bool File_Ffv1::QuantizationTablePerContext(size_t i, size_t j, FFV1::pixel_t &s
     scale *= 2 * v - 1;
     if (scale > 32768U)
     {
-        Element_Error("FFV1-HEADER-QuantizationTable-scale:1");
+        Element_Error("FFV1-HEADER-QuantizationTable-scale:1", conformance::Ffv1_QuantizationTableScale_MoreThanPermitted);
         Element_End0();
         return false;
     }

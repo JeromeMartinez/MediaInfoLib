@@ -1875,7 +1875,7 @@ void File__Analyze::Get_DolbyVision_ReferenceProcessingUnit(DV_RPU& data, size_t
 
     FILLING_BEGIN();
     if (CRC32_Check) {
-        Fill_Conformance("DolbyVision rpu_data_crc32", "CRC-32 mismatch", {}, Conformance_Error, Stream_Video, 0);
+        Fill_Conformance(conformance::DolbyVision_rpu_data_crc32_Mismatch, {}, {}, Stream_Video, 0);
         return;
     }
     int8u Profile{};
@@ -2263,11 +2263,11 @@ void File__Analyze::DolbyVision_Streams_Fill(DV_RPU& Data, dv_source Source)
 
         // Conformance, same checks as with XML metadata
         if (Data.Count_CMv40 && !Data.L254_Present)
-            Fill_Conformance("DolbyVision Level254", "Level254 is missing", {}, Conformance_Warning, Stream_Video, 0);
+            Fill_Conformance(conformance::DolbyVision_Level254_Missing, {}, {}, Stream_Video, 0);
         if (Source_Max)
             for (const auto& L6 : Data.L6)
                 if (L6.max_content_light_level>Source_Max)
-                    Fill_Conformance("DolbyVision Level6", ("MaxCLL is more than mastering display peak brightness (actual "+DV_Nits_String(L6.max_content_light_level).To_UTF8()+", expected <= "+DV_Nits_String(Source_Max).To_UTF8()+')').c_str(), {}, Conformance_Warning, Stream_Video, 0);
+                    Fill_Conformance(conformance::DolbyVision_MaxCLL_MoreThanMasteringDisplayPeak, {{"actual", DV_Nits_String(L6.max_content_light_level).To_UTF8()}, {"expected", DV_Nits_String(Source_Max).To_UTF8()}}, {}, Stream_Video, 0);
     }
 
     // Details
@@ -4312,6 +4312,33 @@ void File__Analyze::Fill_Rating(stream_t StreamKind, size_t StreamPos, float64 S
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
+void File__Analyze::Fill_SetConformance(stream_t StreamKind, size_t StreamPos, const char* Parameter, const string& Data, bool Replace)
+{
+    //Integrity
+    if (StreamKind>=Stream_Max || StreamPos>=(*Stream)[StreamKind].size() || Parameter==NULL || Parameter[0]=='\0' || Data.empty())
+        return;
+
+    //Structured data is in a column after the public ones, one item per message of the field
+    auto& Stream_More_Item=(*Stream_More)[StreamKind][StreamPos];
+    const auto Target=Stream_More_Find(Stream_More_Item, Ztring().From_ISO_8859_1(Parameter));
+    if (Target==(size_t)-1)
+        return;
+    auto& Line=Stream_More_Item[Target];
+    if (Line.size()<=Info_Max)
+        Line.resize(Info_Max+1);
+    auto& Item=Line[Info_Max];
+    if (Replace || Item.empty())
+        Item.From_UTF8(Data);
+    else
+    {
+        Item+=__T('\x1D');
+        Item+=Ztring().From_UTF8(Data);
+    }
+}
+#endif //MEDIAINFO_CONFORMANCE
+
+//---------------------------------------------------------------------------
 const Ztring &File__Analyze::Retrieve_Const (stream_t StreamKind, size_t StreamPos, size_t Parameter, info_t KindOfInfo)
 {
     //Integrity
@@ -4766,8 +4793,14 @@ size_t File__Analyze::Merge(File__Analyze &ToAdd, stream_t StreamKind, size_t St
                 Fill(StreamKind, StreamPos_To, Pos, ToFill_Value, true);
             else
             {
-                Fill(StreamKind, StreamPos_To, ToAdd.Get(StreamKind, StreamPos_From, Pos, Info_Name).To_UTF8().c_str(), ToFill_Value, true);
-                Fill_SetOptions(StreamKind, StreamPos_To, ToAdd.Get(StreamKind, StreamPos_From, Pos, Info_Name).To_UTF8().c_str(), ToAdd.Get(StreamKind, StreamPos_From, Pos, Info_Options).To_UTF8().c_str());
+                const auto Name=ToAdd.Get(StreamKind, StreamPos_From, Pos, Info_Name).To_UTF8();
+                Fill(StreamKind, StreamPos_To, Name.c_str(), ToFill_Value, true);
+                Fill_SetOptions(StreamKind, StreamPos_To, Name.c_str(), ToAdd.Get(StreamKind, StreamPos_From, Pos, Info_Options).To_UTF8().c_str());
+                #if MEDIAINFO_CONFORMANCE
+                    const auto& ToAdd_Line=(*ToAdd.Stream_More)[StreamKind][StreamPos_From][Pos-MediaInfoLib::Config.Info_Get(StreamKind).size()];
+                    if (ToAdd_Line.size()>Info_Max && !ToAdd_Line[Info_Max].empty())
+                        Fill_SetConformance(StreamKind, StreamPos_To, Name.c_str(), ToAdd_Line[Info_Max].To_UTF8(), true);
+                #endif //MEDIAINFO_CONFORMANCE
             }
         }
     }
@@ -5037,11 +5070,11 @@ void File__Analyze::Merge_HDR(size_t StreamPos_To, const Ztring* Container, cons
                     default:;
                 }
                 if (!Container_Profile_RPU.empty() && !Stream_Profile.empty() && Container_Profile_RPU!=Stream_Profile)
-                    Fill_Conformance("Crosscheck DolbyVisionConfiguration dv_profile", ("Dolby Vision configuration dv_profile " + Container_Profile.To_UTF8() + " does not match Dolby Vision RPU profile " + Stream_Profile.To_UTF8()).c_str(), {}, Conformance_Error, Stream_Video, StreamPos_To);
+                    Fill_Conformance(conformance::DolbyVision_dv_profile_MismatchRPU, {{"dv_profile", Container_Profile.To_UTF8()}, {"rpu_profile", Stream_Profile.To_UTF8()}}, {}, Stream_Video, StreamPos_To);
                 const auto& Container_Layers=Container_Values[Video_HDR_Format_Settings-Video_HDR_Format][Container_DolbyVision];
                 const auto& Stream_Layers=Stream_Values[Video_HDR_Format_Settings-Video_HDR_Format][Stream_DolbyVision];
                 if (!Container_Layers.empty() && !Stream_Layers.empty() && Layers_HasEL(Container_Layers)!=Layers_HasEL(Stream_Layers))
-                    Fill_Conformance("Crosscheck DolbyVisionConfiguration el_present_flag", (string("Dolby Vision configuration el_present_flag ") + (Layers_HasEL(Container_Layers)?'1':'0') + " does not match Dolby Vision RPU " + (Layers_HasEL(Stream_Layers)?"with":"without") + " enhancement layer").c_str(), {}, Conformance_Error, Stream_Video, StreamPos_To);
+                    Fill_Conformance(conformance::DolbyVision_el_present_flag_MismatchRPU, {{"el_present_flag", Layers_HasEL(Container_Layers)?'1':'0'}, {"enhancement_layer", Layers_HasEL(Stream_Layers)?"with":"without"}}, {}, Stream_Video, StreamPos_To);
             #endif //MEDIAINFO_CONFORMANCE
 
             for (size_t i=Video_HDR_Format; i<=Video_HDR_Format_Compatibility; i++)
@@ -5100,9 +5133,9 @@ void File__Analyze::Merge_HDR(size_t StreamPos_To, const Ztring* Container, cons
             {
                 //Profile 5 VUI is either 1,2,2,2,0 or 1,9,16,15,0 (video_full_range_flag, colour_primaries, transfer_characteristics, matrix_coeffs, chroma_sample_loc_type)
                 if (ToAdd_colour_range==__T("Limited"))
-                    Fill_Conformance("Crosscheck DolbyVisionConfiguration dv_profile", "Dolby Vision configuration dv_profile 5 does not permit HEVC VUI video_full_range_flag 0", {}, Conformance_Error, Stream_Video, StreamPos_To);
+                    Fill_Conformance(conformance::DolbyVision_dv_profile_NotPermittedVideoFullRangeFlag, {}, {}, Stream_Video, StreamPos_To);
                 if (!ToAdd_matrix_coefficients.empty() && ToAdd_matrix_coefficients!=__T("IPT-PQ-C2"))
-                    Fill_Conformance("Crosscheck DolbyVisionConfiguration dv_profile", ("Dolby Vision configuration dv_profile 5 does not permit HEVC VUI matrix_coeffs " + ToAdd_matrix_coefficients.To_UTF8()).c_str(), {}, Conformance_Error, Stream_Video, StreamPos_To);
+                    Fill_Conformance(conformance::DolbyVision_dv_profile_NotPermittedMatrixCoeffs, {{"matrix_coeffs", ToAdd_matrix_coefficients.To_UTF8()}}, {}, Stream_Video, StreamPos_To);
             }
         }
     #endif //MEDIAINFO_CONFORMANCE

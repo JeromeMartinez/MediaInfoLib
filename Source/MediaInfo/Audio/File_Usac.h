@@ -92,6 +92,8 @@ public :
         string Field;
         string Value;
         bitset8 Flags;
+        conformance::id Id=conformance::None;
+        conformance::args Args;
         struct frame_pos
         {
             int64u Main;
@@ -260,17 +262,14 @@ public :
     const bool*                     roll_distance_FramePos_IsPresent;
     bool CheckIf(const bitset8 Flags) { return !Flags || (ConformanceFlags & Flags); }
     void SetProfileLevel(int8u AudioProfileLevelIndication);
-    void Fill_Conformance(const char* Field, const char* Value, bitset8 Flags={}, conformance_level Level=Error);
-    void Fill_Conformance(const char* Field, const string& Value, bitset8 Flags={}, conformance_level Level=Error) { Fill_Conformance(Field, Value.c_str(), Flags, Level); }
-    void Fill_Conformance(const char* Field, const char* Value, conformance_flags Flag, conformance_level Level=Error) { Fill_Conformance(Field, Value, bitset8().set(Flag)); }
-    void Fill_Conformance(const char* Field, const string& Value, conformance_flags Flag, conformance_level Level=Error) { Fill_Conformance(Field, Value.c_str(), Flag, Level); }
+    void Fill_Conformance(conformance::id Id, conformance::args Args={}, bitset8 Flags={});
     void Clear_Conformance();
     void Merge_Conformance(bool FromConfig=false);
     void Streams_Finish_Conformance();
     struct usac_config;
     struct usac_frame;
     void Streams_Finish_Conformance_Profile(usac_config& CurrentConf);
-    void numPreRollFrames_Check(usac_config& CurrentConf, int32u numPreRollFrames, const string& numPreRollFramesConchString);
+    void numPreRollFrames_Check(usac_config& CurrentConf, int32u numPreRollFrames, const char* Structure, const char* Name);
     #else
     inline void Streams_Finish_Conformance() {}
     #endif

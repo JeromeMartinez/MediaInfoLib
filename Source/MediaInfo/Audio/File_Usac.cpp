@@ -1536,7 +1536,7 @@ void File_Usac::hcod_sf(const char* Name)
         if (Pos>240)
         {
             #if MEDIAINFO_CONFORMANCE
-                Fill_Conformance("UsacCoreCoderData GeneralCompliance", "Issue detected while parsing hcod_sf");
+                Fill_Conformance(conformance::Usac_hcod_sf_Malformed, {});
             #endif
             C.IFrameParsed=false;
             Element_End0();
@@ -1725,10 +1725,7 @@ bool File_Usac::BS_Bookmark(File_Usac::bs_bookmark& B)
                     Peek_S4(BitsRemaining, Probe);
                     IsZeroed=!Probe;
                 }
-                if (IsZeroed)
-                    Fill_Conformance((ConformanceFieldName+" GeneralCompliance").c_str(), "Extra zero bytes after the end of the syntax was reached", bitset8(), Warning);
-                else
-                    Fill_Conformance((ConformanceFieldName+" GeneralCompliance").c_str(), "Extra bytes after the end of the syntax was reached", bitset8(), Warning);
+                Fill_Conformance(IsZeroed ? conformance::Usac_ExtraZeroBytes_Present : conformance::Usac_ExtraBytes_Present, {{"element", ConformanceFieldName}});
             #endif
             LastByte=1;
         }
@@ -1742,7 +1739,7 @@ bool File_Usac::BS_Bookmark(File_Usac::bs_bookmark& B)
         {
             for (size_t Level=0; Level<ConformanceLevel_Max; Level++)
                 ConformanceErrors[Level]=B.ConformanceErrors[Level];
-            Fill_Conformance((ConformanceFieldName + " GeneralCompliance").c_str(), "Bitstream parsing ran out of data to read before the end of the syntax was reached, most probably the bitstream is malformed");
+            Fill_Conformance(conformance::Usac_Bitstream_Malformed, {{"element", ConformanceFieldName}});
         }
     #endif
     *BS=B.BS_Save; //Position at the end of the bookmarked part, wherever its parsing stopped
@@ -1763,16 +1760,19 @@ bool File_Usac::BS_Bookmark(File_Usac::bs_bookmark& B)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File_Usac::Fill_Conformance(const char* Field, const char* Value, bitset8 Flags, conformance_level Level)
+void File_Usac::Fill_Conformance(conformance::id Id, conformance::args Args, bitset8 Flags)
 {
+    auto Level = (conformance_level)conformance::Message_Get(Id).Level; //Same order of levels
     if (Level == Warning && Warning_Error)
         Level = Error;
-    field_value FieldValue(Field, Value, Flags, (int64u)-1, IsParsingRaw>=2?(IsParsingRaw-2):(int64u)-1);
+    field_value FieldValue(conformance::Field_Get(Id, Args), conformance::Text_Get(Id, Args), Flags, (int64u)-1, IsParsingRaw>=2?(IsParsingRaw-2):(int64u)-1);
     auto& Conformance = ConformanceErrors[Level];
     auto Current = find(Conformance.begin(), Conformance.end(), FieldValue);
     if (Current != Conformance.end())
         return;
-    Conformance.emplace_back(FieldValue);
+    FieldValue.Id = Id;
+    FieldValue.Args = std::move(Args);
+    Conformance.emplace_back(std::move(FieldValue));
 }
 #endif
 
@@ -1860,17 +1860,17 @@ void File_Usac::Streams_Finish_Conformance_Profile(usac_config& CurrentConf)
         {
             int32u MaxSamplingRate = 24000 << (xHEAAC_Constraints[ProfileLevel.level].MaxSamplingRate - 1);
             if (CurrentConf.sampling_frequency > MaxSamplingRate)
-                Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " does not permit USAC UsacConfig usacSamplingFrequency " + to_string(CurrentConf.sampling_frequency) + ", max is " + to_string(MaxSamplingRate)).c_str());
+                Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}, {"max", MaxSamplingRate}});
         }
         else if (CurrentConf.sampling_frequency > 48000)
-            Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " does not permit USAC UsacConfig usacSamplingFrequency " + to_string(CurrentConf.sampling_frequency) + ", max is 48000").c_str());
+            Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}, {"max", "48000"}});
         else if (CurrentConf.sampling_frequency_index < Aac_sampling_frequency_Size && Aac_sampling_frequency[CurrentConf.sampling_frequency_index] == CurrentConf.sampling_frequency
          && ((CurrentConf.sampling_frequency_index < 0x03 || CurrentConf.sampling_frequency_index > 0x0C) && (CurrentConf.sampling_frequency_index < 0x11 || CurrentConf.sampling_frequency_index > 0x1B)))
-            Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " does not permit USAC UsacConfig usacSamplingFrequency " + to_string(CurrentConf.sampling_frequency)).c_str());
+            Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedSamplingFrequency, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"usacSamplingFrequency", CurrentConf.sampling_frequency}});
         if (!CurrentConf.channelConfigurationIndex)
         {
             if (CurrentConf.numOutChannels && CurrentConf.numOutChannels > xHEAAC_Constraints[ProfileLevel.level].MaxChannels)
-                Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " does not permit USAC UsacConfig numOutChannels " + to_string(CurrentConf.numOutChannels) + ", max is " + to_string(xHEAAC_Constraints[ProfileLevel.level].MaxChannels)).c_str());
+                Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedNumOutChannels, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"numOutChannels", CurrentConf.numOutChannels}, {"max", xHEAAC_Constraints[ProfileLevel.level].MaxChannels}});
         }
         else
         {
@@ -1881,12 +1881,12 @@ void File_Usac::Streams_Finish_Conformance_Profile(usac_config& CurrentConf)
                 case 8 :
                         break;
                 default:
-                    Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " does not permit USAC UsacConfig channelConfigurationIndex " + to_string(CurrentConf.channelConfigurationIndex)).c_str());
+                    Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedChannelConfigurationIndex, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"channelConfigurationIndex", CurrentConf.channelConfigurationIndex}});
             }
         }
     }
     if (IsCmaf && *IsCmaf && CurrentConf.channelConfigurationIndex != 1 && CurrentConf.channelConfigurationIndex != 2)
-        Fill_Conformance("Crosscheck CMAF channelConfiguration", ("CMAF does not permit USAC UsacConfig channelConfigurationIndex " + to_string(CurrentConf.channelConfigurationIndex) + ", permitted values are 1 and 2").c_str());
+        Fill_Conformance(conformance::Usac_channelConfigurationIndex_NotPermittedInCMAF, {{"channelConfigurationIndex", CurrentConf.channelConfigurationIndex}});
 }
 void File_Usac::Streams_Finish_Conformance()
 {
@@ -1923,12 +1923,17 @@ void File_Usac::Streams_Finish_Conformance()
                 }
             }
             auto Value = ConformanceError.Value;
+            conformance::data Data;
             if (!ConformanceError.FramePoss.empty() && (ConformanceError.FramePoss.size() != 1 || ConformanceError.FramePoss[0].Main != (int64u)-1))
             {
                 auto HasConfError = ConformanceError.FramePoss[0].Main == (int64u)-1;
                 Value += " (";
                 if (HasConfError)
+                {
                     Value += "conf & ";
+                    Data.Locations.emplace_back();
+                    Data.Locations.back().IsConfiguration = true;
+                }
                 Value += "frame";
                 if (ConformanceError.FramePoss.size() - HasConfError > 1)
                     Value += 's';
@@ -1937,21 +1942,39 @@ void File_Usac::Streams_Finish_Conformance()
                 {
                     auto FramePos = ConformanceError.FramePoss[i];
                     if (FramePos.Main == (int64u)-1)
+                    {
                         Value += "...";
+                        Data.Locations_More = true;
+                    }
                     else
                     {
-                        Value += to_string(FramePos.Main);
+                        auto Frame = to_string(FramePos.Main);
                         if (FramePos.Sub != (int64u)-1)
                         {
-                            Value += '.';
-                            Value += to_string(FramePos.Sub);
+                            Frame += '.';
+                            Frame += to_string(FramePos.Sub);
                         }
+                        Value += Frame;
+                        Data.Locations.emplace_back();
+                        Data.Locations.back().Frame = to_string(FramePos.Main);
+                        if (FramePos.Sub != (int64u)-1)
+                            Data.Locations.back().SubFrame = to_string(FramePos.Sub);
                     }
                     Value += '+';
                 }
                 Value.back() = ')';
             }
-            Fill(Stream_Audio, 0, (Conformance_String + ConformanceError.Field).c_str(), Value);
+            const auto Field = Conformance_String + ConformanceError.Field;
+            const auto IsNew = Retrieve_Const(Stream_Audio, 0, Field.c_str()).empty();
+            Fill(Stream_Audio, 0, Field.c_str(), Value);
+            if (ConformanceError.Id)
+            {
+                Data.Name = conformance::Message_Get(ConformanceError.Id).Name;
+                Data.Text = ConformanceError.Value;
+                for (const auto& Arg : ConformanceError.Args)
+                    Data.Args.emplace_back(Arg.Name, Arg.To_String());
+                Fill_SetConformance(Stream_Audio, 0, Field.c_str(), conformance::Data_Serialize(Data), IsNew);
+            }
         }
         Conformance_Total.clear();
     }
@@ -1960,9 +1983,8 @@ void File_Usac::Streams_Finish_Conformance()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File_Usac::numPreRollFrames_Check(usac_config& CurrentConf, int32u numPreRollFrames, const string& numPreRollFramesConchString)
+void File_Usac::numPreRollFrames_Check(usac_config& CurrentConf, int32u numPreRollFrames, const char* Structure, const char* Name)
 {
-    string FieldName = numPreRollFramesConchString.substr(numPreRollFramesConchString.rfind(' ') + 1);
     int32u numPreRollFrames_Max;
     if (CurrentConf.coreSbrFrameLengthIndex >= coreSbrFrameLengthIndex_Mapping_Size || coreSbrFrameLengthIndex_Mapping[CurrentConf.coreSbrFrameLengthIndex].sbrRatioIndex)
     {
@@ -1975,30 +1997,21 @@ void File_Usac::numPreRollFrames_Check(usac_config& CurrentConf, int32u numPreRo
         numPreRollFrames_Max = 1;
     if (numPreRollFrames != numPreRollFrames_Max)
     {
-        auto Value = FieldName + " is " + to_string(numPreRollFrames) + " but ";
-        if (numPreRollFrames > numPreRollFrames_Max)
-            Value += "<= ";
-        if (numPreRollFrames > 3)
+        const auto IsMore = numPreRollFrames > numPreRollFrames_Max;
+        auto Id = conformance::Usac_numPreRollFrames_MoreThanRequired;
+        if (numPreRollFrames <= 3)
         {
-            Value += "3 is required";
-        }
-        else
-        {
-            Value += to_string(numPreRollFrames_Max) + " is recommended";
             if (CurrentConf.coreSbrFrameLengthIndex >= coreSbrFrameLengthIndex_Mapping_Size || coreSbrFrameLengthIndex_Mapping[CurrentConf.coreSbrFrameLengthIndex].sbrRatioIndex)
             {
                 if (CurrentConf.harmonicSBR)
-                {
-                    if (numPreRollFrames < numPreRollFrames_Max)
-                        Value += " due to SBR with harmonic patching";
-                }
+                    Id = IsMore ? conformance::Usac_numPreRollFrames_MoreThanRecommended : conformance::Usac_numPreRollFrames_LessThanRecommendedHarmonicSbr;
                 else
-                    Value += " due to SBR without harmonic patching";
+                    Id = IsMore ? conformance::Usac_numPreRollFrames_MoreThanRecommendedSbr : conformance::Usac_numPreRollFrames_LessThanRecommendedSbr;
             }
             else
-                Value += " due to no SBR";
+                Id = IsMore ? conformance::Usac_numPreRollFrames_MoreThanRecommendedNoSbr : conformance::Usac_numPreRollFrames_LessThanRecommendedNoSbr;
         }
-        Fill_Conformance(numPreRollFramesConchString.c_str(), Value, bitset8(), numPreRollFrames > numPreRollFrames_Max ? Error : Warning);
+        Fill_Conformance(Id, {{"structure", Structure}, {"name", Name}, {"actual", numPreRollFrames}, {"expected", numPreRollFrames_Max}});
     }
 }
 #endif
@@ -2027,7 +2040,7 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
         C.sampling_frequency=samplingFrequency;
         #if MEDIAINFO_CONFORMANCE
             if (C.sampling_frequency == Aac_sampling_frequency[C.sampling_frequency_index]) {
-                Fill_Conformance("UsacConfig usacSamplingFrequencyIndex", ("usacSamplingFrequency is used but usacSamplingFrequencyIndex " + to_string(C.sampling_frequency_index) + " could be used instead").c_str(), bitset8(), Warning);
+                Fill_Conformance(conformance::Usac_usacSamplingFrequency_NotRecommended, {{"usacSamplingFrequencyIndex", C.sampling_frequency_index}});
             }
         #endif
     }
@@ -2036,24 +2049,24 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
         C.sampling_frequency=Aac_sampling_frequency[C.sampling_frequency_index];
         #if MEDIAINFO_CONFORMANCE
             if (!C.sampling_frequency) {
-                Fill_Conformance("UsacConfig usacSamplingFrequencyIndex", ("usacSamplingFrequencyIndex " + to_string(C.sampling_frequency_index) + " is known as reserved in ISO/IEC 23003-3:2020, bitstream parsing is partial and may be wrong").c_str(), bitset8(), Info);
+                Fill_Conformance(conformance::Usac_usacSamplingFrequencyIndex_Reserved, {{"usacSamplingFrequencyIndex", C.sampling_frequency_index}});
                 if (Frequency_b)
                 {
                     for (size_t i = 0; i < Aac_sampling_frequency_Size_Usac; i++)
                         if (Aac_sampling_frequency[i] == Frequency_b)
-                            Fill_Conformance("Crosscheck AudioSpecificConfig samplingFrequency", ("MP4 AudioSpecificConfig samplingFrequency " + to_string(Frequency_b) + " does not match USAC UsacConfig usacSamplingFrequencyIndex " + to_string(C.sampling_frequency_index)).c_str());
+                            Fill_Conformance(conformance::Usac_samplingFrequency_MismatchUsacSamplingFrequencyIndex, {{"samplingFrequency", Frequency_b}, {"usacSamplingFrequencyIndex", C.sampling_frequency_index}});
                 }
             }
         #endif
     }
     #if MEDIAINFO_CONFORMANCE
         if (Frequency_b && C.sampling_frequency && C.sampling_frequency != Frequency_b)
-            Fill_Conformance("Crosscheck AudioSpecificConfig samplingFrequency", ("MP4 AudioSpecificConfig samplingFrequency " + to_string(Frequency_b) + " does not match USAC UsacConfig usacSamplingFrequency " + to_string(C.sampling_frequency)).c_str());
+            Fill_Conformance(conformance::Usac_samplingFrequency_MismatchUsacSamplingFrequency, {{"samplingFrequency", Frequency_b}, {"usacSamplingFrequency", C.sampling_frequency}});
     #endif
     Get_S1 (3, C.coreSbrFrameLengthIndex,                       "coreSbrFrameLengthIndex");
     if (C.coreSbrFrameLengthIndex >= coreSbrFrameLengthIndex_Mapping_Size) {
         #if MEDIAINFO_CONFORMANCE
-                Fill_Conformance("UsacConfig AudioSpecificConfig channelConfiguration", ("MP4 AudioSpecificConfig coreSbrFrameLengthIndex " + to_string(C.coreSbrFrameLengthIndex) + " is known as reserved in ISO/IEC 23003-3:2020, bitstream parsing is partial and may be wrong").c_str(), bitset8(), Info);
+                Fill_Conformance(conformance::Usac_AudioSpecificConfigCoreSbrFrameLengthIndex_Reserved, {{"coreSbrFrameLengthIndex", C.coreSbrFrameLengthIndex}});
         #endif
         Param_Info1("Not supported");
         return;
@@ -2061,7 +2074,7 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
     Get_S1 (5, C.channelConfigurationIndex,                     "channelConfigurationIndex"); Param_Info1C(C.channelConfigurationIndex, Aac_ChannelLayout_GetString(C.channelConfigurationIndex));
     #if MEDIAINFO_CONFORMANCE
         if (channelConfiguration && C.channelConfigurationIndex && C.channelConfigurationIndex != channelConfiguration)
-            Fill_Conformance("Crosscheck AudioSpecificConfig channelConfiguration", ("MP4 AudioSpecificConfig channelConfiguration " + to_string(channelConfiguration) + Aac_ChannelLayout_GetString(channelConfiguration, false, true) + " does not match USAC UsacConfig channelConfigurationIndex " + to_string(C.channelConfigurationIndex) + Aac_ChannelLayout_GetString(C.channelConfigurationIndex, false, true)).c_str());
+            Fill_Conformance(conformance::Usac_channelConfiguration_MismatchChannelConfigurationIndex, {{"channelConfiguration", channelConfiguration}, {"mp4_channel_layout", Aac_ChannelLayout_GetString(channelConfiguration, false, true)}, {"channelConfigurationIndex", C.channelConfigurationIndex}, {"usac_channel_layout", Aac_ChannelLayout_GetString(C.channelConfigurationIndex, false, true)}});
     #endif
     if (!C.channelConfigurationIndex)
     {
@@ -2086,7 +2099,7 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
                         Value = to_string(bsOutputChannelPos);
                     else
                         Value = to_string(bsOutputChannelPos) + " (" + Value + ')';
-                    Fill_Conformance("UsacConfig bsOutputChannelPos", ("bsOutputChannelPos " + Value + " is present 2 times but only 1 instance is permitted").c_str());
+                    Fill_Conformance(conformance::Usac_bsOutputChannelPos_Duplicate, {{"bsOutputChannelPos", Value}});
                 }
                 else
                     bsOutChannelPos_List.insert(bsOutputChannelPos);
@@ -2105,20 +2118,20 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
                 {
                     string PossibleOrder = Aac_ChannelLayout_GetString(i);
                     if (PossibleOrder == ActualOrder)
-                        Fill_Conformance("UsacConfig channelConfigurationIndex", ("channelConfigurationIndex is 0 but channelConfigurationIndex " + to_string(i) + " could be used for channel mapping " + ActualOrder).c_str(), bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_channelConfigurationIndex_NotRecommended0, {{"candidate", i}, {"actual_order", ActualOrder}});
                 }
                 if (ConformanceFlags[xHEAAC] && ProfileLevel.profile == Extended_HE_AAC && ProfileLevel.level > 1 && ProfileLevel.level <= 5)
                 {
                     if (C.numOutChannels == 2 && ActualOrder != "L R")
-                        Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " implies a channel layout of L R, a channel layout of " + ActualOrder + " is not recommended").c_str(), bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_ProfileLevel_NotRecommendedChannelLayout, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}, {"actual_order", ActualOrder}});
                 }
             }
             if (!C.numOutChannels)
-                Fill_Conformance("numOutChannels GeneralCompliance", "numOutChannels is 0");
+                Fill_Conformance(conformance::Usac_numOutChannels_NotPermitted0, {});
             else if (!ExpectedOrder.empty())
             {
                 if (ExpectedOrder != ActualOrder)
-                    Fill_Conformance("Crosscheck AudioSpecificConfig channelConfigurationIndex", ("MP4 AudioSpecificConfig channelConfigurationIndex " + to_string(channelConfiguration) + " (" + ExpectedOrder + ") does not match USAC UsacConfig channel mapping " + ActualOrder).c_str());
+                    Fill_Conformance(conformance::Usac_channelConfigurationIndex_MismatchChannelMapping, {{"channelConfiguration", channelConfiguration}, {"expected_order", ExpectedOrder}, {"actual_order", ActualOrder}});
             }
         #endif
     }
@@ -2128,14 +2141,14 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
     {
         C.numOutChannels=0;
         #if MEDIAINFO_CONFORMANCE
-            Fill_Conformance("UsacConfig channelConfigurationIndex", ("channelConfigurationIndex " + to_string(C.channelConfigurationIndex) + " is known as reserved in ISO/IEC 23003-3:2020, bitstream parsing is partial and may be wrong").c_str(), bitset8(), Info);
+            Fill_Conformance(conformance::Usac_channelConfigurationIndex_Reserved, {{"channelConfigurationIndex", C.channelConfigurationIndex}});
         #endif
     }
     channelConfiguration=C.channelConfigurationIndex;
     #if MEDIAINFO_CONFORMANCE
         Streams_Finish_Conformance_Profile(C);
         if (C.coreSbrFrameLengthIndex >= coreSbrFrameLengthIndex_Mapping_Size)
-            Fill_Conformance("UsacConfig coreSbrFrameLengthIndex", ("coreSbrFrameLengthIndex " + to_string(C.coreSbrFrameLengthIndex) + " is known as reserved in ISO/IEC 23003-3:2020, bitstream parsing is partial and may be wrong").c_str(), bitset8(), Info);
+            Fill_Conformance(conformance::Usac_coreSbrFrameLengthIndex_Reserved, {{"coreSbrFrameLengthIndex", C.coreSbrFrameLengthIndex}});
     #endif
     UsacDecoderConfig();
     if (!C.IFrameParsed)
@@ -2174,9 +2187,9 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
                         IsZeroed=!Probe;
                     }
                     if (IsZeroed)
-                        Fill_Conformance("UsacConfig GeneralCompliance", "Extra zero bytes after the end of the syntax was reached", bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_ExtraZeroBytes_Present, {{"element", "UsacConfig"}});
                     else
-                        Fill_Conformance("UsacConfig GeneralCompliance", "Extra bytes after the end of the syntax was reached", bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_ExtraBytes_Present, {{"element", "UsacConfig"}});
                 #endif
                 LastByte=1;
             }
@@ -2208,7 +2221,7 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
             if (!IsParsingRaw)
             {
                 Clear_Conformance();
-                Fill_Conformance("UsacConfig GeneralCompliance", "Bitstream parsing ran out of data to read before the end of the syntax was reached, most probably the bitstream is malformed.");
+                Fill_Conformance(conformance::Usac_Bitstream_MalformedUsacConfig, {{"element", "UsacConfig"}});
                 Merge_Conformance();
             }
         #endif
@@ -2310,16 +2323,16 @@ void File_Usac::Fill_Loudness(const char* Prefix, bool NoConCh)
             return;
         auto loudnessInfoSet_Present_Total=C.loudnessInfoSet_Present[0]+C.loudnessInfoSet_Present[1];
         if (C.loudnessInfoSet_HasContent[0] && C.loudnessInfoSet_HasContent[1])
-            Fill_Conformance("loudnessInfoSet GeneralCompliance", "loudnessInfoSet contains a mix of v0 and v1 loudnessInfo", bitset8(), Warning);
+            Fill_Conformance(conformance::Usac_loudnessInfoSet_NotRecommendedMixOfVersions, {});
         if (C.loudnessInfoSet_Present[0]>1)
-            Fill_Conformance("loudnessInfoSet GeneralCompliance", ("loudnessInfoSet is present " + to_string(C.loudnessInfoSet_Present[0]) + " times but only 1 instance is recommended").c_str(), bitset8(), Warning);
+            Fill_Conformance(conformance::Usac_loudnessInfoSet_DuplicateNotRecommended, {{"count", C.loudnessInfoSet_Present[0]}});
         constexpr14 auto CheckFlags = bitset8().set(xHEAAC).set(MpegH);
         if (false)
         {
         }
         else if (!loudnessInfoSet_Present_Total)
         {
-            Fill_Conformance("loudnessInfoSet GeneralCompliance", "loudnessInfoSet is missing", CheckFlags);
+            Fill_Conformance(conformance::Usac_loudnessInfoSet_Missing, {}, CheckFlags);
             if (ConformanceFlags & CheckFlags)
             {
                 Fill(Stream_Audio, 0, (FieldPrefix + "ConformanceCheck").c_str(), "Invalid: loudnessInfoSet is missing");
@@ -2328,7 +2341,7 @@ void File_Usac::Fill_Loudness(const char* Prefix, bool NoConCh)
         }
         else if (C.loudnessInfo_Data[0].empty())
         {
-            Fill_Conformance("loudnessInfoSet loudnessInfoCount", "loudnessInfoCount is 0", CheckFlags);
+            Fill_Conformance(conformance::Usac_loudnessInfoCount_NotPermitted0, {}, CheckFlags);
             if (ConformanceFlags & CheckFlags)
             {
                 Fill(Stream_Audio, 0, (FieldPrefix + "ConformanceCheck").c_str(), "Invalid: loudnessInfoSet is empty");
@@ -2337,7 +2350,7 @@ void File_Usac::Fill_Loudness(const char* Prefix, bool NoConCh)
         }
         else if (!DefaultIdPresent)
         {
-            Fill_Conformance("loudnessInfoSet GeneralCompliance", "Default loudnessInfo is missing", CheckFlags);
+            Fill_Conformance(conformance::Usac_DefaultLoudnessInfo_Missing, {}, CheckFlags);
             if (ConformanceFlags & CheckFlags)
             {
                 Fill(Stream_Audio, 0, (FieldPrefix + "ConformanceCheck").c_str(), "Invalid: Default loudnessInfo is missing");
@@ -2346,7 +2359,7 @@ void File_Usac::Fill_Loudness(const char* Prefix, bool NoConCh)
         }
         else if (!C.LoudnessInfoIsNotValid && C.loudnessInfo_Data[0].begin()->second.Measurements.Values[1].empty() && C.loudnessInfo_Data[0].begin()->second.Measurements.Values[2].empty())
         {
-            Fill_Conformance("loudnessInfoSet GeneralCompliance", "None of program loudness or anchor loudness is present in default loudnessInfo", CheckFlags);
+            Fill_Conformance(conformance::Usac_DefaultLoudnessInfoLoudness_Missing, {}, CheckFlags);
             if (ConformanceFlags & CheckFlags)
             {
                 Fill(Stream_Audio, 0, (FieldPrefix + "ConformanceCheck").c_str(), "Invalid: None of program loudness or anchor loudness is present in default loudnessInfo");
@@ -2427,26 +2440,26 @@ void File_Usac::UsacDecoderConfig()
             }
             auto ChannelCount = ChannelCount_NonLfe + Channels_Lfe.size();
             if (ChannelCount < C.numOutChannels)
-                Fill_Conformance("UsacConfig numOutChannels", ("numOutChannels is " + to_string(C.numOutChannels) + " but the usacElementType sequence contains " + to_string(ChannelCount) + " channels").c_str());
+                Fill_Conformance(conformance::Usac_numOutChannels_MismatchElementSequence, {{"numOutChannels", C.numOutChannels}, {"channel_count", ChannelCount}});
             if (ChannelCount > C.numOutChannels)
             {
                 if (AccrossCpe)
                 {
                     if (ConformanceFlags[xHEAAC] && ProfileLevel.profile == Extended_HE_AAC && ProfileLevel.level > 1 && ProfileLevel.level <= 5)
-                        Fill_Conformance("Crosscheck InitialObjectDescriptor audioProfileLevelIndication", ("MP4 InitialObjectDescriptor audioProfileLevelIndication " + Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel) + " does not permit that the usacElementType sequence starts with SCE CPE").c_str());
+                        Fill_Conformance(conformance::Usac_ProfileLevel_NotPermittedElementSequence, {{"audioProfileLevelIndication", Mpeg4_Descriptors_AudioProfileLevelString(ProfileLevel)}});
                     else
-                        Fill_Conformance("UsacConfig numOutChannels", ("numOutChannels is " + to_string(C.numOutChannels) + ", it is not recommended that the usacElementType sequence contains " + to_string(ChannelCount) + " channels, especially when only one channel of a CPE is included in numOutChannels").c_str(), bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_numOutChannels_NotRecommendedPartialCPE, {{"numOutChannels", C.numOutChannels}, {"channel_count", ChannelCount}});
                 }
                 else
-                    Fill_Conformance("UsacConfig numOutChannels", ("numOutChannels is " + to_string(C.numOutChannels) + ", it is not recommended that the usacElementType sequence contains " + to_string(ChannelCount) + " channels").c_str(), bitset8(), Warning);
+                    Fill_Conformance(conformance::Usac_numOutChannels_NotRecommendedElementSequence, {{"numOutChannels", C.numOutChannels}, {"channel_count", ChannelCount}});
             }
             if (ChannelCount == C.numOutChannels)
             {
                 auto C_ChannelCount_NonLfe = C.numOutChannels - C.numOutChannels_Lfe.size();
                 if (ChannelCount_NonLfe != C_ChannelCount_NonLfe && Channels_Lfe.size() == C.numOutChannels_Lfe.size())
-                    Fill_Conformance("UsacConfig numOutChannels", ("numOutChannels minus LFE channel count is " + to_string(C_ChannelCount_NonLfe) + " but the usacElementType sequence contains " + to_string(ChannelCount_NonLfe) + " non LFE channels").c_str());
+                    Fill_Conformance(conformance::Usac_NonLFEChannelCount_MismatchElementSequence, {{"non_lfe_count", C_ChannelCount_NonLfe}, {"element_non_lfe_count", ChannelCount_NonLfe}});
                 if (Channels_Lfe.size() != C.numOutChannels_Lfe.size())
-                    Fill_Conformance("UsacConfig numOutChannels", ("non LFE channel count is " + to_string(C_ChannelCount_NonLfe) + " and LFE channel count is " + to_string(C.numOutChannels_Lfe.size()) + " but the usacElementType sequence contains " + to_string(ChannelCount_NonLfe) + " non LFE channels and " + to_string(Channels_Lfe.size()) + " LFE channels").c_str());
+                    Fill_Conformance(conformance::Usac_ChannelCounts_MismatchElementSequence, {{"non_lfe_count", C_ChannelCount_NonLfe}, {"lfe_count", C.numOutChannels_Lfe.size()}, {"element_non_lfe_count", ChannelCount_NonLfe}, {"element_lfe_count", Channels_Lfe.size()}});
             }
             if (Channels_Lfe.size() > C.numOutChannels_Lfe.size())
                 Channels_Lfe.resize(C.numOutChannels_Lfe.size());
@@ -2463,7 +2476,7 @@ void File_Usac::UsacDecoderConfig()
                     }
             }
             for (size_t i = C.numOutChannels_Lfe.size() - 1; (int)i >= 0; i--)
-                Fill_Conformance("UsacConfig numOutChannels", ("LFE channel is expected at position " + to_string(C.numOutChannels_Lfe[i]) + " but the usacElementType sequence contains a LFE channel at position " + to_string(Channels_Lfe[i])).c_str());
+                Fill_Conformance(conformance::Usac_LFEChannelPosition_MismatchElementSequence, {{"expected", C.numOutChannels_Lfe[i]}, {"actual", Channels_Lfe[i]}});
         }
         if (C.channelConfigurationIndex >= Aac_Channels_Size_Usac)
         {
@@ -2494,7 +2507,7 @@ void File_Usac::UsacDecoderConfig()
                         ActualOrder += ' ';
                     }
                     if (!ActualOrder.empty()) ActualOrder.pop_back();
-                    Fill_Conformance("UsacConfig channelConfigurationIndex", ("channelConfigurationIndex " + to_string(C.channelConfigurationIndex) + " is used but the usacElementType sequence contains " + ActualOrder + ", which is the configuration indicated by channelConfigurationIndex " + to_string(i)).c_str(), bitset8(), Warning);
+                    Fill_Conformance(conformance::Usac_channelConfigurationIndex_NotRecommendedOtherIndex, {{"channelConfigurationIndex", C.channelConfigurationIndex}, {"actual_order", ActualOrder}, {"other", i}});
                     break;
                 }
             }
@@ -2520,7 +2533,7 @@ void File_Usac::UsacDecoderConfig()
                 ActualOrder += ' ';
             }
             if (!ActualOrder.empty()) ActualOrder.pop_back();
-            Fill_Conformance("UsacConfig channelConfigurationIndex", ("channelConfigurationIndex " + to_string(C.channelConfigurationIndex) + " implies element order " + ExpectedOrder + " but actual element order is " + ActualOrder).c_str());
+            Fill_Conformance(conformance::Usac_channelConfigurationIndex_MismatchElementOrder, {{"channelConfigurationIndex", C.channelConfigurationIndex}, {"expected_order", ExpectedOrder}, {"actual_order", ActualOrder}});
         }
     #endif
 
@@ -2576,26 +2589,26 @@ void File_Usac::UsacExtElementConfig()
         if (usacExtElementType_Present.find(usacExtElementType) != usacExtElementType_Present.end() && usacExtElementType < ID_EXT_ELE_Max && usacExtElementType_ConfigNames[usacExtElementType])
         {
             auto FieldName = string(usacExtElementType_ConfigNames[usacExtElementType]);
-            Fill_Conformance("UsacExtElementConfig GeneralCompliance", (FieldName + " is present 2 times but only 1 instance is recommended").c_str(), bitset8(), Warning);
+            Fill_Conformance(conformance::Usac_UsacExtElementConfig_DuplicateNotRecommended, {{"name", FieldName}});
         }
         else
         {
             usacExtElementType_Present.insert(usacExtElementType);
             if (usacExtElementType == ID_EXT_ELE_AUDIOPREROLL && C.usacElements.size() != 1)
-                Fill_Conformance("UsacExtElementConfig GeneralCompliance", ("AudioPreRoll is present in position "+to_string(C.usacElements.size()-1)+" but only presence in position 0 is allowed").c_str());
+                Fill_Conformance(conformance::Usac_AudioPreRoll_WrongPosition, {{"actual", C.usacElements.size()-1}});
         }
     #endif
     escapedValue(usacExtElementConfigLength, 4, 8, 16,          "usacExtElementConfigLength");
     #if MEDIAINFO_CONFORMANCE
         if (usacExtElementType == ID_EXT_ELE_AUDIOPREROLL && usacExtElementConfigLength)
-            Fill_Conformance("UsacExtElementConfig usacExtElementConfigLength", ("AudioPreRoll usacExtElementConfigLength is "+to_string(usacExtElementConfigLength)+" but only 0 is allowed").c_str());
+            Fill_Conformance(conformance::Usac_AudioPreRollUsacExtElementConfigLength_Wrong, {{"actual", usacExtElementConfigLength}});
     #endif
     Get_SB (usacExtElementDefaultLengthPresent,                 "usacExtElementDefaultLengthPresent");
     if (usacExtElementDefaultLengthPresent)
     {
         #if MEDIAINFO_CONFORMANCE
             if (usacExtElementType == ID_EXT_ELE_AUDIOPREROLL)
-                Fill_Conformance("UsacExtElementConfig usacExtElementDefaultLengthPresent", "AudioPreRoll usacExtElementDefaultLengthPresent is 1 but only 0 is allowed");
+                Fill_Conformance(conformance::Usac_AudioPreRollUsacExtElementDefaultLengthPresent_Wrong, {});
         #endif
         int32u usacExtElementDefaultLength;
         escapedValue(usacExtElementDefaultLength, 8, 16, 0,     "usacExtElementDefaultLength");
@@ -2606,7 +2619,7 @@ void File_Usac::UsacExtElementConfig()
     Get_SB (usacExtElementPayloadFrag,                          "usacExtElementPayloadFlag");
     #if MEDIAINFO_CONFORMANCE
         if (usacExtElementType == ID_EXT_ELE_AUDIOPREROLL && usacExtElementPayloadFrag)
-            Fill_Conformance("UsacExtElementConfig usacExtElementPayloadFrag", "AudioPreRoll usacExtElementPayloadFrag is 1 but only 0 is allowed");
+            Fill_Conformance(conformance::Usac_AudioPreRollUsacExtElementPayloadFrag_Wrong, {});
     #endif
     C.usacElements.back().usacExtElementPayloadFrag=usacExtElementPayloadFrag;
 
@@ -2729,7 +2742,7 @@ void File_Usac::Mps212Config(int8u StereoConfigindex)
             break;
         default:
             #if MEDIAINFO_CONFORMANCE
-                Fill_Conformance("Mps212Config bsFreqRes", "bsFreqRes shall not be encoded with a value of 0");
+                Fill_Conformance(conformance::Usac_bsFreqRes_NotPermitted0, {});
             #endif
             C.IFrameParsed=false;
             Element_End0();
@@ -2769,7 +2782,7 @@ void File_Usac::uniDrcConfig()
         Get_S3 (18, bsSampleRate ,                              "bsSampleRate"); bsSampleRate+=1000; Param_Info2(bsSampleRate, " Hz");
         #if MEDIAINFO_CONFORMANCE
             if (C.sampling_frequency && bsSampleRate != C.sampling_frequency)
-                Fill_Conformance("Crosscheck UsacConfig usacSamplingFrequency", ("USAC UsacConfig usacSamplingFrequency " + to_string(C.sampling_frequency) + " does not match DRC uniDrcConfig bsSampleRate " + to_string(bsSampleRate)).c_str());
+                Fill_Conformance(conformance::Usac_usacSamplingFrequency_MismatchBsSampleRate, {{"usacSamplingFrequency", C.sampling_frequency}, {"bsSampleRate", bsSampleRate}});
         #endif
     TEST_SB_END();
     Get_S1 (7, downmixInstructionsCount,                        "downmixInstructionsCount");
@@ -2784,15 +2797,15 @@ void File_Usac::uniDrcConfig()
     Get_S1 (6, drcInstructionsUniDrcCount,                      "drcInstructionsUniDrcCount");
     #if MEDIAINFO_CONFORMANCE
         if (downmixInstructionsCount)
-            Fill_Conformance("uniDrcConfig downmixInstructionsCount", "Version 0 shall not be used");
+            Fill_Conformance(conformance::Usac_uniDrcConfigVersion0_NotPermitted, {{"name", "downmixInstructionsCount"}});
         if (drcCoefficientsBasicCount)
-            Fill_Conformance("uniDrcConfig drcCoefficientsBasicCount", "Version 0 shall not be used");
+            Fill_Conformance(conformance::Usac_uniDrcConfigVersion0_NotPermitted, {{"name", "drcCoefficientsBasicCount"}});
         if (drcInstructionsBasicCount)
-            Fill_Conformance("uniDrcConfig drcInstructionsBasicCount", "Version 0 shall not be used");
+            Fill_Conformance(conformance::Usac_uniDrcConfigVersion0_NotPermitted, {{"name", "drcInstructionsBasicCount"}});
         if (drcCoefficientsUniDrcCount)
-            Fill_Conformance("uniDrcConfig drcCoefficientsUniDrcCount", "Version 0 shall not be used");
+            Fill_Conformance(conformance::Usac_uniDrcConfigVersion0_NotPermitted, {{"name", "drcCoefficientsUniDrcCount"}});
         if (drcInstructionsUniDrcCount)
-            Fill_Conformance("uniDrcConfig drcInstructionsUniDrcCount", "Version 0 shall not be used");
+            Fill_Conformance(conformance::Usac_uniDrcConfigVersion0_NotPermitted, {{"name", "drcInstructionsUniDrcCount"}});
     #endif
     channelLayout();
     for (int8u i=0; i<downmixInstructionsCount; i++)
@@ -2879,7 +2892,7 @@ void File_Usac::uniDrcConfigExtension()
                             for (int8u i = 0; i < 6; i++)
                             {
                                 if (!(C.drcSetEffect & (1 << i)))
-                                    Fill_Conformance("drcInstructions drcSetEffect", (string(drcSetEffect_List[i]) + " isn't in at least one DRC").c_str());
+                                    Fill_Conformance(conformance::Usac_drcSetEffect_MissingInAllDRC, {{"name", string(drcSetEffect_List[i])}});
                                 if (i == 2)
                                     i += 2;
                             }
@@ -3323,7 +3336,7 @@ void File_Usac::channelLayout()
     Get_S1 (7, C.baseChannelCount,                              "C.baseChannelCount");
     #if MEDIAINFO_CONFORMANCE
         if (C.channelConfigurationIndex && C.channelConfigurationIndex < Aac_Channels_Size_Usac && Aac_Channels[C.channelConfigurationIndex] != C.baseChannelCount)
-            Fill_Conformance("Crosscheck UsacConfig numOutChannels", ("USAC UsacConfig numOutChannels " + to_string(Aac_Channels[C.channelConfigurationIndex]) + " does not match DRC uniDrcConfig baseChannelCount " + to_string(C.baseChannelCount)).c_str());
+            Fill_Conformance(conformance::Usac_numOutChannels_MismatchBaseChannelCount, {{"numOutChannels", Aac_Channels[C.channelConfigurationIndex]}, {"baseChannelCount", C.baseChannelCount}});
     #endif
     Get_SB (   layoutSignalingPresent,                          "layoutSignalingPresent");
     if (layoutSignalingPresent)
@@ -3415,7 +3428,7 @@ void File_Usac::fill_bytes(size_t usacConfigExtLength)
                 fill_bytes[fill_byte]++;
         }
         if (!fill_bytes.empty())
-            Fill_Conformance("UsacConfigExtension fill_byte", "fill_byte is "+(fill_bytes.size()==1?("0b"+Ztring::ToZtring(fill_bytes.begin()->first, 2).To_UTF8()):"with different values")+" but only 0b10100101 is expected", bitset8(), Warning);
+            Fill_Conformance(conformance::Usac_fill_byte_NotExpected, {{"actual", fill_bytes.size()==1?("0b"+Ztring::ToZtring(fill_bytes.begin()->first, 2).To_UTF8()):"with different values"}});
         Element_End0();
     #else
         Skip_BS(usacConfigExtLength,                            "0b10100101");
@@ -3489,14 +3502,14 @@ bool File_Usac::loudnessInfo(bool FromAlbum, bool V1)
         Get_S1 ( 2, reliability,                                "reliability"); Param_Info1(reliabilities[reliability]);
             #if MEDIAINFO_CONFORMANCE
             if (measurementSystem == 4)
-                Fill_Conformance("loudnessInfo measurementSystem", ("measurementSystem " + to_string(measurementSystem) + (measurementSystem < measurementSystems_Size ? (string(" (") + measurementSystems[measurementSystem] + ')') : string()) + " is known as reserved in ISO/IEC 23003-3:2020").c_str(), bitset8(), Warning);
+                Fill_Conformance(measurementSystem < measurementSystems_Size ? conformance::Usac_measurementSystem_ReservedNamed : conformance::Usac_measurementSystem_Reserved, {{"measurementSystem", measurementSystem}, {"name", measurementSystem < measurementSystems_Size ? measurementSystems[measurementSystem] : ""}});
             if (reliability == 1)
-                Fill_Conformance("loudnessInfo reliability", (to_string(reliability) + " (" + reliabilities[reliability] + ") is known as reserved in ISO/IEC 23003-3:2020").c_str(), bitset8(), Warning);
+                Fill_Conformance(conformance::Usac_reliability_Reserved, {{"reliability", reliability}, {"name", reliabilities[reliability]}});
         #endif
     }
     #if MEDIAINFO_CONFORMANCE
         if (!drcSetId && !samplePeakLevelPresent && !truePeakLevelPresent)
-            Fill_Conformance("loudnessInfo GeneralCompliance", "None of samplePeakLevelPresent or truePeakLevelPresent is present", bitset8().set(Usac), Warning);
+            Fill_Conformance(conformance::Usac_PeakLevel_Missing, {}, bitset8().set(Usac));
     #endif
     Get_S1 (4, measurementCount,                                "measurementCount");
     bool IsNOK=false;
@@ -3523,7 +3536,7 @@ bool File_Usac::loudnessInfo(bool FromAlbum, bool V1)
         Get_S1 (2, reliability,                                 "reliability"); Param_Info1(reliabilities[reliability]);
         #if MEDIAINFO_CONFORMANCE
             if (measurementSystem >= 7 && measurementSystem <= 11) // || measurementSystem == 4
-                Fill_Conformance("loudnessInfo measurementSystem", ("measurementSystem " + to_string(measurementSystem) + (measurementSystem < measurementSystems_Size ? (string(" (") + measurementSystems[measurementSystem] + ')') : string()) + " is known as reserved in ISO/IEC 23003-3:2020").c_str(), bitset8(), Warning);
+                Fill_Conformance(measurementSystem < measurementSystems_Size ? conformance::Usac_measurementSystem_ReservedNamed : conformance::Usac_measurementSystem_Reserved, {{"measurementSystem", measurementSystem}, {"name", measurementSystem < measurementSystems_Size ? measurementSystems[measurementSystem] : ""}});
             //if (reliability == 1)
             //    Fill_Conformance("loudnessInfo reliability", (to_string(reliability) + " (" + reliabilities[reliability] + ") is incorrect").c_str(), bitset8(), Warning);
             measurement_present Measurement_Present = { methodDefinition, measurementSystem };
@@ -3544,7 +3557,7 @@ bool File_Usac::loudnessInfo(bool FromAlbum, bool V1)
                         Field += to_string(measurementSystem);
                     Field += ')';
                 }
-                Fill_Conformance("loudnessInfo methodDefinition", (Field + " is present 2 times but only 1 instance is recommended").c_str(), bitset8(), Warning);
+                Fill_Conformance(conformance::Usac_methodDefinition_DuplicateNotRecommended, {{"name", Field}});
             }
             else
                 Measurements_Present.insert(Measurement_Present);
@@ -3563,7 +3576,7 @@ bool File_Usac::loudnessInfo(bool FromAlbum, bool V1)
     drc_id Id={drcSetId, downmixId, eqSetId};
     #if MEDIAINFO_CONFORMANCE
         if (C.loudnessInfo_Data[FromAlbum].find(Id) != C.loudnessInfo_Data[FromAlbum].end())
-            Fill_Conformance("loudnessInfo GeneralCompliance", ((Id.empty() ? string("Default loudness") : Id.to_string()) + " is present 2 times but only 1 instance is recommended").c_str(), bitset8(), Warning);
+            Fill_Conformance(conformance::Usac_loudnessInfo_DuplicateNotRecommended, {{"name", Id.empty() ? string("Default loudness") : Id.to_string()}});
     #endif
     C.loudnessInfo_Data[FromAlbum][Id].SamplePeakLevel=((samplePeakLevelPresent && bsSamplePeakLevel)?(Ztring::ToZtring(20-((double)bsSamplePeakLevel)/32)+__T(" dBFS")):Ztring());
     C.loudnessInfo_Data[FromAlbum][Id].TruePeakLevel=((truePeakLevelPresent && bsTruePeakLevel)?(Ztring::ToZtring(20-((double)bsTruePeakLevel)/32)+__T(" dBTP")):Ztring());
@@ -3638,9 +3651,9 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
             {
                 auto numPreRollFrames = (*roll_distance_Values)[0].roll_distance;
                 if (numPreRollFrames <= 0)
-                    Fill_Conformance("sgpd_prol roll_distance", "roll_distance is " + to_string(numPreRollFrames) + " but > 0 is required");
+                    Fill_Conformance(conformance::Usac_roll_distance_Wrong, {{"actual", numPreRollFrames}});
                 else
-                    numPreRollFrames_Check(Conf, (int32u)numPreRollFrames, "sgpd_prol roll_distance");
+                    numPreRollFrames_Check(Conf, (int32u)numPreRollFrames, "sgpd_prol", "roll_distance");
             }
         }
     #endif
@@ -3660,23 +3673,23 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                 if (usacIndependencyFlag)
                 {
                     if (!ContainerSaysImmediate && !ContainerSaysNonImmediate && roll_distance_FramePos_IsPresent && *roll_distance_FramePos_IsPresent)
-                        Fill_Conformance("Crosscheck stss sample_number", "MP4 stss or MP4 sbgp does not indicate this frame is independent but USAC UsacFrame usacIndependencyFlag 1 indicates this frame is independent");
+                        Fill_Conformance(conformance::Usac_usacIndependencyFlag_MismatchStssSbgp, {});
                 }
                 else
                 {
                     if (ContainerSaysImmediate)
-                        Fill_Conformance("Crosscheck stss sample_number", "MP4 stss indicates this frame is an immediate play-out frame (IPF) but USAC UsacFrame usacIndependencyFlag 0 indicates this frame is not an immediate play-out frame (IPF)");
+                        Fill_Conformance(conformance::Usac_usacIndependencyFlag_MismatchStss, {});
                     if (ContainerSaysNonImmediate && roll_distance_FramePos_IsPresent && *roll_distance_FramePos_IsPresent)
-                        Fill_Conformance("Crosscheck sbgp group_description_index", "MP4 sbgp indicates this frame is an independent frame (IF) but USAC UsacFrame usacIndependencyFlag 0 indicates this frame is not an independent frame (IF)");
+                        Fill_Conformance(conformance::Usac_usacIndependencyFlag_MismatchSbgp, {});
                 }
             }
             if (!Frame_Count_NotParsedIncluded && !usacIndependencyFlag)
-                Fill_Conformance("Crosscheck UsacFrame usacIndependencyFlag", "This is the first frame in this stream but USAC UsacFrame usacIndependencyFlag is 0 so this frame is not decodable", bitset8(), Warning);
+                Fill_Conformance(conformance::Usac_usacIndependencyFlag_Wrong0InFirstFrame, {});
         }
         if (IsParsingRaw == 2) //If from AudioPreRoll() and first frame
         {
             if (!usacIndependencyFlag)
-                Fill_Conformance("UsacFrame usacIndependencyFlag", "usacIndependencyFlag is 0 for first UsacFrame inside AudioPreRoll");
+                Fill_Conformance(conformance::Usac_usacIndependencyFlag_Wrong0InAudioPreRoll, {});
         }
         Merge_Conformance();
     #endif
@@ -3742,9 +3755,9 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                         IsZeroed=!Probe;
                     }
                     if (IsZeroed)
-                        Fill_Conformance("UsacFrame GeneralCompliance", "Extra zero bytes after the end of the syntax was reached", bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_ExtraZeroBytes_Present, {{"element", "UsacFrame"}});
                     else
-                        Fill_Conformance("UsacFrame GeneralCompliance", "Extra bytes after the end of the syntax was reached", bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_ExtraBytes_Present, {{"element", "UsacFrame"}});
                 #endif
                 LastByte=1;
             }
@@ -3765,9 +3778,9 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                     if (Buffer_Temp[i])
                         break;
                 if (i == Size)
-                    Fill_Conformance("UsacFrame GeneralCompliance", "Extra zero bytes after the end of the syntax was reached", bitset8(), Warning);
+                    Fill_Conformance(conformance::Usac_ExtraZeroBytes_Present, {{"element", "UsacFrame"}});
                 else
-                    Fill_Conformance("UsacFrame GeneralCompliance", "Extra bytes after the end of the syntax was reached", bitset8(), Warning);
+                    Fill_Conformance(conformance::Usac_ExtraBytes_Present, {{"element", "UsacFrame"}});
             }
         #endif
     }
@@ -3788,7 +3801,7 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                     auto SampleDuration_FromStream = ((int32u)coreSbrFrameLengthIndex_Mapping[C.coreSbrFrameLengthIndex].outputFrameLengthDivided256) * 256;
                     bool IsLastFrame = i == outputFrameLength->size() && Frame_Count_NotParsedIncluded == outputFrameLength_FrameTotal - 1;
                     if (SampleDuration_FromContainer != SampleDuration_FromStream && (!IsLastFrame || SampleDuration_FromContainer > SampleDuration_FromStream))
-                        Fill_Conformance("Crosscheck stts sample_count", ("MP4 stts sample_count " + to_string(SampleDuration_FromContainer) + " does not match USAC UsacConfig coreCoderFrameLength " + to_string(SampleDuration_FromStream)).c_str());
+                        Fill_Conformance(conformance::Usac_SampleDuration_Mismatch, {{"sample_duration_from_container", SampleDuration_FromContainer}, {"sample_duration_from_stream", SampleDuration_FromStream}});
                 }
             }
             if (roll_distance_FramePos && usacIndependencyFlag)
@@ -3798,7 +3811,7 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                     auto ContainerSaysNonImmediate = find(roll_distance_FramePos->begin(), roll_distance_FramePos->end(), Frame_Count_NotParsedIncluded) != roll_distance_FramePos->end();
                     if (ContainerSaysNonImmediate && (!FirstOutputtedDecodedSample || !*FirstOutputtedDecodedSample))
                     {
-                        Fill_Conformance("AudioPreRoll GeneralCompliance", "This is the first frame in this stream but USAC AudioPreRoll is not present", bitset8(), Warning);
+                        Fill_Conformance(conformance::Usac_AudioPreRoll_MissingInFirstFrame, {});
                     }
                 }
                 if (Immediate_FramePos)
@@ -3809,17 +3822,17 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                     {
                         //Immediate
                         if (!ContainerSaysImmediate)
-                            Fill_Conformance("Crosscheck stss sample_number", "MP4 stss does not indicate this frame is an immediate play-out frame (IPF) but USAC AudioPreRoll is present");
+                            Fill_Conformance(conformance::Usac_AudioPreRoll_PresentWithoutStss, {});
                         if (ContainerSaysNonImmediate && roll_distance_FramePos_IsPresent && *roll_distance_FramePos_IsPresent)
-                            Fill_Conformance("Crosscheck sbgp group_description_index", "MP4 sbgp indicates this frame is an independent frame (IF) but USAC AudioPreRoll is present");
+                            Fill_Conformance(conformance::Usac_AudioPreRoll_PresentWithSbgp, {});
                     }
                     else
                     {
                         //NonImmediate
                         if (ContainerSaysImmediate)
-                            Fill_Conformance("Crosscheck stss sample_number", "MP4 stss indicates this frame is an immediate play-out frame (IPF) but USAC AudioPreRoll is not present");
+                            Fill_Conformance(conformance::Usac_AudioPreRoll_MissingWithStss, {});
                         if (!ContainerSaysNonImmediate && roll_distance_FramePos_IsPresent && *roll_distance_FramePos_IsPresent)
-                            Fill_Conformance("Crosscheck sbgp group_description_index", "MP4 sbgp does not indicate this frame is an independent frame (IF) but USAC AudioPreRoll is not present");
+                            Fill_Conformance(conformance::Usac_AudioPreRoll_MissingWithoutSbgp, {});
                     }
                 }
             }
@@ -3838,7 +3851,7 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
     {
         #if MEDIAINFO_CONFORMANCE
             Clear_Conformance();
-            Fill_Conformance("UsacFrame GeneralCompliance", "Bitstream parsing ran out of data to read before the end of the syntax was reached, most probably the bitstream is malformed");
+            Fill_Conformance(conformance::Usac_Bitstream_Malformed, {{"element", "UsacFrame"}});
             Merge_Conformance();
         #endif
         C.IFrameParsed=false;
@@ -3992,9 +4005,9 @@ void File_Usac::arithData(size_t ch, int16u N, int16u lg, int16u lg_max, bool ar
     {
         #if MEDIAINFO_CONFORMANCE
             if (lg>1024)
-                Fill_Conformance("arithData GeneralCompliance", "lg is more than 1024");
+                Fill_Conformance(conformance::Usac_lg_MoreThan1024, {});
             if (N>4096)
-                Fill_Conformance("arithData GeneralCompliance", "N is more than 4096");
+                Fill_Conformance(conformance::Usac_N_MoreThan4096, {});
         #endif
         C.IFrameParsed=false;
         return;
@@ -4012,7 +4025,7 @@ void File_Usac::arithData(size_t ch, int16u N, int16u lg, int16u lg_max, bool ar
             if (!N && lg)
             {
                 #if MEDIAINFO_CONFORMANCE
-                    Fill_Conformance("arithData GeneralCompliance", "N is 0");
+                    Fill_Conformance(conformance::Usac_N_NotPermitted0, {});
                 #endif
                 C.IFrameParsed=false;
                 return;
@@ -4113,7 +4126,7 @@ void File_Usac::arithData(size_t ch, int16u N, int16u lg, int16u lg_max, bool ar
             if (lev>23)
             {
                 #if MEDIAINFO_CONFORMANCE
-                    Fill_Conformance("arithData GeneralCompliance", "Issue detected while computing lev");
+                    Fill_Conformance(conformance::Usac_arithDataLev_Malformed, {});
                 #endif
                 C.IFrameParsed=false;
                 Element_End0();
@@ -4227,7 +4240,7 @@ void File_Usac::acSpectralData(size_t ch, bool usacIndependencyFlag)
                 if (Aac_sampling_frequency[sampling_frequency_index_swb])
                     ;//Fill_Conformance("acSpectralData", "acSpectralData is not implemented for this sampling_frequency_index_swb", bitset8(), Info);
                 else
-                    Fill_Conformance("acSpectralData Cohenrecy", "Issue in acSpectralData while computing sampling_frequency_index_swb");
+                    Fill_Conformance(conformance::Usac_acSpectralData_Malformed, {});
             }
         #endif
         C.IFrameParsed=false;
@@ -5095,7 +5108,7 @@ void File_Usac::UsacSbrData(size_t nrSbrChannels, bool usacIndependencyFlag)
         {
             Element_End0();
             #if MEDIAINFO_CONFORMANCE
-                Fill_Conformance("UsacSbrData GeneralCompliance", "Issue detected while computing SBR bands");
+                Fill_Conformance(conformance::Usac_UsacSbrData_Malformed, {});
             #endif
             C.IFrameParsed=false;
             return;
@@ -5701,7 +5714,7 @@ void File_Usac::EnvelopeReshapeHuff(bool (&bsTempShapeEnableChannel)[2])
             if (i+len>C.mps212Handler.numSlots)
             {
                 #if MEDIAINFO_CONFORMANCE
-                    Fill_Conformance("EnvelopeReshapeHuff GeneralCompliance", "Issue detected while computing 2Dhuff_dec");
+                    Fill_Conformance(conformance::Usac_EnvelopeReshapeHuff_Malformed, {});
                 #endif
                 C.IFrameParsed=false;
                 return;
@@ -5854,7 +5867,7 @@ void File_Usac::Mps212Data(bool usacIndependencyFlag)
         break;
     default:
         #if MEDIAINFO_CONFORMANCE
-            Fill_Conformance("Mps212Data", "Mps212Data support not implemented for this coreSbrFrameLengthIndex", bitset8(), Info);
+            Fill_Conformance(conformance::Usac_Mps212Data_NotSupported, {});
         #endif
         C.IFrameParsed=false;
         return;
@@ -5882,7 +5895,7 @@ void File_Usac::UsacLfeElement(bool usacIndependencyFlag)
     Element_Begin1("UsacLfeElement");
         //fdChannelStream(0, false, false, false, usacIndependencyFlag);
         #if MEDIAINFO_CONFORMANCE
-            Fill_Conformance("UsacLfeElement", "UsacLfeElement support not implemented", bitset8(), Info);
+            Fill_Conformance(conformance::Usac_UsacLfeElement_NotSupported, {});
         #endif
         C.IFrameParsed=false;
     Element_End0();
@@ -5906,7 +5919,7 @@ void File_Usac::UsacExtElement(size_t elemIdx, bool usacIndependencyFlag)
         {
             #if MEDIAINFO_CONFORMANCE
                 if (usacExtElementType == ID_EXT_ELE_AUDIOPREROLL)
-                    Fill_Conformance("UsacExtElement usacExtElementUseDefaultLength", "AudioPreRoll usacExtElementUseDefaultLength is 1 but only 0 is allowed");
+                    Fill_Conformance(conformance::Usac_AudioPreRollUsacExtElementUseDefaultLength_Wrong, {});
             #endif
             usacExtElementPayloadLength=C.usacElements[elemIdx].usacExtElementDefaultLength;
         }
@@ -5929,12 +5942,12 @@ void File_Usac::UsacExtElement(size_t elemIdx, bool usacIndependencyFlag)
             if (usacExtElementType == ID_EXT_ELE_AUDIOPREROLL)
             {
                 if (IsParsingRaw > 1)
-                    Fill_Conformance("UsacExtElement usacExtElementPresent", "AudioPreRoll usacExtElementPresent is 1 for AudioPreRoll inside AudioPreRoll");
+                    Fill_Conformance(conformance::Usac_AudioPreRoll_NotPermittedInAudioPreRoll, {});
                 else if (!usacExtElementPayloadLength)
                 {
                     F.numPreRollFrames = 0;
                     if (!Frame_Count && IsParsingRaw <= 1)
-                        numPreRollFrames_Check(Conf, 0, "AudioPreRoll numPreRollFrames");
+                        numPreRollFrames_Check(Conf, 0, "AudioPreRoll", "numPreRollFrames");
                 }
             }
         #endif
@@ -5963,7 +5976,7 @@ void File_Usac::UsacExtElement(size_t elemIdx, bool usacIndependencyFlag)
         #if MEDIAINFO_CONFORMANCE
             if (usacIndependencyFlag && usacExtElementType == ID_EXT_ELE_AUDIOPREROLL && IsParsingRaw == 1 && roll_distance_FramePos_IsPresent && !*roll_distance_FramePos_IsPresent)
             {
-                Fill_Conformance("Crosscheck sbgp roll_distance", "MP4 sbgp is not present and this is an independent frame (IF), seeking is not optimal", bitset8(), Info);
+                Fill_Conformance(conformance::Usac_sbgp_MissingForIndependentFrame, {});
             }
         #endif
     }
@@ -6008,14 +6021,14 @@ void File_Usac::AudioPreRoll()
             C = Conf; //Using default conf if there is no replacing conf
         #if MEDIAINFO_CONFORMANCE
             if (IsParsingRaw <= 1)
-                Fill_Conformance("AudioPreRoll configLen", "configLen is 0 but it is recommended to have a preroll config", bitset8(), Warning);
+                Fill_Conformance(conformance::Usac_configLen_NotRecommended0, {});
         #endif
     }
     Skip_SB(                                                    "applyCrossfade");
     Skip_SB(                                                    "reserved");
     escapedValue(F.numPreRollFrames, 2, 4, 0,                   "numPreRollFrames");
     #if MEDIAINFO_CONFORMANCE
-        numPreRollFrames_Check(C, F.numPreRollFrames, "AudioPreRoll numPreRollFrames");
+        numPreRollFrames_Check(C, F.numPreRollFrames, "AudioPreRoll", "numPreRollFrames");
     #endif
     for (int32u frameIdx=0; frameIdx<F.numPreRollFrames; frameIdx++)
     {
@@ -6055,7 +6068,7 @@ void File_Usac::AudioPreRoll()
             else
             {
                 #if MEDIAINFO_CONFORMANCE
-                    Fill_Conformance("AudioPreRoll auLen", "auLen is 0 but preroll frame shall not be empty");
+                    Fill_Conformance(conformance::Usac_auLen_NotPermitted0, {});
                 #endif
             }
         Element_End0();
