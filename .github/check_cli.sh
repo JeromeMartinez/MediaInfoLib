@@ -46,10 +46,12 @@ if [ ! -d ../MediaInfo ] ; then
     sh .github/clone_branch.sh MediaInfo ../MediaInfo
 fi
 
-# ZenLib built again with the Unicode mode ${1}, only as a static library
+# ZenLib built again with the Unicode mode ${1}, only as a static library (also for the next modes)
+zenlib_static=
 zenlib_build() {
     git -C ../ZenLib clean -fdxq
     ( cd ../ZenLib/Project/GNU/Library && autoreconf -if && ./configure --enable-silent-rules --enable-unicode=${1} --enable-static --disable-shared && ${make} -j4 )
+    zenlib_static=yes
 }
 
 for mode in "${@}" ; do
@@ -73,10 +75,12 @@ for mode in "${@}" ; do
             if [ "${mode}" = dll_without_unicode ] ; then
                 unicode=no
             fi
-            options=--with-dll
             if [ "$(../ZenLib/Project/GNU/Library/libzen-config Unicode)" != "${unicode}" ] ; then
-                options="--with-dll --enable-staticlibs"
                 zenlib_build ${unicode}
+            fi
+            options=--with-dll
+            if [ -n "${zenlib_static}" ] ; then
+                options="--with-dll --enable-staticlibs"
             fi
             ;;
         *)
