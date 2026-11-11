@@ -249,5 +249,85 @@ private :
     MediaInfo& operator=(const MediaInfo&);                 // Prevent assignment
 };
 
+//***************************************************************************
+/// @brief MediaInfo with UTF-8 or wide strings, whatever the Unicode mode of the library
+/// The functions of MediaInfo for a program which is not compiled with the Unicode mode of the library (UNICODE), with the same results with
+/// and without Unicode: MediaInfoA with UTF-8 text (the strings of the library without Unicode), MediaInfoW with wide strings (the strings of
+/// the library with Unicode). With Unicode, the strings of MediaInfoA are converted as ZenLib converts its strings without Unicode: the bytes
+/// which are not valid UTF-8 are kept, the UTF-16 surrogates which are not in a pair are 3 bytes as in WTF-8, and a file name which is not
+/// UTF-8 text is in the encoding of the locale (the code page on Windows). The strings are given and returned up to their first NUL character,
+/// as with the C interface.
+//***************************************************************************
+
+class MEDIAINFO_EXP MediaInfoA
+{
+public :
+    MediaInfoA ();
+    ~MediaInfoA ();
+    size_t Open (const std::string &File_Name);
+    size_t Open (const ZenLib::int8u* Begin, size_t Begin_Size, const ZenLib::int8u* End=NULL, size_t End_Size=0, ZenLib::int64u File_Size=0);
+    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Continue (const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    ZenLib::int64u Open_Buffer_Continue_GoTo_Get ();
+    size_t Open_Buffer_Finalize ();
+    size_t Open_NextPacket ();
+    size_t Save ();
+    void Close ();
+    std::string Inform (size_t Reserved=0);
+    std::string Get (stream_t StreamKind, size_t StreamNumber, size_t Parameter, info_t InfoKind=Info_Text);
+    std::string Get (stream_t StreamKind, size_t StreamNumber, const std::string &Parameter, info_t InfoKind=Info_Text, info_t SearchKind=Info_Name);
+    size_t Set (const std::string &ToSet, stream_t StreamKind, size_t StreamNumber, size_t Parameter, const std::string &OldValue=std::string());
+    size_t Set (const std::string &ToSet, stream_t StreamKind, size_t StreamNumber, const std::string &Parameter, const std::string &OldValue=std::string());
+    size_t Output_Buffer_Get (const std::string &Value);
+    size_t Output_Buffer_Get (size_t Pos);
+    std::string        Option (const std::string &Option, const std::string &Value=std::string());
+    static std::string Option_Static (const std::string &Option, const std::string &Value=std::string());
+    size_t             State_Get ();
+    size_t             Count_Get (stream_t StreamKind, size_t StreamNumber=(size_t)-1);
+
+private :
+    MediaInfo* Object;
+
+    //Constructor
+    MediaInfoA (const MediaInfoA&);                         // Prevent copy-construction
+    MediaInfoA& operator=(const MediaInfoA&);               // Prevent assignment
+};
+
+#if !defined(WSTRING_MISSING)
+class MEDIAINFO_EXP MediaInfoW
+{
+public :
+    MediaInfoW ();
+    ~MediaInfoW ();
+    size_t Open (const std::wstring &File_Name);
+    size_t Open (const ZenLib::int8u* Begin, size_t Begin_Size, const ZenLib::int8u* End=NULL, size_t End_Size=0, ZenLib::int64u File_Size=0);
+    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Continue (const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    ZenLib::int64u Open_Buffer_Continue_GoTo_Get ();
+    size_t Open_Buffer_Finalize ();
+    size_t Open_NextPacket ();
+    size_t Save ();
+    void Close ();
+    std::wstring Inform (size_t Reserved=0);
+    std::wstring Get (stream_t StreamKind, size_t StreamNumber, size_t Parameter, info_t InfoKind=Info_Text);
+    std::wstring Get (stream_t StreamKind, size_t StreamNumber, const std::wstring &Parameter, info_t InfoKind=Info_Text, info_t SearchKind=Info_Name);
+    size_t Set (const std::wstring &ToSet, stream_t StreamKind, size_t StreamNumber, size_t Parameter, const std::wstring &OldValue=std::wstring());
+    size_t Set (const std::wstring &ToSet, stream_t StreamKind, size_t StreamNumber, const std::wstring &Parameter, const std::wstring &OldValue=std::wstring());
+    size_t Output_Buffer_Get (const std::wstring &Value);
+    size_t Output_Buffer_Get (size_t Pos);
+    std::wstring        Option (const std::wstring &Option, const std::wstring &Value=std::wstring());
+    static std::wstring Option_Static (const std::wstring &Option, const std::wstring &Value=std::wstring());
+    size_t              State_Get ();
+    size_t              Count_Get (stream_t StreamKind, size_t StreamNumber=(size_t)-1);
+
+private :
+    MediaInfo* Object;
+
+    //Constructor
+    MediaInfoW (const MediaInfoW&);                         // Prevent copy-construction
+    MediaInfoW& operator=(const MediaInfoW&);               // Prevent assignment
+};
+#endif //!defined(WSTRING_MISSING)
+
 } //NameSpace
 #endif

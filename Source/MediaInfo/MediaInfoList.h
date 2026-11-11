@@ -221,5 +221,74 @@ private :
     MediaInfoList& operator=(const MediaInfoList&);         // Prevent assignment
 };
 
+//***************************************************************************
+/// @brief MediaInfoList with UTF-8 or wide strings, whatever the Unicode mode of the library
+/// The functions of MediaInfoList with the strings of MediaInfoA (UTF-8 text) or of MediaInfoW (wide strings), see MediaInfoA
+//***************************************************************************
+
+class MEDIAINFO_EXP MediaInfoListA
+{
+public :
+    MediaInfoListA (size_t Count_Init=64);
+    ~MediaInfoListA ();
+    size_t Open (const std::string &File, const fileoptions_t Options=FileOption_Nothing);
+    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
+    size_t Open_Buffer_Finalize (size_t FilePos);
+    size_t Save (size_t FilePos);
+    void Close (size_t FilePos=(size_t)-1);
+    std::string Inform (size_t FilePos=(size_t)-1, size_t Reserved=0);
+    std::string Get (size_t FilePos, stream_t StreamKind, size_t StreamNumber, size_t Parameter, info_t KindOfInfo=Info_Text);
+    std::string Get (size_t FilePos, stream_t StreamKind, size_t StreamNumber, const std::string &Parameter, info_t KindOfInfo=Info_Text, info_t KindOfSearch=Info_Name);
+    size_t Set (const std::string &ToSet, size_t FilePos, stream_t StreamKind, size_t StreamNumber, size_t Parameter, const std::string &OldValue=std::string());
+    size_t Set (const std::string &ToSet, size_t FilePos, stream_t StreamKind, size_t StreamNumber, const std::string &Parameter, const std::string &OldValue=std::string());
+    std::string        Option (const std::string &Option, const std::string &Value=std::string());
+    static std::string Option_Static (const std::string &Option, const std::string &Value=std::string());
+    size_t             State_Get ();
+    size_t             Count_Get (size_t FilePos, stream_t StreamKind, size_t StreamNumber=(size_t)-1);
+    size_t             Count_Get ();
+
+private :
+    MediaInfoList* Object;
+
+    //Constructor
+    MediaInfoListA (const MediaInfoListA&);                 // Prevent copy-construction
+    MediaInfoListA& operator=(const MediaInfoListA&);       // Prevent assignment
+};
+
+#if !defined(WSTRING_MISSING)
+class MEDIAINFO_EXP MediaInfoListW
+{
+public :
+    MediaInfoListW (size_t Count_Init=64);
+    ~MediaInfoListW ();
+    size_t Open (const std::wstring &File, const fileoptions_t Options=FileOption_Nothing);
+    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
+    size_t Open_Buffer_Finalize (size_t FilePos);
+    size_t Save (size_t FilePos);
+    void Close (size_t FilePos=(size_t)-1);
+    std::wstring Inform (size_t FilePos=(size_t)-1, size_t Reserved=0);
+    std::wstring Get (size_t FilePos, stream_t StreamKind, size_t StreamNumber, size_t Parameter, info_t KindOfInfo=Info_Text);
+    std::wstring Get (size_t FilePos, stream_t StreamKind, size_t StreamNumber, const std::wstring &Parameter, info_t KindOfInfo=Info_Text, info_t KindOfSearch=Info_Name);
+    size_t Set (const std::wstring &ToSet, size_t FilePos, stream_t StreamKind, size_t StreamNumber, size_t Parameter, const std::wstring &OldValue=std::wstring());
+    size_t Set (const std::wstring &ToSet, size_t FilePos, stream_t StreamKind, size_t StreamNumber, const std::wstring &Parameter, const std::wstring &OldValue=std::wstring());
+    std::wstring        Option (const std::wstring &Option, const std::wstring &Value=std::wstring());
+    static std::wstring Option_Static (const std::wstring &Option, const std::wstring &Value=std::wstring());
+    size_t              State_Get ();
+    size_t              Count_Get (size_t FilePos, stream_t StreamKind, size_t StreamNumber=(size_t)-1);
+    size_t              Count_Get ();
+
+private :
+    MediaInfoList* Object;
+
+    //Constructor
+    MediaInfoListW (const MediaInfoListW&);                 // Prevent copy-construction
+    MediaInfoListW& operator=(const MediaInfoListW&);       // Prevent assignment
+};
+#endif //!defined(WSTRING_MISSING)
+
 } //NameSpace
 #endif
