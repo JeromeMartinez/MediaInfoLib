@@ -16,9 +16,28 @@
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
+#include <cstddef>
 #include <sstream>
 #include <string>
-#include <ZenLib/Conf.h>
+//ZenLib is not needed by the interface, ZenLib/Conf.h is still included if it is available, for the programs which use its types or macros
+//through these headers
+#if defined(__has_include)
+    #if __has_include(<ZenLib/Conf.h>)
+        #include <ZenLib/Conf.h>
+    #endif
+#else
+    #include <ZenLib/Conf.h>
+#endif
+//---------------------------------------------------------------------------
+
+//---------------------------------------------------------------------------
+/// @brief Integer types of the interface, as in the C interface (MediaInfoDLL.h), the same types as ZenLib::int8u and ZenLib::int64u
+typedef unsigned char MediaInfo_int8u;
+#if defined(_WIN32) && !defined(__MINGW32__) && !defined(__CYGWIN32__)
+    typedef unsigned __int64 MediaInfo_int64u;
+#else
+    typedef unsigned long long MediaInfo_int64u;
+#endif
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
