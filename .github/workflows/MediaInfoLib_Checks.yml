@@ -78,9 +78,9 @@ jobs:
       RUN_TESTS: ${{ matrix.RUN_TESTS }}
       # curl and graphviz linked for this job, else loaded at run time
       LINK_CURL_GRAPHVIZ: ${{ (matrix.environement == 'link-curl-graphviz' || (matrix.os == 'macos-26' && matrix.environement == 'gcc')) && 'yes' || '' }}
-      # CLI of MediaInfo with this library (with and without Unicode): with the C++ API, and with the C API loaded at run time by a CLI with and
-      # without Unicode
-      CLI_MODES: ${{ (matrix.os == 'ubuntu-26.04' || matrix.os == 'macos-26') && (matrix.environement == 'gcc' || matrix.environement == 'utf8') && 'shared dll dll_without_unicode' || '' }}
+      # CLI of MediaInfo with this library (with and without Unicode): with the C++ API by a CLI with the Unicode mode of the library and (if
+      # it has Unicode) by a CLI without Unicode, and with the C API loaded at run time by a CLI with and without Unicode
+      CLI_MODES: ${{ (matrix.os == 'ubuntu-26.04' || matrix.os == 'macos-26') && (matrix.environement == 'gcc' && 'shared shared_without_unicode dll_without_unicode dll' || matrix.environement == 'utf8' && 'shared dll_without_unicode dll') || '' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 300M
       CCACHE_COMPRESS: 1

@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # CLI of MediaInfo (branch of the same name if any) with this library, its file name test and files which can not be opened, for the modes ${1}...:
-# - shared: C++ API of the installed library (same Unicode mode)
-# - dll: C API of the installed library (with or without Unicode, the same results), loaded at run time, by a CLI with Unicode
-# - dll_without_unicode: same, by a CLI without Unicode
-# (for the dll modes, ZenLib is built again for the CLI if it has not the Unicode mode of the CLI, so after shared)
+# - shared: C++ API of the installed library, by a CLI with its Unicode mode
+# - shared_without_unicode: same, by a CLI without Unicode (classes with narrow strings, whatever the Unicode mode of the library)
+# - dll_without_unicode: C API of the installed library (with or without Unicode, the same results), loaded at run time, by a CLI without Unicode
+# - dll: same, by a CLI with Unicode (ZenLib is built again for the CLI if it has not Unicode, so after the other modes)
 # The libraries are installed before (the CLI and the test load them from the system directories), MAKE and SUDO may be set
 
 set -e
@@ -50,16 +50,18 @@ for mode in "${@}" ; do
         shared)
             options=
             ;;
-        dll|dll_without_unicode)
-            unicode=yes
-            if [ "${mode}" = dll_without_unicode ] ; then
-                unicode=no
-            fi
+        shared_without_unicode)
+            options=--disable-unicode
+            ;;
+        dll_without_unicode)
+            options="--with-dll --disable-unicode"
+            ;;
+        dll)
             options=--with-dll
-            if [ "$(../ZenLib/Project/GNU/Library/libzen-config Unicode)" != "${unicode}" ] ; then
+            if [ "$(../ZenLib/Project/GNU/Library/libzen-config Unicode)" != yes ] ; then
                 options="--with-dll --enable-staticlibs" # ZenLib built again only as a static library
                 git -C ../ZenLib clean -fdxq
-                ( cd ../ZenLib/Project/GNU/Library && autoreconf -if && ./configure --enable-silent-rules --enable-unicode=${unicode} --enable-static --disable-shared && ${make} -j4 )
+                ( cd ../ZenLib/Project/GNU/Library && autoreconf -if && ./configure --enable-silent-rules --enable-unicode=yes --enable-static --disable-shared && ${make} -j4 )
             fi
             ;;
         *)
