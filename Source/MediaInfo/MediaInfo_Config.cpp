@@ -3936,10 +3936,22 @@ string MediaInfo_Config::AdmProfile(const Ztring& Value2)
             Result.BS2076 = 2;
         else if (Item.rfind("urn:ebu:tech:3392:1.0:", 0) == 0)
         {
-            if (Item.size() > 22 && Item[22] >= '1' && Item[22] <= '4')
-                Result.Ebu3392 = Item[22] - '0';
-            else
+            // urn:ebu:tech:3392:1.0:l or urn:ebu:tech:3392:1.0:l:t (l is the level, t is the type combination e.g. "dmo")
+            if (Item.size() < 23 || Item[22] < '1' || Item[22] > '4' || (Item.size() > 23 && (Item[23] != ':' || Item.size() == 24)))
                 return "Unknown ADM profile " + Item;
+            Result.Ebu3392 = Item[22] - '0';
+            Result.Ebu3392_Types = 0;
+            static const char TypeLetters[] = "dmohb"; // Ordered by typeLabel value
+            size_t TypeLetters_Pos = 0;
+            for (size_t i = 24; i < Item.size(); i++)
+            {
+                while (TypeLetters[TypeLetters_Pos] && TypeLetters[TypeLetters_Pos] != Item[i])
+                    TypeLetters_Pos++;
+                if (!TypeLetters[TypeLetters_Pos])
+                    return "Unknown ADM profile " + Item + " (type combination letters shall be from \"dmohb\" and in this order)";
+                Result.Ebu3392_Types |= 1 << (TypeLetters_Pos + 1);
+                TypeLetters_Pos++;
+            }
         }
         else if (Item.rfind("urn:ebu:tech:3393:1.0:", 0) == 0)
         {

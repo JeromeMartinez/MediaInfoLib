@@ -43,6 +43,8 @@
 #include <algorithm>
 #include <bitset>
 #include <cstdlib>
+#include <cstring>
+#include <limits>
 using namespace ZenLib;
 using namespace std;
 #if (__cplusplus > 202002L || (defined(_MSC_VER) && _MSC_VER >= 1910 && _MSVC_LANG > 202002L)) && defined(__cpp_lib_constexpr_bitset)
@@ -70,6 +72,8 @@ static const char* ADM_Atmos_1_0 = " (additional constraint from Dolby Atmos Mas
 static const char* ADM_Atmos_1_1 = " (additional constraint from Dolby Atmos Master ADM Profile v1.1)";
 static const char* ADM_AdvSSE_1 = " (additional constraint from AdvSS Emission v1)";
 static const char* ADM_DolbyE_1_2 = " (additional constraint from Dolby E Profile for emission v1.2)";
+static const char* ADM_Ebu3392 = " (additional constraint from EBU Tech 3392)";
+static const char* ADM_Ebu3393 = " (additional constraint from EBU Tech 3393)";
 
 static const uint8_t Version_Max = 3;
 
@@ -1255,6 +1259,8 @@ enum source {
     Source_Atmos_1_0,
     Source_AdvSSE_1,
     Source_DolbyE_1_2,
+    Source_Ebu3392,
+    Source_Ebu3393,
     // Minor update, not in the common checks
     Source_Atmos_1_1,
     source_Max,
@@ -1264,6 +1270,8 @@ static const char* Source_Strings[] = {
     ADM_Atmos_1_0,
     ADM_AdvSSE_1,
     ADM_DolbyE_1_2,
+    ADM_Ebu3392,
+    ADM_Ebu3393,
     ADM_Atmos_1_1,
 };
 static_assert(sizeof(Source_Strings) / sizeof(Source_Strings[0]) == source_Max, "");
@@ -6024,14 +6032,16 @@ int file_adm_private::frameHeader()
 }
 
 //---------------------------------------------------------------------------
-static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type, size_t i, const char* Name, vector<string>* Errors_Field, vector<string>* Errors_Value, bool WarningError, size_t* Error_Count_Per_Type, bool IsAdvSSE, bool IsDolbyE)
+static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type, size_t i, const char* Name, vector<string>* Errors_Field, vector<string>* Errors_Value, bool WarningError, size_t* Error_Count_Per_Type, bool IsAdvSSE, bool IsDolbyE, bool IsEbu3392, bool IsEbu3393)
 {
     const bool IsAtmos = File_Adm_Private->IsAtmos;
     for (size_t k = 0; k < error_Type_Max; k++) {
     for (size_t l = 0; l < source_Max; l++) {
         if ((!IsAtmos && (l == Source_Atmos_1_0 || l == Source_Atmos_1_1))
          || (!IsDolbyE && l == Source_DolbyE_1_2)
-         || (!IsAdvSSE && l == Source_AdvSSE_1)) {
+         || (!IsAdvSSE && l == Source_AdvSSE_1)
+         || (!IsEbu3392 && l == Source_Ebu3392)
+         || (!IsEbu3393 && l == Source_Ebu3393)) {
             continue;
         }
         auto& Item = File_Adm_Private->Items[item_Type];
@@ -6162,6 +6172,883 @@ void File_Adm::Streams_Accept()
 }
 
 //---------------------------------------------------------------------------
+// EBU ADM profiles
+// - EBU Tech 3392 "ADM broadcast production profile", referenced as urn:ebu:tech:3392:1.0:l[:t]
+// - EBU Tech 3393 "EBU ADM production profile", writing requirements
+//---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
+struct ebu_profile_limits {
+    int32u audioProgrammeCount;
+    int32u audioContentCount;
+    int32u audioObjectCount;             // In the whole file or flow
+    int32u concurrentAudioObjectCount;
+    int32u interactiveObjectsCount;      // Per audioProgramme
+    int32u complementaryGroupsCount;     // Per audioProgramme
+    int32u audioObjectNestingLevel;
+    int32u audioTrackUIDCount;           // In the whole file or flow
+    int32u concurrentAudioTrackUIDCount;
+    int32u audioPackFormatCount;         // Without common definitions
+    int32u audioPackFormatNestingLevel;  // Without common definitions
+    int32u audioChannelFormatCount;      // Without common definitions, same limit for audioStreamFormat and audioTrackFormat
+    int32u nameLength;
+    bool   PerProgrammeCountsAreConcurrent;
+};
+// 0 means unbounded
+static const ebu_profile_limits Ebu3392_Limits[] = {
+    {  4,   4,   8,   4,  1,  4, 2,  32,   0,  16, 1,   32,  32, false }, // Level 1
+    { 16,  16,  64,  20,  4, 16, 2, 128,   0,  64, 2,  128,  32, false }, // Level 2
+    { 32, 128, 512, 128, 16, 64, 4, 512,   0, 256, 4,  512,  32, false }, // Level 3
+    {  0,   0,   0,   0,  0,  0, 0,   0,   0,   0, 0,    0,   0, false }, // Level 4
+};
+static const ebu_profile_limits Ebu3393_Limits =
+    { 32, 128,   0, 128, 32, 32, 6,   0, 128, 256, 5, 1024, 128, true  };
+
+static bool Ebu_IsCommonDefinition(const string& ID) {
+    // XX_yyyyxxxx[...], common definitions have xxxx < 0x1000
+    return ID.size() >= 11 && ID[2] == '_' && IsHexaDigit(ID, 7, 4) && strtoul(ID.substr(7, 4).c_str(), nullptr, 16) < 0x1000;
+}
+
+static int Ebu_TypeFromID(const string& ID) {
+    // XX_yyyyxxxx[...], yyyy is the typeLabel
+    if (ID.size() < 7 || ID[2] != '_' || !IsHexaDigit(ID, 3, 4)) {
+        return 0;
+    }
+    return (int)strtoul(ID.substr(3, 4).c_str(), nullptr, 16);
+}
+
+static int Ebu_Type(const Item_Struct& Item, size_t typeLabel_Pos, size_t typeDefinition_Pos, size_t ID_Pos) {
+    // Returns the typeLabel value, 0 if unknown
+    const auto& typeLabel = Item.Attributes[typeLabel_Pos];
+    if (typeLabel.size() == 4 && IsHexaDigit(typeLabel, 0, 4)) {
+        return (int)strtoul(typeLabel.c_str(), nullptr, 16);
+    }
+    const auto& typeDefinition = Item.Attributes[typeDefinition_Pos];
+    for (size_t i = 0; i < Type_Max; i++) {
+        if (typeDefinition == typeDefinition_List[i]) {
+            return (int)i + 1;
+        }
+    }
+    return Ebu_TypeFromID(Item.Attributes[ID_Pos]);
+}
+
+static size_t Ebu_Utf8Length(const string& Value) {
+    size_t Count = 0;
+    for (const auto c : Value) {
+        if ((c & 0xC0) != 0x80) {
+            Count++;
+        }
+    }
+    return Count;
+}
+
+static double Ebu_Time(const string& Value) {
+    // hh:mm:ss.zzzzz or hh:mm:ss.zzzzzSfffff, -1 if malformed
+    const char* Begin = Value.c_str();
+    char* End;
+    auto H = strtoul(Begin, &End, 10);
+    if (End == Begin || *End != ':') {
+        return -1;
+    }
+    Begin = End + 1;
+    auto M = strtoul(Begin, &End, 10);
+    if (End == Begin || *End != ':') {
+        return -1;
+    }
+    Begin = End + 1;
+    auto S = strtoul(Begin, &End, 10);
+    if (End == Begin) {
+        return -1;
+    }
+    double Fraction = 0;
+    if (*End == '.') {
+        Begin = End + 1;
+        const auto S_Pos = strchr(Begin, 'S');
+        if (S_Pos) {
+            auto Numerator = strtoul(Begin, &End, 10);
+            if (End != S_Pos) {
+                return -1;
+            }
+            Begin = S_Pos + 1;
+            auto Denominator = strtoul(Begin, &End, 10);
+            if (End == Begin || *End || !Denominator) {
+                return -1;
+            }
+            Fraction = ((double)Numerator) / Denominator;
+        }
+        else {
+            Fraction = strtod(End, &End);
+            if (*End) {
+                return -1;
+            }
+        }
+    }
+    else if (*End) {
+        return -1;
+    }
+    return H * 3600.0 + M * 60.0 + S + Fraction;
+}
+
+// Maximum of the sum of weights of intervals [Start, End) at the same time instant
+static size_t Ebu_MaxConcurrent(const vector<pair<double, double> >& Intervals, const vector<size_t>& Weights) {
+    vector<pair<double, ptrdiff_t> > Events;
+    Events.reserve(Intervals.size() * 2);
+    for (size_t i = 0; i < Intervals.size(); i++) {
+        Events.emplace_back(Intervals[i].first, (ptrdiff_t)Weights[i]);
+        Events.emplace_back(Intervals[i].second, -(ptrdiff_t)Weights[i]);
+    }
+    sort(Events.begin(), Events.end()); // At the same time instant, ends (negative) are before starts
+    ptrdiff_t Current = 0;
+    ptrdiff_t Max = 0;
+    for (const auto& Event : Events) {
+        Current += Event.second;
+        if (Current > Max) {
+            Max = Current;
+        }
+    }
+    return (size_t)Max;
+}
+
+// Depth of each node in a directed graph (1 = no child), and nodes being part of a loop
+static void Ebu_Depths(const vector<vector<size_t> >& Children, vector<size_t>& Depths, vector<bool>& InLoop) {
+    const auto Size = Children.size();
+    Depths.assign(Size, 0);
+    InLoop.assign(Size, false);
+    vector<int8u> State(Size, 0); // 0 = not visited, 1 = in progress, 2 = done
+    vector<pair<size_t, size_t> > Stack;
+    for (size_t Root = 0; Root < Size; Root++) {
+        if (State[Root]) {
+            continue;
+        }
+        Stack.emplace_back(Root, 0);
+        State[Root] = 1;
+        while (!Stack.empty()) {
+            auto& Top = Stack.back();
+            const auto Node = Top.first;
+            if (Top.second < Children[Node].size()) {
+                const auto Child = Children[Node][Top.second++];
+                if (State[Child] == 1) {
+                    InLoop[Node] = true;
+                }
+                else if (!State[Child]) {
+                    State[Child] = 1;
+                    Stack.emplace_back(Child, 0);
+                }
+                continue;
+            }
+            size_t Depth = 0;
+            for (const auto Child : Children[Node]) {
+                if (State[Child] == 2 && Depths[Child] > Depth) {
+                    Depth = Depths[Child];
+                }
+            }
+            Depths[Node] = Depth + 1;
+            State[Node] = 2;
+            Stack.pop_back();
+        }
+    }
+}
+
+static void Ebu_Check(file_adm_private* File_Adm_Private, const ebu_profile_limits& Limits, int8u Types, bool Is3393, source Source) {
+    auto& Items = File_Adm_Private->Items;
+    auto& Programmes = Items[item_audioProgramme].Items;
+    auto& Contents = Items[item_audioContent].Items;
+    auto& Objects = Items[item_audioObject].Items;
+    auto& PackFormats = Items[item_audioPackFormat].Items;
+    auto& ChannelFormats = Items[item_audioChannelFormat].Items;
+    auto& StreamFormats = Items[item_audioStreamFormat].Items;
+    auto& TrackFormats = Items[item_audioTrackFormat].Items;
+    auto& TrackUIDs = Items[item_audioTrackUID].Items;
+    const auto Is3392 = !Is3393;
+    const auto IsComplete = !File_Adm_Private->IsPartial && !Items[item_audioFormatExtended].Items.empty();
+
+    // Helpers
+    auto AddError = [&](item Item_Type, size_t i, const string& Sub, const string& Message) {
+        const auto Name = item_Infos[Item_Type].Name ? (CraftName(item_Infos[Item_Type].Name) + to_string(i)) : string("audioFormatExtended");
+        Items[Item_Type].Items[i].AddError(Error, ':' + Name + ':' + Sub + ':' + Message, Source);
+    };
+    auto ElementName = [&](item Item_Type, size_t Element) {
+        return string(item_Infos[Item_Type].Element_Infos[Element].Name);
+    };
+    auto AttributeName = [&](item Item_Type, size_t Attribute) {
+        return string(item_Infos[Item_Type].Attribute_Infos[Attribute].Name);
+    };
+    auto CheckElementCount = [&](item Item_Type, size_t i, size_t Element, size_t Min, size_t Max) {
+        const auto Count = Items[Item_Type].Items[i].Elements[Element].size();
+        const auto Name = ElementName(Item_Type, Element);
+        if (Count < Min) {
+            AddError(Item_Type, i, Name, Name + (Count ? (" subelement count " + to_string(Count) + " is not permitted, min is " + to_string(Min)) : string(" element is not present")));
+        }
+        else if (Count > Max) {
+            AddError(Item_Type, i, Name, Name + (Max ? (" subelement count " + to_string(Count) + " is not permitted, max is " + to_string(Max)) : string(" element is present")));
+        }
+    };
+    auto CheckAttributePresence = [&](item Item_Type, size_t i, size_t Attribute, bool Expected) {
+        if (Items[Item_Type].Items[i].Attributes_Present[Attribute] != Expected) {
+            const auto Name = AttributeName(Item_Type, Attribute);
+            AddError(Item_Type, i, Name, Name + (Expected ? " attribute is not present" : " attribute is present"));
+        }
+    };
+    auto CheckNameLength = [&](item Item_Type, size_t i) {
+        if (!Limits.nameLength) {
+            return;
+        }
+        const auto& Name = Items[Item_Type].Items[i].Attributes[1]; // Name is always the second attribute
+        const auto Length = Ebu_Utf8Length(Name);
+        if (Length > Limits.nameLength) {
+            const auto AttName = AttributeName(Item_Type, 1);
+            AddError(Item_Type, i, AttName, AttName + " attribute length " + to_string(Length) + " is not permitted, max is " + to_string(Limits.nameLength));
+        }
+    };
+    auto CheckCount = [&](item Item_Type, const vector<size_t>& Positions, int32u Max, const char* Precision) {
+        if (Max && Positions.size() > Max) {
+            const auto Name = CraftName(item_Infos[Item_Type].Name);
+            AddError(Item_Type, Positions[Max], "GeneralCompliance", Name + " element count" + Precision + ' ' + to_string(Positions.size()) + " is not permitted, max is " + to_string(Max));
+        }
+    };
+    auto AllPositions = [&](item Item_Type) {
+        vector<size_t> Positions(Items[Item_Type].Items.size());
+        for (size_t i = 0; i < Positions.size(); i++) {
+            Positions[i] = i;
+        }
+        return Positions;
+    };
+    auto NonCommonPositions = [&](item Item_Type) {
+        vector<size_t> Positions;
+        const auto& List = Items[Item_Type].Items;
+        for (size_t i = 0; i < List.size(); i++) {
+            if (!Ebu_IsCommonDefinition(List[i].Attributes[0])) {
+                Positions.push_back(i);
+            }
+        }
+        return Positions;
+    };
+    auto MakeMap = [&](item Item_Type) {
+        map<string, size_t> Map;
+        const auto& List = Items[Item_Type].Items;
+        for (size_t i = 0; i < List.size(); i++) {
+            Map.emplace(List[i].Attributes[0], i);
+        }
+        return Map;
+    };
+    const auto ContentMap = MakeMap(item_audioContent);
+    const auto ObjectMap = MakeMap(item_audioObject);
+    const auto PackFormatMap = MakeMap(item_audioPackFormat);
+    const auto PackFormats_NonCommon = NonCommonPositions(item_audioPackFormat);
+    const auto ChannelFormats_NonCommon = NonCommonPositions(item_audioChannelFormat);
+    const auto StreamFormats_NonCommon = NonCommonPositions(item_audioStreamFormat);
+    const auto TrackFormats_NonCommon = NonCommonPositions(item_audioTrackFormat);
+
+    // Element counts
+    CheckCount(item_audioProgramme, AllPositions(item_audioProgramme), Limits.audioProgrammeCount, "");
+    CheckCount(item_audioContent, AllPositions(item_audioContent), Limits.audioContentCount, "");
+    CheckCount(item_audioObject, AllPositions(item_audioObject), Limits.audioObjectCount, "");
+    CheckCount(item_audioTrackUID, AllPositions(item_audioTrackUID), Limits.audioTrackUIDCount, "");
+    CheckCount(item_audioPackFormat, PackFormats_NonCommon, Limits.audioPackFormatCount, " (without common definitions)");
+    CheckCount(item_audioChannelFormat, ChannelFormats_NonCommon, Limits.audioChannelFormatCount, " (without common definitions)");
+    if (Is3392) {
+        CheckCount(item_audioStreamFormat, StreamFormats_NonCommon, Limits.audioChannelFormatCount, " (without common definitions)");
+        CheckCount(item_audioTrackFormat, TrackFormats_NonCommon, Limits.audioChannelFormatCount, " (without common definitions)");
+    }
+    else {
+        // audioTrackUID references audioChannelFormat directly when writing
+        if (!StreamFormats.empty()) {
+            AddError(item_audioStreamFormat, 0, "GeneralCompliance", "audioStreamFormat element is present");
+        }
+        if (!TrackFormats.empty()) {
+            AddError(item_audioTrackFormat, 0, "GeneralCompliance", "audioTrackFormat element is present");
+        }
+    }
+
+    // audioFormatExtended
+    if (IsComplete) {
+        static const item Mandatory[] = { item_audioProgramme, item_audioContent, item_audioObject, item_audioTrackUID };
+        for (const auto Item_Type : Mandatory) {
+            if (Items[Item_Type].Items.empty()) {
+                const auto Name = CraftName(item_Infos[Item_Type].Name);
+                AddError(item_audioFormatExtended, 0, Name, Name + " element is not present");
+            }
+        }
+        const auto Version = File_Adm_Private->Version;
+        if (Is3392 ? (Version != 1) : (Version != 2 && Version != 3)) {
+            AddError(item_audioFormatExtended, 0, "version", string("version attribute value is not permitted, permitted value") + (Is3392 ? " is \"ITU-R_BS.2076-1\"" : "s are \"ITU-R_BS.2076-2\" or \"ITU-R_BS.2076-3\""));
+        }
+    }
+
+    // Object graph
+    vector<vector<size_t> > Object_Children(Objects.size());
+    vector<size_t> Object_ReferencedCount(Objects.size());
+    for (size_t i = 0; i < Contents.size(); i++) {
+        for (const auto& IDRef : Contents[i].Elements[audioContent_audioObjectIDRef]) {
+            const auto Found = ObjectMap.find(IDRef);
+            if (Found != ObjectMap.end()) {
+                Object_ReferencedCount[Found->second]++;
+            }
+        }
+    }
+    for (size_t i = 0; i < Objects.size(); i++) {
+        for (const auto& IDRef : Objects[i].Elements[audioObject_audioObjectIDRef]) {
+            const auto Found = ObjectMap.find(IDRef);
+            if (Found != ObjectMap.end()) {
+                Object_Children[i].push_back(Found->second);
+                Object_ReferencedCount[Found->second]++;
+            }
+        }
+    }
+    vector<size_t> Object_Depths;
+    vector<bool> Object_InLoop;
+    Ebu_Depths(Object_Children, Object_Depths, Object_InLoop);
+
+    // Object timing
+    vector<pair<double, double> > Object_Intervals(Objects.size());
+    for (size_t i = 0; i < Objects.size(); i++) {
+        const auto& Object = Objects[i];
+        double Start = 0;
+        if (Object.Attributes_Present[audioObject_start]) {
+            Start = Ebu_Time(Object.Attributes[audioObject_start]);
+            if (Start < 0) {
+                Start = 0;
+            }
+        }
+        double End = numeric_limits<double>::infinity();
+        if (Object.Attributes_Present[audioObject_duration]) {
+            const auto Duration = Ebu_Time(Object.Attributes[audioObject_duration]);
+            if (Duration >= 0) {
+                End = Start + Duration;
+            }
+        }
+        Object_Intervals[i] = { Start, End };
+    }
+
+    // Concurrent audioObjects and audioTrackUIDs
+    if (Limits.concurrentAudioObjectCount || Limits.concurrentAudioTrackUIDCount) {
+        // Only audioObjects referencing audio (audioPackFormat or audioTrackUID) are counted, parent audioObjects are for grouping
+        vector<pair<double, double> > Intervals;
+        vector<size_t> Ones, TrackCounts;
+        size_t FirstObject = (size_t)-1;
+        for (size_t i = 0; i < Objects.size(); i++) {
+            const auto& Object = Objects[i];
+            if (Object.Elements[audioObject_audioPackFormatIDRef].empty() && Object.Elements[audioObject_audioTrackUIDRef].empty()) {
+                continue;
+            }
+            if (FirstObject == (size_t)-1) {
+                FirstObject = i;
+            }
+            Intervals.push_back(Object_Intervals[i]);
+            Ones.push_back(1);
+            TrackCounts.push_back(Object.Elements[audioObject_audioTrackUIDRef].size());
+        }
+        if (FirstObject != (size_t)-1) {
+            if (Limits.concurrentAudioObjectCount) {
+                const auto Count = Ebu_MaxConcurrent(Intervals, Ones);
+                if (Count > Limits.concurrentAudioObjectCount) {
+                    AddError(item_audioObject, FirstObject, "GeneralCompliance", "concurrent audioObject count " + to_string(Count) + " is not permitted, max is " + to_string(Limits.concurrentAudioObjectCount));
+                }
+            }
+            if (Limits.concurrentAudioTrackUIDCount) {
+                const auto Count = Ebu_MaxConcurrent(Intervals, TrackCounts);
+                if (Count > Limits.concurrentAudioTrackUIDCount) {
+                    AddError(item_audioObject, FirstObject, "GeneralCompliance", "concurrent audioTrackUIDRef count " + to_string(Count) + " is not permitted, max is " + to_string(Limits.concurrentAudioTrackUIDCount));
+                }
+            }
+        }
+    }
+
+    // audioProgramme
+    vector<size_t> Content_ReferencedCount(Contents.size());
+    size_t Programmes_WithTime = 0;
+    for (size_t i = 0; i < Programmes.size(); i++) {
+        const auto& Programme = Programmes[i];
+        CheckNameLength(item_audioProgramme, i);
+        CheckElementCount(item_audioProgramme, i, audioProgramme_audioContentIDRef, 1, (size_t)-1);
+        CheckElementCount(item_audioProgramme, i, audioProgramme_loudnessMetadata, 0, 1);
+        CheckElementCount(item_audioProgramme, i, audioProgramme_audioProgrammeReferenceScreen, 0, 1);
+        if (Is3392) {
+            CheckAttributePresence(item_audioProgramme, i, audioProgramme_maxDuckingDepth, false);
+        }
+        else {
+            CheckElementCount(item_audioProgramme, i, audioProgramme_audioProgrammeLabel, 0, 16);
+            CheckElementCount(item_audioProgramme, i, audioProgramme_authoringInformation, 0, 1);
+            CheckElementCount(item_audioProgramme, i, audioProgramme_alternativeValueSetIDRef, 0, 32);
+            if (Programme.Attributes_Present[audioProgramme_start] || Programme.Attributes_Present[audioProgramme_end]) {
+                Programmes_WithTime++;
+            }
+        }
+
+        // Objects in this audioProgramme
+        vector<bool> Visited(Objects.size());
+        vector<size_t> ToVisit;
+        for (const auto& IDRef : Programme.Elements[audioProgramme_audioContentIDRef]) {
+            const auto Content = ContentMap.find(IDRef);
+            if (Content == ContentMap.end()) {
+                continue;
+            }
+            Content_ReferencedCount[Content->second]++;
+            for (const auto& IDRef2 : Contents[Content->second].Elements[audioContent_audioObjectIDRef]) {
+                const auto Object = ObjectMap.find(IDRef2);
+                if (Object != ObjectMap.end()) {
+                    ToVisit.push_back(Object->second);
+                }
+            }
+        }
+        while (!ToVisit.empty()) {
+            const auto Object = ToVisit.back();
+            ToVisit.pop_back();
+            if (Visited[Object]) {
+                continue;
+            }
+            Visited[Object] = true;
+            ToVisit.insert(ToVisit.end(), Object_Children[Object].begin(), Object_Children[Object].end());
+        }
+        vector<pair<double, double> > Interactive_Intervals, Complementary_Intervals;
+        for (size_t j = 0; j < Objects.size(); j++) {
+            if (!Visited[j]) {
+                continue;
+            }
+            if (Objects[j].Attributes[audioObject_interact] == "1") {
+                Interactive_Intervals.push_back(Object_Intervals[j]);
+            }
+            if (!Objects[j].Elements[audioObject_audioComplementaryObjectIDRef].empty()) {
+                Complementary_Intervals.push_back(Object_Intervals[j]);
+            }
+        }
+        auto CheckProgrammeCount = [&](const vector<pair<double, double> >& Intervals, int32u Max, const char* Name) {
+            if (!Max) {
+                return;
+            }
+            const auto Count = Limits.PerProgrammeCountsAreConcurrent ? Ebu_MaxConcurrent(Intervals, vector<size_t>(Intervals.size(), 1)) : Intervals.size();
+            if (Count > Max) {
+                AddError(item_audioProgramme, i, "GeneralCompliance", string(Limits.PerProgrammeCountsAreConcurrent ? "concurrent " : "") + Name + " count " + to_string(Count) + " is not permitted, max is " + to_string(Max));
+            }
+        };
+        CheckProgrammeCount(Interactive_Intervals, Limits.interactiveObjectsCount, "interactive audioObject");
+        CheckProgrammeCount(Complementary_Intervals, Limits.complementaryGroupsCount, "audioObject with audioComplementaryObjectIDRef");
+    }
+    if (Is3393 && Programmes_WithTime && Programmes.size() > 1) {
+        for (size_t i = 0; i < Programmes.size(); i++) {
+            CheckAttributePresence(item_audioProgramme, i, audioProgramme_start, true);
+            CheckAttributePresence(item_audioProgramme, i, audioProgramme_end, true);
+        }
+    }
+
+    // loudnessMetadata
+    auto& LoudnessMetadatas = Items[item_loudnessMetadata].Items;
+    for (size_t i = 0; i < LoudnessMetadatas.size(); i++) {
+        const auto& LoudnessMetadata = LoudnessMetadatas[i];
+        const auto& loudnessMethod = LoudnessMetadata.Attributes[loudnessMetadata_loudnessMethod];
+        if (Is3392) {
+            if (i >= File_Adm_Private->loudnessMetadata_Source.size() || File_Adm_Private->loudnessMetadata_Source[i] != 'P') {
+                continue; // Requirements are for audioProgramme only
+            }
+            CheckAttributePresence(item_loudnessMetadata, i, loudnessMetadata_loudnessMethod, true);
+            if (LoudnessMetadata.Attributes_Present[loudnessMetadata_loudnessMethod] && loudnessMethod != "ITU-R BS.1770-4") {
+                AddError(item_loudnessMetadata, i, "loudnessMethod", "loudnessMethod attribute value \"" + loudnessMethod + "\" is not permitted, permitted value is \"ITU-R BS.1770-4\"");
+            }
+            CheckAttributePresence(item_loudnessMetadata, i, loudnessMetadata_loudnessRecType, true);
+            const auto& loudnessRecType = LoudnessMetadata.Attributes[loudnessMetadata_loudnessRecType];
+            if (LoudnessMetadata.Attributes_Present[loudnessMetadata_loudnessRecType] && loudnessRecType != "EBU R128") {
+                AddError(item_loudnessMetadata, i, "loudnessRecType", "loudnessRecType attribute value \"" + loudnessRecType + "\" is not permitted, permitted value is \"EBU R128\"");
+            }
+            const auto& loudnessCorrectionType = LoudnessMetadata.Attributes[loudnessMetadata_loudnessCorrectionType];
+            if (LoudnessMetadata.Attributes_Present[loudnessMetadata_loudnessCorrectionType] && loudnessCorrectionType != "file-based" && loudnessCorrectionType != "real-time") {
+                AddError(item_loudnessMetadata, i, "loudnessCorrectionType", "loudnessCorrectionType attribute value \"" + loudnessCorrectionType + "\" is not permitted, permitted values are \"file-based\" or \"real-time\"");
+            }
+            CheckElementCount(item_loudnessMetadata, i, loudnessMetadata_integratedLoudness, 1, 1);
+            CheckElementCount(item_loudnessMetadata, i, loudnessMetadata_maxTruePeak, 1, 1);
+            CheckElementCount(item_loudnessMetadata, i, loudnessMetadata_dialogueLoudness, 0, 0);
+        }
+        else {
+            CheckAttributePresence(item_loudnessMetadata, i, loudnessMetadata_loudnessMethod, true);
+            if (LoudnessMetadata.Attributes_Present[loudnessMetadata_loudnessMethod] && loudnessMethod.rfind("ITU-R BS.1770-", 0)) {
+                AddError(item_loudnessMetadata, i, "loudnessMethod", "loudnessMethod attribute value \"" + loudnessMethod + "\" is not permitted, permitted value is \"ITU-R BS.1770-X\"");
+            }
+            CheckElementCount(item_loudnessMetadata, i, loudnessMetadata_integratedLoudness, 1, 1);
+        }
+    }
+
+    // Labels, renderer, referenceLayout (Tech 3393)
+    if (Is3393) {
+        static const pair<item, size_t> Labels[] = {
+            { item_audioProgrammeLabel, audioProgrammeLabel_language },
+            { item_audioContentLabel, audioContentLabel_language },
+            { item_audioObjectLabel, audioObjectLabel_language },
+            { item_audioComplementaryObjectGroupLabel, audioComplementaryObjectGroupLabel_language },
+        };
+        for (const auto& Label : Labels) {
+            for (size_t i = 0; i < Items[Label.first].Items.size(); i++) {
+                CheckAttributePresence(Label.first, i, Label.second, true);
+            }
+        }
+        auto& Renderers = Items[item_renderer].Items;
+        for (size_t i = 0; i < Renderers.size(); i++) {
+            CheckAttributePresence(item_renderer, i, renderer_uri, true);
+            const auto& uri = Renderers[i].Attributes[renderer_uri];
+            if (Renderers[i].Attributes_Present[renderer_uri] && uri != "urn:itu:bs:2127:0:itu_adm_renderer") {
+                AddError(item_renderer, i, "uri", "uri attribute value \"" + uri + "\" is not permitted, permitted value is \"urn:itu:bs:2127:0:itu_adm_renderer\"");
+            }
+        }
+        for (size_t i = 0; i < Items[item_authoringInformation].Items.size(); i++) {
+            CheckElementCount(item_authoringInformation, i, authoringInformation_referenceLayout, 0, 8);
+            CheckElementCount(item_authoringInformation, i, authoringInformation_renderer, 0, 1);
+        }
+        for (size_t i = 0; i < Items[item_referenceLayout].Items.size(); i++) {
+            CheckElementCount(item_referenceLayout, i, referenceLayout_audioPackFormatIDRef, 1, 1);
+        }
+    }
+
+    // audioContent
+    for (size_t i = 0; i < Contents.size(); i++) {
+        CheckNameLength(item_audioContent, i);
+        CheckElementCount(item_audioContent, i, audioContent_audioObjectIDRef, 1, (size_t)-1);
+        CheckElementCount(item_audioContent, i, audioContent_loudnessMetadata, 0, 1);
+        CheckElementCount(item_audioContent, i, audioContent_dialogue, Is3393 ? 1 : 0, 1);
+        if (Is3393) {
+            CheckElementCount(item_audioContent, i, audioContent_audioContentLabel, 0, 16);
+            CheckElementCount(item_audioContent, i, audioContent_alternativeValueSetIDRef, 0, 4);
+        }
+        if (IsComplete && !Content_ReferencedCount[i]) {
+            AddError(item_audioContent, i, "GeneralCompliance", "this audioContent is not referenced by any audioProgramme");
+        }
+    }
+
+    // audioPackFormat graph
+    vector<vector<size_t> > PackFormat_Children(PackFormats.size());
+    vector<bool> PackFormat_TrackCountUnknown(PackFormats.size());
+    for (size_t i = 0; i < PackFormats.size(); i++) {
+        for (const auto& IDRef : PackFormats[i].Elements[audioPackFormat_audioPackFormatIDRef]) {
+            const auto Found = PackFormatMap.find(IDRef);
+            if (Found != PackFormatMap.end()) {
+                if (!Ebu_IsCommonDefinition(IDRef)) {
+                    PackFormat_Children[i].push_back(Found->second);
+                }
+            }
+            PackFormat_TrackCountUnknown[i] = true; // Track count with nested audioPackFormats is not computed
+        }
+    }
+    vector<size_t> PackFormat_Depths;
+    vector<bool> PackFormat_InLoop;
+    Ebu_Depths(PackFormat_Children, PackFormat_Depths, PackFormat_InLoop);
+
+    // audioObject
+    map<size_t, size_t> ComplementaryMemberships; // Count of complementary groups per audioObject
+    for (size_t i = 0; i < Objects.size(); i++) {
+        const auto& Refs = Objects[i].Elements[audioObject_audioComplementaryObjectIDRef];
+        if (Refs.empty()) {
+            continue;
+        }
+        ComplementaryMemberships[i]++; // Leader of the group
+        for (const auto& IDRef : Refs) {
+            const auto Found = ObjectMap.find(IDRef);
+            if (Found != ObjectMap.end()) {
+                ComplementaryMemberships[Found->second]++;
+            }
+        }
+    }
+    for (size_t i = 0; i < Objects.size(); i++) {
+        const auto& Object = Objects[i];
+        CheckNameLength(item_audioObject, i);
+        CheckElementCount(item_audioObject, i, audioObject_audioPackFormatIDRef, 0, 1);
+        CheckElementCount(item_audioObject, i, audioObject_audioObjectInteraction, 0, 1);
+        const auto HasPackFormat = !Object.Elements[audioObject_audioPackFormatIDRef].empty();
+        const auto HasObjects = !Object.Elements[audioObject_audioObjectIDRef].empty();
+        const auto HasTrackUIDs = !Object.Elements[audioObject_audioTrackUIDRef].empty();
+        if (HasPackFormat && HasObjects) {
+            AddError(item_audioObject, i, "GeneralCompliance", "this audioObject references both audioPackFormat and audioObject");
+        }
+        else if (!HasPackFormat && !HasObjects) {
+            AddError(item_audioObject, i, "GeneralCompliance", "this audioObject references neither audioPackFormat nor audioObject");
+        }
+        if (HasObjects) {
+            if (HasTrackUIDs) {
+                AddError(item_audioObject, i, "audioTrackUIDRef", "audioTrackUIDRef element is present but this audioObject references audioObject");
+            }
+            if (Is3392) {
+                CheckAttributePresence(item_audioObject, i, audioObject_start, false);
+                CheckAttributePresence(item_audioObject, i, audioObject_duration, false);
+            }
+        }
+        if (HasPackFormat && !HasObjects) {
+            if (Is3392) {
+                CheckAttributePresence(item_audioObject, i, audioObject_start, true);
+                CheckAttributePresence(item_audioObject, i, audioObject_duration, true);
+            }
+            const auto& IDRef = Object.Elements[audioObject_audioPackFormatIDRef][0];
+            const auto Found = PackFormatMap.find(IDRef);
+            if (Found != PackFormatMap.end() && !PackFormat_TrackCountUnknown[Found->second]) {
+                const auto TrackCount = PackFormats[Found->second].Elements[audioPackFormat_audioChannelFormatIDRef].size();
+                const auto TrackUIDCount = Object.Elements[audioObject_audioTrackUIDRef].size();
+                if (TrackUIDCount != TrackCount) {
+                    AddError(item_audioObject, i, "audioTrackUIDRef", "audioTrackUIDRef element count " + to_string(TrackUIDCount) + " is not same as audioChannelFormatIDRef count " + to_string(TrackCount) + " of audioPackFormat \"" + IDRef + "\"");
+                }
+            }
+        }
+        if (Is3392) {
+            CheckAttributePresence(item_audioObject, i, audioObject_disableDucking, false);
+        }
+        else {
+            if (Object.Attributes_Present[audioObject_start] != Object.Attributes_Present[audioObject_duration]) {
+                AddError(item_audioObject, i, "GeneralCompliance", "start and duration attributes are not both present or both absent");
+            }
+            CheckAttributePresence(item_audioObject, i, audioObject_importance, true);
+            CheckAttributePresence(item_audioObject, i, audioObject_interact, true);
+            CheckElementCount(item_audioObject, i, audioObject_audioObjectLabel, 0, 16);
+            CheckElementCount(item_audioObject, i, audioObject_audioComplementaryObjectGroupLabel, 0, 16);
+            CheckElementCount(item_audioObject, i, audioObject_gain, 0, 1);
+            CheckElementCount(item_audioObject, i, audioObject_headLocked, 0, 1);
+            CheckElementCount(item_audioObject, i, audioObject_positionOffset, 0, 1);
+            CheckElementCount(item_audioObject, i, audioObject_mute, 0, 1);
+            CheckElementCount(item_audioObject, i, audioObject_alternativeValueSet, 0, 16);
+            if (!Object.Elements[audioObject_mute].empty() && Object.Attributes[audioObject_interact] != "1") {
+                AddError(item_audioObject, i, "mute", "mute element is present but interact attribute is not 1");
+            }
+        }
+        if (IsComplete && !Object_ReferencedCount[i]) {
+            AddError(item_audioObject, i, "GeneralCompliance", "this audioObject is not referenced by any audioContent or audioObject");
+        }
+        if (Object_InLoop[i]) {
+            AddError(item_audioObject, i, "audioObjectIDRef", "audioObjectIDRef references back to this audioObject");
+        }
+        else if (Limits.audioObjectNestingLevel && Object_Depths[i] > Limits.audioObjectNestingLevel) {
+            AddError(item_audioObject, i, "audioObjectIDRef", "audioObject nesting level " + to_string(Object_Depths[i]) + " is not permitted, max is " + to_string(Limits.audioObjectNestingLevel));
+        }
+        const auto Membership = ComplementaryMemberships.find(i);
+        if (Membership != ComplementaryMemberships.end() && Membership->second > 1) {
+            AddError(item_audioObject, i, "audioComplementaryObjectIDRef", "this audioObject is member of " + to_string(Membership->second) + " complementary groups");
+        }
+    }
+
+    // audioTrackUID
+    for (size_t i = 0; i < TrackUIDs.size(); i++) {
+        if (Is3392) {
+            CheckElementCount(item_audioTrackUID, i, audioTrackUID_audioTrackFormatIDRef, 1, 1);
+        }
+        else {
+            CheckElementCount(item_audioTrackUID, i, audioTrackUID_audioTrackFormatIDRef, 0, 0);
+            CheckElementCount(item_audioTrackUID, i, audioTrackUID_audioChannelFormatIDRef, 1, 1);
+        }
+        CheckElementCount(item_audioTrackUID, i, audioTrackUID_audioPackFormatIDRef, 1, 1);
+    }
+
+    // typeLabel and typeDefinition
+    auto CheckType = [&](item Item_Type, size_t i, size_t typeLabel_Pos, size_t typeDefinition_Pos, int Type) {
+        const auto& Item = Items[Item_Type].Items[i];
+        CheckAttributePresence(Item_Type, i, typeLabel_Pos, true);
+        if (Is3392) {
+            CheckAttributePresence(Item_Type, i, typeDefinition_Pos, false);
+        }
+        else {
+            const auto& typeLabel = Item.Attributes[typeLabel_Pos];
+            if (Item.Attributes_Present[typeLabel_Pos] && (Type < 1 || Type > Type_Max || typeLabel.size() != 4 || !IsHexaDigit(typeLabel, 0, 4))) {
+                AddError(Item_Type, i, "typeLabel", "typeLabel attribute value \"" + typeLabel + "\" is not permitted, custom typeLabel is not permitted");
+            }
+            const auto& typeDefinition = Item.Attributes[typeDefinition_Pos];
+            if (Item.Attributes_Present[typeDefinition_Pos] && find(begin(typeDefinition_List), end(typeDefinition_List), typeDefinition) == end(typeDefinition_List)) {
+                AddError(Item_Type, i, "typeDefinition", "typeDefinition attribute value \"" + typeDefinition + "\" is not permitted, custom typeDefinition is not permitted");
+            }
+        }
+        if (Types && Type > 0 && Type < 8 && !(Types & (1 << Type))) {
+            AddError(Item_Type, i, "typeLabel", "typeLabel attribute value \"" + Item.Attributes[typeLabel_Pos] + "\" is not permitted by the profile type combination");
+        }
+    };
+
+    // audioPackFormat
+    for (const auto i : PackFormats_NonCommon) {
+        const auto& PackFormat = PackFormats[i];
+        const auto Type = Ebu_Type(PackFormat, audioPackFormat_typeLabel, audioPackFormat_typeDefinition, audioPackFormat_audioPackFormatID);
+        CheckNameLength(item_audioPackFormat, i);
+        CheckType(item_audioPackFormat, i, audioPackFormat_typeLabel, audioPackFormat_typeDefinition, Type);
+        static const size_t SameType[] = { audioPackFormat_audioChannelFormatIDRef, audioPackFormat_audioPackFormatIDRef };
+        for (const auto Element : SameType) {
+            for (const auto& IDRef : PackFormat.Elements[Element]) {
+                const auto RefType = Ebu_TypeFromID(IDRef);
+                if (Type && RefType && RefType != Type) {
+                    const auto Name = ElementName(item_audioPackFormat, Element);
+                    AddError(item_audioPackFormat, i, Name, Name + " value \"" + IDRef + "\" has not the same typeLabel as this audioPackFormat");
+                }
+            }
+        }
+        CheckElementCount(item_audioPackFormat, i, audioPackFormat_absoluteDistance, 0, 1);
+        if (Is3393) {
+            CheckElementCount(item_audioPackFormat, i, audioPackFormat_audioPackFormatIDRef, 0, 32);
+        }
+        if (Type == 2) { // Matrix
+            if (Is3392) {
+                CheckElementCount(item_audioPackFormat, i, audioPackFormat_encodePackFormatIDRef, 0, 0);
+                CheckElementCount(item_audioPackFormat, i, audioPackFormat_decodePackFormatIDRef, 0, 0);
+                static const size_t DirectSpeakersOnly[] = { audioPackFormat_inputPackFormatIDRef, audioPackFormat_outputPackFormatIDRef };
+                for (const auto Element : DirectSpeakersOnly) {
+                    for (const auto& IDRef : PackFormat.Elements[Element]) {
+                        if (Ebu_TypeFromID(IDRef) != 1) {
+                            const auto Name = ElementName(item_audioPackFormat, Element);
+                            AddError(item_audioPackFormat, i, Name, Name + " value \"" + IDRef + "\" is not permitted, only typeLabel 0001 is permitted");
+                        }
+                    }
+                }
+            }
+            else {
+                CheckElementCount(item_audioPackFormat, i, audioPackFormat_encodePackFormatIDRef, 0, 1);
+                CheckElementCount(item_audioPackFormat, i, audioPackFormat_decodePackFormatIDRef, 0, 1);
+            }
+            CheckElementCount(item_audioPackFormat, i, audioPackFormat_inputPackFormatIDRef, 0, 1);
+            CheckElementCount(item_audioPackFormat, i, audioPackFormat_outputPackFormatIDRef, 0, 1);
+        }
+        if (Type == 4) { // HOA, Tech 3393 wants these parameters in audioBlockFormat only
+            const size_t Max = Is3393 ? 0 : 1;
+            CheckElementCount(item_audioPackFormat, i, audioPackFormat_normalization, 0, Max);
+            CheckElementCount(item_audioPackFormat, i, audioPackFormat_nfcRefDist, 0, Max);
+            CheckElementCount(item_audioPackFormat, i, audioPackFormat_screenRef, 0, Max);
+        }
+        if (PackFormat_InLoop[i]) {
+            AddError(item_audioPackFormat, i, "audioPackFormatIDRef", "audioPackFormatIDRef references back to this audioPackFormat");
+        }
+        else if (Limits.audioPackFormatNestingLevel && PackFormat_Depths[i] > Limits.audioPackFormatNestingLevel) {
+            AddError(item_audioPackFormat, i, "audioPackFormatIDRef", "audioPackFormat nesting level " + to_string(PackFormat_Depths[i]) + " is not permitted, max is " + to_string(Limits.audioPackFormatNestingLevel));
+        }
+    }
+
+    // audioChannelFormat
+    map<string, size_t> ChannelFormat_ReferencedCount;
+    for (const auto& PackFormat : PackFormats) {
+        for (const auto& IDRef : PackFormat.Elements[audioPackFormat_audioChannelFormatIDRef]) {
+            ChannelFormat_ReferencedCount[IDRef]++;
+        }
+    }
+    for (const auto i : ChannelFormats_NonCommon) {
+        const auto& ChannelFormat = ChannelFormats[i];
+        const auto Type = Ebu_Type(ChannelFormat, audioChannelFormat_typeLabel, audioChannelFormat_typeDefinition, audioChannelFormat_audioChannelFormatID);
+        CheckNameLength(item_audioChannelFormat, i);
+        CheckType(item_audioChannelFormat, i, audioChannelFormat_typeLabel, audioChannelFormat_typeDefinition, Type);
+        auto BlockFormat_Count = ChannelFormat.Elements[audioChannelFormat_audioBlockFormat].size();
+        if (i < File_Adm_Private->ChannelFormat_BlockFormat_ReduceCount.size()) {
+            BlockFormat_Count += File_Adm_Private->ChannelFormat_BlockFormat_ReduceCount[i];
+        }
+        const auto IsStatic = Type == 1 || Type == 4 || Type == 5 || (Is3392 && Type == 2);
+        const auto BlockFormat_Name = ElementName(item_audioChannelFormat, audioChannelFormat_audioBlockFormat);
+        if (!BlockFormat_Count) {
+            AddError(item_audioChannelFormat, i, BlockFormat_Name, BlockFormat_Name + " element is not present");
+        }
+        else if (IsStatic && BlockFormat_Count > 1) {
+            AddError(item_audioChannelFormat, i, BlockFormat_Name, BlockFormat_Name + " subelement count " + to_string(BlockFormat_Count) + " is not permitted, max is 1");
+        }
+        if (Is3393) {
+            CheckElementCount(item_audioChannelFormat, i, audioChannelFormat_frequency, 0, 2);
+        }
+        if (Is3392 && Type == 3) { // Objects
+            const auto Found = ChannelFormat_ReferencedCount.find(ChannelFormat.Attributes[audioChannelFormat_audioChannelFormatID]);
+            if (Found != ChannelFormat_ReferencedCount.end() && Found->second > 1) {
+                AddError(item_audioChannelFormat, i, "GeneralCompliance", "this audioChannelFormat is referenced by " + to_string(Found->second) + " audioPackFormat");
+            }
+        }
+    }
+
+    // audioStreamFormat and audioTrackFormat (Tech 3392 only, Tech 3393 does not permit them when writing)
+    if (Is3392) {
+        for (const auto i : StreamFormats_NonCommon) {
+            const auto& StreamFormat = StreamFormats[i];
+            CheckNameLength(item_audioStreamFormat, i);
+            CheckAttributePresence(item_audioStreamFormat, i, audioStreamFormat_formatLabel, true);
+            const auto& formatLabel = StreamFormat.Attributes[audioStreamFormat_formatLabel];
+            if (StreamFormat.Attributes_Present[audioStreamFormat_formatLabel] && formatLabel != "0001") {
+                AddError(item_audioStreamFormat, i, "formatLabel", "formatLabel attribute value \"" + formatLabel + "\" is not permitted, permitted value is \"0001\"");
+            }
+            CheckAttributePresence(item_audioStreamFormat, i, audioStreamFormat_formatDefinition, false);
+            CheckElementCount(item_audioStreamFormat, i, audioStreamFormat_audioChannelFormatIDRef, 1, 1);
+            CheckElementCount(item_audioStreamFormat, i, audioStreamFormat_audioPackFormatIDRef, 0, 0);
+            CheckElementCount(item_audioStreamFormat, i, audioStreamFormat_audioTrackFormatIDRef, 0, 0);
+        }
+        for (const auto i : TrackFormats_NonCommon) {
+            const auto& TrackFormat = TrackFormats[i];
+            CheckNameLength(item_audioTrackFormat, i);
+            const auto& ID = TrackFormat.Attributes[audioTrackFormat_audioTrackFormatID];
+            if (ID.size() == 14 && ID.compare(12, 2, "01")) {
+                AddError(item_audioTrackFormat, i, "audioTrackFormatID", "audioTrackFormatID attribute zz value \"" + ID.substr(12) + "\" is not permitted, permitted value is \"01\"");
+            }
+            CheckAttributePresence(item_audioTrackFormat, i, audioTrackFormat_formatLabel, true);
+            const auto& formatLabel = TrackFormat.Attributes[audioTrackFormat_formatLabel];
+            if (TrackFormat.Attributes_Present[audioTrackFormat_formatLabel] && formatLabel != "0001") {
+                AddError(item_audioTrackFormat, i, "formatLabel", "formatLabel attribute value \"" + formatLabel + "\" is not permitted, permitted value is \"0001\"");
+            }
+            CheckAttributePresence(item_audioTrackFormat, i, audioTrackFormat_formatDefinition, false);
+            CheckElementCount(item_audioTrackFormat, i, audioTrackFormat_audioStreamFormatIDRef, 1, 1);
+        }
+    }
+
+    // profileList and tagList (Tech 3393)
+    if (Is3393 && IsComplete) {
+        auto& ProfileLists = Items[item_profileList_audioFormatExtended].Items;
+        auto& Profiles = Items[item_profile_audioFormatExtended].Items;
+        bool Found = false;
+        size_t Profile_Pos = 0;
+        for (size_t i = 0; i < ProfileLists.size(); i++) {
+            const auto& ProfileValues = ProfileLists[i].Elements[profileList_profile];
+            for (size_t j = 0; j < ProfileValues.size() && Profile_Pos < Profiles.size(); j++, Profile_Pos++) {
+                const auto& Profile = Profiles[Profile_Pos];
+                if (Profile.Attributes[profile_profileName] != "EBU Production Profile") {
+                    continue;
+                }
+                Found = true;
+                if (Profile.Attributes[profile_profileVersion] != "1.0") {
+                    AddError(item_profile_audioFormatExtended, Profile_Pos, "profileVersion", "profileVersion attribute value \"" + Profile.Attributes[profile_profileVersion] + "\" is not permitted, permitted value is \"1.0\"");
+                }
+                if (Profile.Attributes[profile_profileLevel] != "1") {
+                    AddError(item_profile_audioFormatExtended, Profile_Pos, "profileLevel", "profileLevel attribute value \"" + Profile.Attributes[profile_profileLevel] + "\" is not permitted, permitted value is \"1\"");
+                }
+                if (ProfileValues[j] != "EBU Tech 3393") {
+                    AddError(item_profile_audioFormatExtended, Profile_Pos, "GeneralCompliance", "profile element value \"" + ProfileValues[j] + "\" is not permitted, permitted value is \"EBU Tech 3393\"");
+                }
+            }
+        }
+        if (!Found) {
+            AddError(item_audioFormatExtended, 0, "profileList", "profileList element with \"EBU Production Profile\" profile is not present");
+        }
+
+        auto& TagLists = Items[item_tagList].Items;
+        auto& TagGroups = Items[item_tagGroup].Items;
+        auto& Tags = Items[item_tag].Items;
+        if (TagLists.empty()) {
+            AddError(item_audioFormatExtended, 0, "tagList", "tagList element is not present");
+        }
+        else if (TagLists.size() > 1) {
+            AddError(item_audioFormatExtended, 0, "tagList", "tagList subelement count " + to_string(TagLists.size()) + " is not permitted, max is 1");
+        }
+        size_t Tag_Pos = 0;
+        size_t TagGroups_Layer = 0;
+        size_t TagGroups_Other = 0;
+        for (size_t i = 0; i < TagGroups.size(); i++) {
+            const auto& TagGroup = TagGroups[i];
+            CheckElementCount(item_tagGroup, i, tagGroup_tag, 1, 1);
+            CheckElementCount(item_tagGroup, i, tagGroup_audioProgrammeIDRef, 0, 1);
+            if (TagGroup.Elements[tagGroup_audioProgrammeIDRef].empty() && TagGroup.Elements[tagGroup_audioContentIDRef].empty() && TagGroup.Elements[tagGroup_audioObjectIDRef].empty()) {
+                AddError(item_tagGroup, i, "GeneralCompliance", "this tagGroup references neither audioProgramme nor audioContent nor audioObject");
+            }
+            bool IsLayer = false;
+            const auto& TagValues = TagGroup.Elements[tagGroup_tag];
+            for (size_t j = 0; j < TagValues.size() && Tag_Pos < Tags.size(); j++, Tag_Pos++) {
+                auto Class = Tags[Tag_Pos].Attributes[tag_class];
+                transform(Class.begin(), Class.end(), Class.begin(), [](unsigned char c) { return (char)tolower(c); });
+                if (Class == "urn:profile:production:layer") {
+                    IsLayer = true;
+                    const auto& Value = TagValues[j];
+                    if (Value.empty() || Value.find_first_not_of("0123456789") != string::npos) {
+                        AddError(item_tagGroup, i, "tag", "tag element value \"" + Value + "\" is not permitted, Layer number shall be an integer");
+                    }
+                }
+            }
+            (IsLayer ? TagGroups_Layer : TagGroups_Other)++;
+        }
+        if (!TagLists.empty() && !TagGroups_Layer) {
+            AddError(item_tagList, 0, "tagGroup", "tagGroup element with Layer tag is not present");
+        }
+        if (TagGroups_Layer > 8) {
+            AddError(item_tagList, 0, "tagGroup", "tagGroup with Layer tag count " + to_string(TagGroups_Layer) + " is not permitted, max is 8");
+        }
+        if (TagGroups_Other > 8) {
+            AddError(item_tagList, 0, "tagGroup", "tagGroup without Layer tag count " + to_string(TagGroups_Other) + " is not permitted, max is 8");
+        }
+    }
+}
+#endif //MEDIAINFO_CONFORMANCE
+
+//---------------------------------------------------------------------------
 void File_Adm::Streams_Fill()
 {
     // chna mapping
@@ -6271,6 +7158,7 @@ void File_Adm::Streams_Fill()
     size_t Profiles_Pos = 0;
     bool IsAdvSSE = false;
     bool IsDolbyE = false;
+    bool IsEbu3393_InFile = false;
     vector<int8u> IsAdvSSE_Versions;
     vector<int8u> IsAdvSSE_Levels;
     for (size_t i = 0; i < ProfileList.size(); i++) {
@@ -6319,6 +7207,9 @@ void File_Adm::Streams_Fill()
             }
             else {
                 ProfileInfo.Strings[0] = Profile_Item.Attributes[profile_profileName];
+                if (Profile_Item.Attributes[profile_profileName] == "EBU Production Profile") {
+                    IsEbu3393_InFile = true;
+                }
             }
             ProfileInfo.Strings[1] = Profile_Item.Attributes[profile_profileVersion];
             ProfileInfo.Strings[3] = Profile_Item.Attributes[profile_profileLevel];
@@ -6492,28 +7383,6 @@ void File_Adm::Streams_Fill()
             Summary += __T(')');
             Fill(StreamKind_Last, StreamPos_Last, P.c_str(), Summary, true);
         }
-
-        #if MEDIAINFO_CONFORMANCE
-        //TODO: expand this proof of concept
-        if (Config_AdmProfile.Ebu3392==1)
-        {
-            const string& audioProgrammeName = File_Adm_Private->Items[item_audioProgramme].Items[i].Attributes[audioProgramme_audioProgrammeName];
-            if (Ztring().From_UTF8(audioProgrammeName).size() > 32)
-            {
-                Errors_Field[Error].push_back("audioProgramme");
-                Errors_Value[Error].push_back("audioProgrammeName length is more than EBU Tech 3392 constraint");
-            }
-        }
-        if (Config_AdmProfile.Ebu3393==1)
-        {
-            const string& audioProgrammeName = File_Adm_Private->Items[item_audioProgramme].Items[i].Attributes[audioProgramme_audioProgrammeName];
-            if (Ztring().From_UTF8(audioProgrammeName).size() > 128)
-            {
-                Errors_Field[Error].push_back("audioProgramme");
-                Errors_Value[Error].push_back("audioProgrammeName length is more than EBU Tech 3393 constraint");
-            }
-        }
-        #endif // MEDIAINFO_CONFORMANCE
     }
 
     size_t audioContentLabel_Pos = 0;
@@ -7687,11 +8556,21 @@ void File_Adm::Streams_Fill()
         }
     }   
 
+    // Errors - EBU profiles
+    const auto IsEbu3392 = Config_AdmProfile.Ebu3392 >= 1 && Config_AdmProfile.Ebu3392 <= sizeof(Ebu3392_Limits) / sizeof(Ebu3392_Limits[0]);
+    const auto IsEbu3393 = Config_AdmProfile.Ebu3393 == 1 || IsEbu3393_InFile;
+    if (IsEbu3392) {
+        Ebu_Check(File_Adm_Private, Ebu3392_Limits[Config_AdmProfile.Ebu3392 - 1], Config_AdmProfile.Ebu3392_Types, false, Source_Ebu3392);
+    }
+    if (IsEbu3393) {
+        Ebu_Check(File_Adm_Private, Ebu3393_Limits, 0, true, Source_Ebu3393);
+    }
+
     // Errors - Fill
     for (size_t t = 0; t < item_Max; t++) {
         size_t Error_Count_Per_Type[error_Type_Max] = {};
         for (size_t i = 0; i < File_Adm_Private->Items[t].Items.size(); i++) {
-            FillErrors(File_Adm_Private, (item)t, i, item_Infos[t].Name, &Errors_Field[0], &Errors_Value[0], WarningError, &Error_Count_Per_Type[0], IsAdvSSE, IsDolbyE);
+            FillErrors(File_Adm_Private, (item)t, i, item_Infos[t].Name, &Errors_Field[0], &Errors_Value[0], WarningError, &Error_Count_Per_Type[0], IsAdvSSE, IsDolbyE, IsEbu3392, IsEbu3393);
         }
     }
 

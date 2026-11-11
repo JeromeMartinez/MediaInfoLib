@@ -381,12 +381,14 @@ public :
               bool Auto;
               int8u BS2076;
               int8u Ebu3392;
+              int8u Ebu3392_Types; // Bit n set means typeLabel n is permitted, 0 means all
               int8u Ebu3393;
 
               adm_profile() :
                   Auto(false),
                   BS2076((int8u)-1),
                   Ebu3392((int8u)-1),
+                  Ebu3392_Types(0),
                   Ebu3393((int8u)-1)
               {}
           };
