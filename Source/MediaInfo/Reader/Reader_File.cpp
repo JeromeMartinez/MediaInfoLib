@@ -165,14 +165,16 @@ size_t Reader_File::Format_Test(MediaInfo_Internal* MI, String File_Name)
     //std::cout<<Ztring(File_Name).To_Local().c_str()<<std::endl;
     #if MEDIAINFO_EVENTS
         {
-            string File_Name_Local=FileName_To_Native(File_Name);
+            string File_Name_Local=MI->Config.File_IsNative(File_Name)?MI->Config.File_Name_Native:FileName_To_Native(File_Name);
             wstring File_Name_Unicode=Ztring(File_Name).To_Unicode();
+            File F_Size;
+            MI->Config.File_Open(F_Size, File_Name);
             struct MediaInfo_Event_General_Start_0 Event;
             memset(&Event, 0xFF, sizeof(struct MediaInfo_Event_Generic));
             Event.EventCode=MediaInfo_EventCode_Create(MediaInfo_Parser_None, MediaInfo_Event_General_Start, 0);
             Event.EventSize=sizeof(struct MediaInfo_Event_General_Start_0);
             Event.StreamIDs_Size=0;
-            Event.Stream_Size=File::Size_Get(File_Name);
+            Event.Stream_Size=F_Size.Size_Get();
             Event.FileName=File_Name_Local.c_str();
             Event.FileName_Unicode=File_Name_Unicode.c_str();
             MI->Config.Event_Send(NULL, (const int8u*)&Event, sizeof(MediaInfo_Event_General_Start_0));
@@ -180,11 +182,13 @@ size_t Reader_File::Format_Test(MediaInfo_Internal* MI, String File_Name)
     #endif //MEDIAINFO_EVENTS
 
     //File which can not be opened (e.g. without read permission), not tried again by each parser
-    if (!File().Open(File_Name))
+    File F_Test;
+    if (!MI->Config.File_Open(F_Test, File_Name))
     {
         MediaInfoLib::Config.Log_Send(0xC0, 0xFF, 0, __T("File can not be opened: ")+File_Name);
         return 0;
     }
+    F_Test.Close();
 
     //With Parser MultipleParsing
     /*
@@ -242,7 +246,7 @@ size_t Reader_File::Format_Test_PerParser(MediaInfo_Internal* MI, const String &
     #endif //MEDIAINFO_READTHREAD
 
     //Opening the file
-    F.Open(File_Name);
+    MI->Config.File_Open(F, File_Name);
     if (!F.Opened_Get())
         return 0;
 
@@ -446,7 +450,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                     if (Pos!=MI->Config.File_Names_Pos-1)
                     {
                         F.Close();
-                        F.Open(MI->Config.File_Names[Pos]);
+                        MI->Config.File_Open(F, MI->Config.File_Names[Pos]);
                         if (Pos>=MI->Config.File_Sizes.size())
                         {
                             MI->Config.File_Sizes.resize(Pos, (int64u)-1);
@@ -536,7 +540,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                     #if MEDIAINFO_EVENTS
                         MI->Config.Event_SubFile_Start(MI->Config.File_Names[MI->Config.File_Names_Pos]);
                     #endif //MEDIAINFO_EVENTS
-                    F.Open(MI->Config.File_Names[MI->Config.File_Names_Pos]);
+                    MI->Config.File_Open(F, MI->Config.File_Names[MI->Config.File_Names_Pos]);
                     while (!F.Opened_Get())
                     {
                         #if MEDIAINFO_EVENTS
@@ -545,7 +549,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                         if (MI->Config.File_Names_Pos+1<MI->Config.File_Names.size())
                         {
                             MI->Config.File_Names_Pos++;
-                            F.Open(MI->Config.File_Names[MI->Config.File_Names_Pos]);
+                            MI->Config.File_Open(F, MI->Config.File_Names[MI->Config.File_Names_Pos]);
                         }
                         else //break the otherwise infinite loop
                         {

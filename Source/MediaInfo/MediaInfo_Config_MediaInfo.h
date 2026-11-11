@@ -38,6 +38,11 @@ using namespace ZenLib;
 using std::string;
 //---------------------------------------------------------------------------
 
+namespace ZenLib
+{
+    class File;
+}
+
 namespace MediaInfoLib
 {
 
@@ -413,6 +418,9 @@ public :
 
     //Internal to MediaInfo, not thread safe
     ZtringList    File_Names;
+    std::string   File_Name_Native; //Name of File_Names[0] as the system gave it (narrow name on POSIX), if any: the file is opened with it as it is
+    bool          File_IsNative (const Ztring &File_Name) {return !File_Name_Native.empty() && !File_Names.empty() && File_Name==File_Names[0];}
+    bool          File_Open (ZenLib::File &F, const Ztring &File_Name);
     std::vector<int64u> File_Sizes;
     size_t        File_Names_Pos;
     size_t        File_Buffer_Size_Max;

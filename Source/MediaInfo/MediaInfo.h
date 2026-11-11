@@ -243,6 +243,7 @@ public :
 
 private :
     MediaInfo_Internal* Internal;
+    friend class MediaInfoA;
 
     //Constructor
     MediaInfo (const MediaInfo&);                           // Prevent copy-construction
@@ -256,6 +257,8 @@ private :
 /// the option CharSet set to UTF-8, as the narrow functions of the C interface (MediaInfoA_*), MediaInfoW with wide strings (the strings of the
 /// library with Unicode). The CharSet option of MediaInfoA is independent from the one of the C interface: Option() for this object,
 /// Option_Static() for the next objects and the static functions. The strings are given and returned up to their first NUL character.
+/// Except on Windows, a file name given to MediaInfoA without the UTF-8 option is the name as the system gives it (e.g. an argument of
+/// main()): a file which exists with this name is opened with it as it is, whatever the encoding of the name and the locale.
 //***************************************************************************
 
 class MEDIAINFO_EXP MediaInfoA

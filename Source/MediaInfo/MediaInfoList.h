@@ -215,6 +215,7 @@ public :
 
 private :
     MediaInfoList_Internal* Internal;
+    friend class MediaInfoListA;
 
     //Constructor
     MediaInfoList (const MediaInfoList&);                   // Prevent copy-construction

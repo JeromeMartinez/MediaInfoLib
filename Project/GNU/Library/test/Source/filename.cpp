@@ -607,6 +607,25 @@ int main(int argc, char* argv[])
     }
     #endif
 
+    // C++ classes, name as the system gives it (e.g. an argument of main()) next to the UTF-8 name of the same characters, with all the locales:
+    // the file is opened with this name as it is, also where names are converted from a locale (e.g. macOS, these names can't be created there)
+    #if !defined(_WIN32)
+    {
+        std::string Path=Directory+"/native_"+Names_NotUTF8[0];
+        if (Create_FLAC(Path, "Plain title") && Create_FLAC(Directory+"/native_"+Names[0]+".flac", Title))
+        {
+            std::string Shown=Printable(Names_NotUTF8[0]);
+            MediaInfoLib::MediaInfoA MI_A;
+            bool Opened_A=MI_A.Open(Path)!=0;
+            Check(Opened_A && MI_A.Get(MediaInfoLib::Stream_General, 0, "Title")=="Plain title", "MediaInfoA::Open("+Shown+"), name as the system gives it", Opened_A?"another file":"file not opened");
+            Check(MI_A.Get(MediaInfoLib::Stream_General, 0, "CompleteName")==Path, "MediaInfoA::Get("+Shown+", CompleteName), name as the system gives it", "result is "+Printable(MI_A.Get(MediaInfoLib::Stream_General, 0, "CompleteName")));
+            MediaInfoLib::MediaInfoListA List_A;
+            List_A.Open(Path);
+            Check(List_A.Count_Get()==1 && List_A.Get(0, MediaInfoLib::Stream_General, 0, "Title")=="Plain title", "MediaInfoListA::Open("+Shown+"), name as the system gives it", "file not opened or another file");
+        }
+    }
+    #endif //!defined(_WIN32)
+
     // Narrow API, directory listing: it must end, with all the names with their bytes with all the locales (Windows: names of the code page)
     std::string List_Path_Narrow;
     if (!To_Narrow(List_Path, List_Path_Narrow))

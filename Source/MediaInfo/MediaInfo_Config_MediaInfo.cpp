@@ -20,6 +20,7 @@
 #include "MediaInfo/MediaInfo_Config.h"
 #include "MediaInfo/TimeCode.h"
 #include "ZenLib/ZtringListListF.h"
+#include "ZenLib/File.h"
 #if MEDIAINFO_EVENTS
     #include "ZenLib/FileName.h"
 #endif //MEDIAINFO_EVENTS
@@ -3933,6 +3934,20 @@ float MediaInfo_Config_MediaInfo::State_Get ()
 {
     CriticalSectionLocker CSL(CS);
     return State;
+}
+
+//***************************************************************************
+// File names
+//***************************************************************************
+
+//---------------------------------------------------------------------------
+bool MediaInfo_Config_MediaInfo::File_Open (ZenLib::File &F, const Ztring &File_Name)
+{
+    #if !defined(WINDOWS)
+        if (File_IsNative(File_Name))
+            return F.Open_Native(File_Name_Native.c_str());
+    #endif //!defined(WINDOWS)
+    return F.Open(File_Name);
 }
 
 } //NameSpace

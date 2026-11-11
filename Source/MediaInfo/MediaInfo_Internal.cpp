@@ -29,6 +29,9 @@
 #endif //defined(MEDIAINFO_DIRECTORY_YES)
 #include "ZenLib/FileName.h"
 #include "ZenLib/OS_Utils.h"
+#if !defined(WINDOWS)
+    #include <sys/stat.h>
+#endif //!defined(WINDOWS)
 #if defined(MEDIAINFO_DIRECTORY_YES)
     #include "MediaInfo/Reader/Reader_Directory.h"
 #endif
@@ -1134,10 +1137,27 @@ MediaInfo_Internal::~MediaInfo_Internal()
 //***************************************************************************
 
 //---------------------------------------------------------------------------
-size_t MediaInfo_Internal::Open(const String &File_Name_Given)
+//Name of a file as the system gives it (e.g. an argument of main()): a file which exists with this name is opened with it as it is, instead of
+//a name found again from its text, which depends on the locale and on the existing names (see ZenLib), its text is for the outputs and the
+//names made from it (e.g. the other files of a package); else (e.g. directory, URL) its text
+#if !defined(WINDOWS)
+size_t MediaInfo_Internal::Open_Native(const std::string &File_Name)
+{
+    return Open(FileName_From_Native(File_Name.c_str()), Native_IsFile(File_Name)?&File_Name:NULL);
+}
+
+bool MediaInfo_Internal::Native_IsFile(const std::string &File_Name)
+{
+    struct stat Stat;
+    return !stat(File_Name.c_str(), &Stat) && S_ISREG(Stat.st_mode);
+}
+#endif //!defined(WINDOWS)
+
+//---------------------------------------------------------------------------
+size_t MediaInfo_Internal::Open(const String &File_Name_Given, const std::string* File_Name_Native)
 {
     #if !defined(UNICODE)
-        const String File_Name_=FileName_UTF8(File_Name_Given);
+        const String File_Name_=File_Name_Native?File_Name_Given:FileName_UTF8(File_Name_Given); //The text of a name as the system gave it is already UTF-8 text
     #else //!defined(UNICODE)
         const String &File_Name_=File_Name_Given;
     #endif //!defined(UNICODE)
@@ -1168,13 +1188,18 @@ size_t MediaInfo_Internal::Open(const String &File_Name_Given)
 
     MEDIAINFO_DEBUG_CONFIG_TEXT(Debug+=__T("Open, File=");Debug+=Ztring(File_Name_).c_str();)
     Config.File_Names.clear();
+    Config.File_Name_Native.clear();
     if (Config.File_FileNameFormat_Get()==__T("CSV"))
     {
         Config.File_Names.Separator_Set(0, __T(","));
         Config.File_Names.Write(File_Name_);
     }
     else if (!File_Name_.empty())
+    {
         Config.File_Names.push_back(File_Name_);
+        if (File_Name_Native)
+            Config.File_Name_Native=*File_Name_Native;
+    }
     if (Config.File_Names.empty())
     {
         return 0;
@@ -1273,12 +1298,12 @@ void MediaInfo_Internal::Entry()
         #endif //MEDIAINFO_LIBCURL_YES
 
     #if defined(MEDIAINFO_DIRECTORY_YES)
-        else if (Dir::Exists(Config.File_Names[0]))
+        else if (Config.File_Name_Native.empty() && Dir::Exists(Config.File_Names[0])) //A name as the system gave it is the one of a file
             Reader_Directory().Format_Test(this, Config.File_Names[0]);
     #endif //MEDIAINFO_DIRECTORY_YES
 
     #if defined(MEDIAINFO_FILE_YES)
-        else if (File::Exists(Config.File_Names[0]))
+        else if (!Config.File_Name_Native.empty() || File::Exists(Config.File_Names[0]))
         {
             #if defined(MEDIAINFO_REFERENCES_YES)
                 string Dxw;

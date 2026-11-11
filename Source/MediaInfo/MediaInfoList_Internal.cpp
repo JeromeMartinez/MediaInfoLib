@@ -26,6 +26,7 @@
 #endif //defined(MEDIAINFO_DIRECTORY_YES)
 #include "MediaInfo/Reader/Reader_Directory.h"
 #include "MediaInfo/File__Analyse_Automatic.h"
+#include "ZenLib/OS_Utils.h"
 #include <algorithm>
 using namespace ZenLib;
 using namespace std;
@@ -75,7 +76,7 @@ MediaInfoList_Internal::~MediaInfoList_Internal()
 //***************************************************************************
 
 //---------------------------------------------------------------------------
-size_t MediaInfoList_Internal::Open(const String &File_Name, const fileoptions_t Options)
+size_t MediaInfoList_Internal::Open(const String &File_Name, const fileoptions_t Options, const std::string* File_Native)
 {
     //Option FileOption_Close
     if (Options & FileOption_CloseAll)
@@ -87,7 +88,7 @@ size_t MediaInfoList_Internal::Open(const String &File_Name, const fileoptions_t
     //Get all filenames
     ZtringList List;
     #if defined(MEDIAINFO_DIRECTORY_YES)
-    if (Dir::Exists(File_Name))
+    if (!File_Native && Dir::Exists(File_Name)) //A name as the system gave it is the one of a file
     {
         List=Dir::GetAllFileNames(File_Name, (Options&FileOption_NoRecursive)?Dir::Include_Files:((Dir::dirlist_t)(Dir::Include_Files|Dir::Parse_SubDirs)));
         sort(List.begin(), List.end());
@@ -124,7 +125,10 @@ size_t MediaInfoList_Internal::Open(const String &File_Name, const fileoptions_t
     if (ToParse.empty())
         CountValid=0;
     for (ZtringList::iterator L=List.begin(); L!=List.end(); ++L)
+    {
         ToParse.push(*L);
+        ToParse_Native.push(File_Native && *L==File_Name?*File_Native:std::string());
+    }
     ToParse_Total+=List.size();
     if (ToParse_Total)
         State=ToParse_AlreadyDone*10000/ToParse_Total;
@@ -150,8 +154,16 @@ size_t MediaInfoList_Internal::Open(const String &File_Name, const fileoptions_t
     }
 }
 
+//---------------------------------------------------------------------------
+#if !defined(WINDOWS)
+size_t MediaInfoList_Internal::Open_Native(const std::string &File_Name, const fileoptions_t Options)
+{
+    return Open(FileName_From_Native(File_Name.c_str()), Options, MediaInfo_Internal::Native_IsFile(File_Name)?&File_Name:NULL);
+}
+#endif //!defined(WINDOWS)
+
 #if defined(MEDIAINFO_FILE_YES)
-static size_t RemoveFilesFromList(std::queue<String>& ToParse, Ztring CompleteName_Begin, const Ztring &CompleteName_Last)
+static size_t RemoveFilesFromList(std::queue<String>& ToParse, std::queue<std::string>& ToParse_Native, Ztring CompleteName_Begin, const Ztring &CompleteName_Last)
 {
     size_t Removed=0;
     size_t Pos=0;
@@ -168,6 +180,7 @@ static size_t RemoveFilesFromList(std::queue<String>& ToParse, Ztring CompleteNa
         while (!ToParse.empty() && ToParse.front().find(CompleteName_Begin)==0)
         {
             ToParse.pop();
+            ToParse_Native.pop();
             Removed++;
         }
     }
@@ -187,6 +200,8 @@ void MediaInfoList_Internal::Entry()
         {
             Ztring FileName=ToParse.front();
             ToParse.pop();
+            std::string FileName_Native=ToParse_Native.front();
+            ToParse_Native.pop();
             #if defined(MEDIAINFO_FILE_YES)
                 bool Skip=false;
                 for (size_t i=0; i<ToParse_ToIgnore.size(); i++)
@@ -212,7 +227,7 @@ void MediaInfoList_Internal::Entry()
                 MI->Option(__T("Thread"), __T("1"));
             Info.push_back(MI);
             CS.Leave();
-            MI->Open(FileName);
+            MI->Open(FileName, FileName_Native.empty()?NULL:&FileName_Native);
 
             if (BlockMethod==1)
             {
@@ -237,7 +252,7 @@ void MediaInfoList_Internal::Entry()
             #if defined(MEDIAINFO_FILE_YES)
                 //Removing sequences of files from the list
                 if (!MI->Get(Stream_General, 0, General_CompleteName_Last).empty())
-                    ToParse_AlreadyDone+=RemoveFilesFromList(ToParse, MI->Get(Stream_General, 0, General_CompleteName),
+                    ToParse_AlreadyDone+=RemoveFilesFromList(ToParse, ToParse_Native, MI->Get(Stream_General, 0, General_CompleteName),
                                                                       MI->Get(Stream_General, 0, General_CompleteName_Last));
                 if (MI->Config.File_TestDirectory_Get() && MI->Get(Stream_General, 0, General_Format)==__T("Directory"))
                 {
@@ -245,7 +260,7 @@ void MediaInfoList_Internal::Entry()
                         for (size_t StreamPos=0; StreamPos<MI->Count_Get((stream_t)StreamKind); StreamPos++)
                         {
                             if (!MI->Get((stream_t)StreamKind, StreamPos, __T("Source_Last")).empty())
-                                ToParse_AlreadyDone+=RemoveFilesFromList(ToParse, MI->Get(Stream_General, 0, General_CompleteName)+MI->Get((stream_t)StreamKind, StreamPos, __T("Source")),
+                                ToParse_AlreadyDone+=RemoveFilesFromList(ToParse, ToParse_Native, MI->Get(Stream_General, 0, General_CompleteName)+MI->Get((stream_t)StreamKind, StreamPos, __T("Source")),
                                                                                   MI->Get(Stream_General, 0, General_CompleteName)+MI->Get((stream_t)StreamKind, StreamPos, __T("Source_Last")));
                             else
                             {
@@ -373,6 +388,7 @@ void MediaInfoList_Internal::Close(size_t FilePos)
     }
 
     ToParse = {};
+    ToParse_Native = {};
     ToParse_AlreadyDone=0;
     ToParse_Total=0;
 }

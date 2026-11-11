@@ -58,7 +58,11 @@ public :
     ~MediaInfo_Internal ();
 
     //File
-    size_t Open (const String &File_Name);
+    size_t Open (const String &File_Name, const std::string* File_Name_Native=NULL); //With the name of this file as the system gave it, if any
+    #if !defined(WINDOWS)
+    size_t Open_Native (const std::string &File_Name);
+    static bool Native_IsFile (const std::string &File_Name); //A regular file exists with this name as it is
+    #endif //!defined(WINDOWS)
     size_t Open (const ZenLib::int8u* Begin, size_t Begin_Size, const ZenLib::int8u* End=NULL, size_t End_Size=0, ZenLib::int64u File_Size=0);
     size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, const String &File_Name=String());
     size_t Open_Buffer_Init (ZenLib::int64u File_Size, ZenLib::int64u File_Offset);

@@ -32,7 +32,10 @@ public :
     virtual ~MediaInfoList_Internal ();
 
     //Files
-    size_t Open (const String &File, const fileoptions_t Options=FileOption_Nothing);
+    size_t Open (const String &File, const fileoptions_t Options=FileOption_Nothing, const std::string* File_Native=NULL); //With the name of this file as the system gave it, if any
+    #if !defined(WINDOWS)
+    size_t Open_Native (const std::string &File, const fileoptions_t Options=FileOption_Nothing); //See MediaInfo_Internal::Open_Native()
+    #endif //!defined(WINDOWS)
     size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
     size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
     ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
@@ -65,6 +68,7 @@ private :
     std::vector<String> ToParse_ToIgnore;
     #endif //defined(MEDIAINFO_FILE_YES)
     std::queue<String> ToParse;
+    std::queue<std::string> ToParse_Native; //For each name of ToParse, the name as the system gave it, if any
     std::map<String, String> Config_MediaInfo_Items; //Config per file
     size_t  ToParse_AlreadyDone;
     size_t  ToParse_Total;

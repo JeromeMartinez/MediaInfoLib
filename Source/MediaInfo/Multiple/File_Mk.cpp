@@ -5820,7 +5820,7 @@ void File_Mk::CRC32_Check ()
                                 {
                                     size_t NewBuffer_Size=(size_t)(CRC32Compute[i].UpTo-CRC32Compute[i].From);
                                     File F;
-                                    if (F.Open(File_Name))
+                                    if (Config->File_Open(F, File_Name))
                                     {
                                         int8u* NewBuffer = new int8u[NewBuffer_Size];
                                         F.GoTo(CRC32Compute[i].From);

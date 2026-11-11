@@ -11000,7 +11000,7 @@ void File_Mxf::Read_Buffer_CheckFileModifications()
             if (HeaderPartition_IsOpen && !Config->File_IsNotGrowingAnymore)
             {
                 File F;
-                F.Open(File_Name);
+                Config->File_Open(F, File_Name);
                 std::vector<int8u> SearchingPartitionPack(65536);
                 size_t SearchingPartitionPack_Size=F.Read(&SearchingPartitionPack[0], SearchingPartitionPack.size());
                 for (size_t Pos=0; Pos+16<SearchingPartitionPack_Size; Pos++)

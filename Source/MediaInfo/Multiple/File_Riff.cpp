@@ -1177,7 +1177,8 @@ void File_Riff::Header_Parse()
         #if defined(MEDIAINFO_FILE_YES) //TODO: seek if file API is not available
         else if (!File_Name.empty())
         {
-            File F(File_Name);
+            File F;
+            Config->File_Open(F, File_Name);
             F.GoTo(File_Offset+Buffer_Offset+8+Size_Complete); // TODO: remove this code and check non word aligned streams directly
             int8u Temp;
             if (F.Read(&Temp, 1))

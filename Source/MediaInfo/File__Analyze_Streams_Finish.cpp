@@ -2872,7 +2872,7 @@ bool File__Analyze::FixFile(int64u FileOffsetForWriting, const int8u* ToWrite, c
         std::ofstream  Dest(FileName_To_Native(Config->File_Names[0]+__T(".Fixed")).c_str(), std::ios::binary);
         if (Dest.fail())
             return false;
-        std::ifstream  Source(FileName_To_Native(Config->File_Names[0]).c_str(), std::ios::binary);
+        std::ifstream  Source((Config->File_IsNative(Config->File_Names[0])?Config->File_Name_Native:FileName_To_Native(Config->File_Names[0])).c_str(), std::ios::binary);
         if (Source.fail())
             return false;
         Dest << Source.rdbuf();

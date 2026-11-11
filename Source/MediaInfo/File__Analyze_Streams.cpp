@@ -2851,7 +2851,8 @@ size_t File__Analyze::Stream_Prepare (stream_t KindOfStream, size_t StreamPos)
 
         //File dates
         #if defined(MEDIAINFO_FILE_YES)
-        File F(File_Name);
+        File F;
+        Config->File_Open(F, File_Name);
         Fill (Stream_General, 0, General_File_Created_Date, F.Created_Get());
         Fill (Stream_General, 0, General_File_Created_Date_Local, F.Created_Local_Get());
         Fill (Stream_General, 0, General_File_Modified_Date, F.Modified_Get());

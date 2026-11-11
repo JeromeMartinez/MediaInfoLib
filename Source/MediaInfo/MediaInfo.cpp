@@ -17,6 +17,7 @@
 #include "MediaInfo/MediaInfo.h"
 #include "MediaInfo/MediaInfoList.h"
 #include "MediaInfo/MediaInfo_Internal.h"
+#include "MediaInfo/MediaInfoList_Internal.h"
 #include "ZenLib/OS_Utils.h"
 #include <cstring>
 #if defined(_MSC_VER) && _MSC_VER >= 1800 && _MSC_VER < 1900 && defined(_M_X64)
@@ -327,11 +328,10 @@ namespace
 
 //---------------------------------------------------------------------------
 //The functions of MediaInfo and MediaInfoList with the strings of the class _CLASS (_STRING, String from _OUT, UTF-8 strings if _UTF8), its
-//object being an _OBJECT, except the options
+//object being an _OBJECT, except the options and the opening of a file
 #define MEDIAINFO_STRINGS(_CLASS, _STRING, _OUT, _OBJECT, _UTF8) \
     _CLASS::_CLASS() : Object(new _OBJECT) {} \
     _CLASS::~_CLASS() {delete static_cast<_OBJECT*>(Object);} \
-    size_t _CLASS::Open(const _STRING &File_Name) {return Object->Open(In_FileName(File_Name, _UTF8));} \
     size_t _CLASS::Open(const int8u* Begin, size_t Begin_Size, const int8u* End, size_t End_Size, int64u File_Size) {return Object->Open(Begin, Begin_Size, End, End_Size, File_Size);} \
     size_t _CLASS::Open_Buffer_Init(int64u File_Size, int64u File_Offset) {return Object->Open_Buffer_Init(File_Size, File_Offset);} \
     size_t _CLASS::Open_Buffer_Continue(const int8u* Buffer, size_t Buffer_Size) {return Object->Open_Buffer_Continue(Buffer, Buffer_Size);} \
@@ -353,7 +353,6 @@ namespace
 #define MEDIAINFOLIST_STRINGS(_CLASS, _STRING, _OUT, _OBJECT, _UTF8) \
     _CLASS::_CLASS(size_t Count_Init) : Object(new _OBJECT(Count_Init)) {} \
     _CLASS::~_CLASS() {delete static_cast<_OBJECT*>(Object);} \
-    size_t _CLASS::Open(const _STRING &File, const fileoptions_t Options) {return Object->Open(In_FileName(File, _UTF8), Options);} \
     size_t _CLASS::Open_Buffer_Init(int64u File_Size, int64u File_Offset) {return Object->Open_Buffer_Init(File_Size, File_Offset);} \
     size_t _CLASS::Open_Buffer_Continue(size_t FilePos, const int8u* Buffer, size_t Buffer_Size) {return Object->Open_Buffer_Continue(FilePos, Buffer, Buffer_Size);} \
     int64u _CLASS::Open_Buffer_Continue_GoTo_Get(size_t FilePos) {return Object->Open_Buffer_Continue_GoTo_Get(FilePos);} \
@@ -374,6 +373,42 @@ MEDIAINFOLIST_STRINGS(MediaInfoListA, std::string, Out_Narrow, MediaInfoListA_Ob
 #if !defined(WSTRING_MISSING)
 MEDIAINFO_STRINGS(MediaInfoW, std::wstring, Out_Wide, MediaInfo, false)
 MEDIAINFOLIST_STRINGS(MediaInfoListW, std::wstring, Out_Wide, MediaInfoList, false)
+#endif //!defined(WSTRING_MISSING)
+
+//---------------------------------------------------------------------------
+//Opening of a file: except on Windows, a narrow name in the encoding of the locale is the name as the system gives it (e.g. an argument of
+//main()), a file which exists with this name is opened with it as it is (see MediaInfo_Internal::Open_Native(); the wide names of Windows
+//are given as they are to the system from their text)
+size_t MediaInfoA::Open(const std::string &File_Name)
+{
+    bool UTF8=static_cast<MediaInfoA_Object*>(Object)->UTF8;
+    #if !defined(WINDOWS) && defined(MEDIAINFO_FILE_YES)
+        if (!UTF8)
+            return Object->Internal->Open_Native(File_Name.c_str());
+    #endif //!defined(WINDOWS) && defined(MEDIAINFO_FILE_YES)
+    return Object->Open(In_FileName(File_Name, UTF8));
+}
+
+size_t MediaInfoListA::Open(const std::string &File, const fileoptions_t Options)
+{
+    bool UTF8=static_cast<MediaInfoListA_Object*>(Object)->UTF8;
+    #if !defined(WINDOWS)
+        if (!UTF8)
+            return Object->Internal->Open_Native(File.c_str(), Options);
+    #endif //!defined(WINDOWS)
+    return Object->Open(In_FileName(File, UTF8), Options);
+}
+
+#if !defined(WSTRING_MISSING)
+size_t MediaInfoW::Open(const std::wstring &File_Name)
+{
+    return Object->Open(In_FileName(File_Name, false));
+}
+
+size_t MediaInfoListW::Open(const std::wstring &File, const fileoptions_t Options)
+{
+    return Object->Open(In_FileName(File, false), Options);
+}
 #endif //!defined(WSTRING_MISSING)
 
 //---------------------------------------------------------------------------
