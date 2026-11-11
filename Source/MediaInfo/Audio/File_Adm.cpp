@@ -42,6 +42,8 @@
 #include "ThirdParty/tfsxml/tfsxml.h"
 #include <algorithm>
 #include <bitset>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -3890,24 +3892,94 @@ static bool Ebu_IsCommonDefinition(const string& ID) {
 }
 
 //---------------------------------------------------------------------------
-// ITU-R BS.2051 speaker label style: a letter for the vertical layer then '+' or '-' and a 3-digit azimuth (e.g. M+030), plus "SC" positions and LFE
-static bool Ebu_IsBS2051SpeakerLabel(string Label) {
-    static const char* Urn = "urn:itu:bs:2051:";
-    if (!Label.rfind(Urn, 0)) {
-        const auto Pos = Label.find(":speaker:");
-        if (Pos == string::npos) {
-            return false;
-        }
-        Label.erase(0, Pos + 9);
+// ITU-R BS.2051 speaker label (SP Label) style: layer (B, M, U, UH, T) then '+' or '-' and a 3-digit azimuth (e.g. M+030) or SC, or LFEn
+// Optionally as an URI (urn:itu:bs:2051:n:speaker:Label)
+static string Ebu_SpeakerLabel_RemoveUrn(const string& Label) {
+    if (Label.rfind("urn:itu:bs:2051:", 0)) {
+        return Label;
     }
+    const auto Pos = Label.find(":speaker:");
+    return Pos == string::npos ? string() : Label.substr(Pos + 9);
+}
+
+static bool Ebu_IsBS2051SpeakerLabel(const string& Label_Full) {
+    const auto Label = Ebu_SpeakerLabel_RemoveUrn(Label_Full);
     if (!Label.rfind("LFE", 0)) {
-        return Label.size() == 3 || (Label.size() == 4 && isdigit((unsigned char)Label[3]));
+        return Label.size() == 4 && isdigit((unsigned char)Label[3]);
     }
-    if (Label.size() < 4 || !isupper((unsigned char)Label[0]) || (Label[1] != '+' && Label[1] != '-')) {
+    const auto Sign_Pos = Label.find_first_of("+-");
+    if (Sign_Pos == string::npos) {
         return false;
     }
-    const auto Azimuth = Label.substr(2);
+    const auto Layer = Label.substr(0, Sign_Pos);
+    if (Layer != "B" && Layer != "M" && Layer != "U" && Layer != "UH" && Layer != "T") {
+        return false;
+    }
+    const auto Azimuth = Label.substr(Sign_Pos + 1);
     return Azimuth == "SC" || (Azimuth.size() == 3 && isdigit((unsigned char)Azimuth[0]) && isdigit((unsigned char)Azimuth[1]) && isdigit((unsigned char)Azimuth[2]));
+}
+
+//---------------------------------------------------------------------------
+// ITU-R BS.2388 speaker label style for Cartesian coordinates: optional layer (B, M, U, UH, T, BMzz, UMzz) and '_',
+// then C, TC, FL/FR/BL/BR (optional 2-digit x or 4-digit xy), FC/BC/SL/SR (optional 2-digit value), FSL/FSR/BSL/BSR (2-digit y)
+static bool Ebu_IsBS2388SpeakerLabel(string Label) {
+    const auto Underscore = Label.find('_');
+    if (Underscore != string::npos) {
+        const auto Layer = Label.substr(0, Underscore);
+        const auto IsIntermediate = Layer.size() == 4 && (!Layer.rfind("BM", 0) || !Layer.rfind("UM", 0)) && isdigit((unsigned char)Layer[2]) && isdigit((unsigned char)Layer[3]);
+        if (Layer != "B" && Layer != "M" && Layer != "U" && Layer != "UH" && Layer != "T" && !IsIntermediate) {
+            return false;
+        }
+        Label.erase(0, Underscore + 1);
+    }
+    if (Label == "C" || Label == "TC") {
+        return true;
+    }
+    const auto Digits_Pos = Label.find_first_of("0123456789");
+    const auto Position = Label.substr(0, Digits_Pos);
+    const auto Digits_Size = Digits_Pos == string::npos ? 0 : (Label.size() - Digits_Pos);
+    if (Digits_Size && Label.find_first_not_of("0123456789", Digits_Pos) != string::npos) {
+        return false;
+    }
+    if (Position == "FL" || Position == "FR" || Position == "BL" || Position == "BR") {
+        return Digits_Size == 0 || Digits_Size == 2 || Digits_Size == 4;
+    }
+    if (Position == "FC" || Position == "BC" || Position == "SL" || Position == "SR") {
+        return Digits_Size == 0 || Digits_Size == 2;
+    }
+    if (Position == "FSL" || Position == "FSR" || Position == "BSL" || Position == "BSR") {
+        return Digits_Size == 2;
+    }
+    return false;
+}
+
+//---------------------------------------------------------------------------
+// ITU-R BS.2051 SP Label of a loudspeaker position from Table 1, empty if none
+static string Ebu_BS2051SpeakerLabel(double Azimuth, double Elevation) {
+    static const struct { const char* Layer; double Elevation; } Layers[] = { { "B", -30 }, { "M", 0 }, { "U", 30 }, { "UH", 45 }, { "T", 90 } };
+    static const double Azimuths[] = { 0, 22.5, 30, 45, 60, 90, 110, 135, 180 };
+    for (const auto& Layer : Layers) {
+        if (fabs(Elevation - Layer.Elevation) > 0.01) {
+            continue;
+        }
+        if (Layer.Elevation == 90) {
+            return "T+000";
+        }
+        for (const auto Value : Azimuths) {
+            if (fabs(fabs(Azimuth) - Value) > 0.01) {
+                continue;
+            }
+            if (Layer.Elevation == 45 && Value != 180) {
+                return {};
+            }
+            const auto Value_Int = (int)Value;
+            char Label[16];
+            snprintf(Label, sizeof(Label), "%s%c%03d", Layer.Layer, (Azimuth < 0 && Value != 0 && Value != 180) ? '-' : '+', Value_Int);
+            return Label;
+        }
+        return {};
+    }
+    return {};
 }
 
 //---------------------------------------------------------------------------
@@ -4089,10 +4161,42 @@ static void Ebu_audioBlockFormat_Check(file_adm_private* File_Adm_Private, type 
             AddError("position", "position screenEdgeLock attribute count " + to_string(ScreenEdgeLock_Count) + " is not permitted, max is 2", Source_Ebu3393);
         }
         CheckCount(audioBlockFormat_speakerLabel, 1, 1, Source_Ebu3393);
-        if (!HasCartesian) {
-            for (const auto& speakerLabel : Elements[audioBlockFormat_speakerLabel]) {
-                if (!Ebu_IsBS2051SpeakerLabel(speakerLabel)) {
-                    BlockFormat.AddError(Warning, ":speakerLabel:speakerLabel element value \"" + speakerLabel + "\" does not use the ITU-R BS.2051 speaker label style (e.g. M+030)", Source_Ebu3393);
+        for (const auto& speakerLabel : Elements[audioBlockFormat_speakerLabel]) {
+            if (HasCartesian ? !Ebu_IsBS2388SpeakerLabel(speakerLabel) : !Ebu_IsBS2051SpeakerLabel(speakerLabel)) {
+                BlockFormat.AddError(Warning, ":speakerLabel:speakerLabel element value \"" + speakerLabel + "\" does not use the " + (HasCartesian ? "ITU-R BS.2388 speaker label style (e.g. U_FL)" : "ITU-R BS.2051 speaker label style (e.g. M+030)"), Source_Ebu3393);
+            }
+        }
+        if (!HasCartesian && Coordinate_Counts[Azimuth][Bound_None] == 1 && Coordinate_Counts[Elevation][Bound_None] == 1) {
+            // Speaker defined in ITU-R BS.2051: its SP Label or the corresponding URI should be used (Tech 3392)
+            double Values[2] = { 0, 0 };
+            bool Values_Ok[2] = { false, false };
+            for (size_t k = 0; k < Position_Count && Position_Pos + k < Positions.size(); k++) {
+                const auto& Position = Positions[Position_Pos + k];
+                if (Position.Attributes_Present[position_bound]) {
+                    continue;
+                }
+                const auto& Coordinate_Name = Position.Attributes[position_coordinate];
+                const size_t Index = Coordinate_Name == "azimuth" ? 0 : (Coordinate_Name == "elevation" ? 1 : 2);
+                if (Index < 2 && k < Elements[audioBlockFormat_position].size()) {
+                    const auto& Value = Elements[audioBlockFormat_position][k];
+                    char* End;
+                    Values[Index] = strtod(Value.c_str(), &End);
+                    Values_Ok[Index] = !Value.empty() && !*End;
+                }
+            }
+            if (Values_Ok[0] && Values_Ok[1]) {
+                const auto SP_Label = Ebu_BS2051SpeakerLabel(Values[0], Values[1]);
+                if (!SP_Label.empty()) {
+                    bool Found = false;
+                    for (const auto& speakerLabel : Elements[audioBlockFormat_speakerLabel]) {
+                        const auto Label = Ebu_SpeakerLabel_RemoveUrn(speakerLabel);
+                        if (Label == SP_Label || !Label.rfind("LFE", 0)) { // LFE position is not a Table 1 position
+                            Found = true;
+                        }
+                    }
+                    if (!Found) {
+                        BlockFormat.AddError(Warning, ":speakerLabel:speakerLabel element with ITU-R BS.2051 SP Label \"" + SP_Label + "\" or its URI is not present", Source_Ebu3392);
+                    }
                 }
             }
         }
