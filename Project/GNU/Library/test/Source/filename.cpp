@@ -4,8 +4,8 @@
  *  be found in the License.html file in the root of the source tree.
  */
 
-// File names with non-ASCII characters with the C API (narrow and wide functions, the same results with and without Unicode) and the locale of
-// the environment, for filename.sh
+// File names with non-ASCII characters with the C API (narrow and wide functions) and the C++ classes with UTF-8 or wide strings, the same
+// results with and without Unicode, and the locale of the environment, for filename.sh
 // Usage: mil_filename setlocale(0|1) charset_utf8(0|1) directory
 // Prints "NOK: check, message" lines or "OK: count checks", exit code 0 (OK) or 1 (NOK)
 
@@ -51,11 +51,11 @@ extern "C"
     const wchar_t*  __stdcall MediaInfo_Get(void* Handle, int StreamKind, size_t StreamNumber, const wchar_t* Parameter, int KindOfInfo, int KindOfSearch);
 }
 
-#if !defined(UNICODE)
-    // Without Unicode, also the C++ API, whose strings are UTF-8 text
-    #include "MediaInfo/MediaInfo.h"
+#if !defined(_WIN32) || !defined(UNICODE)
+    // C++ API: the classes with UTF-8 or wide strings (not in the DLL of Windows), and without Unicode the classes whose strings are UTF-8 text
+    #include "MediaInfo/MediaInfoList.h"
     #include "ZenLib/OS_Utils.h"
-#endif //!defined(UNICODE)
+#endif //!defined(_WIN32) || !defined(UNICODE)
 
 static const int Stream_General=0;
 static const int Info_Name=0;
@@ -502,6 +502,36 @@ int main(int argc, char* argv[])
             Check(Value_Wide && Title_Wide==Value_Wide, "MediaInfo_Get("+Shown+", Title)", "wrong title");
         }
         MediaInfo_Delete(MI);
+
+        // C++ classes with UTF-8 or wide strings, the same results with the library with and without Unicode (e.g. a program which is not
+        // compiled with the Unicode mode of the library): with the UTF-8 name, and with the bytes of the name in the encoding of the locale
+        #if !defined(_WIN32)
+        {
+            const std::string* Names_A[]={&Path, &Files[i].Path_System};
+            for (size_t k=0; k<(Files[i].Path_System==Path?1:2); k++)
+            {
+                std::string What="MediaInfoA::Open("+Shown+(k?", bytes of the name in the encoding of the locale)":")");
+                MediaInfoLib::MediaInfoA MI_A;
+                size_t Opened_A=MI_A.Open(*Names_A[k]);
+                Check(Opened_A, What, "file not opened");
+                if (Opened_A)
+                {
+                    std::string Value=MI_A.Get(MediaInfoLib::Stream_General, 0, "CompleteName");
+                    Check(Value==Path, What+", CompleteName", "result is "+Printable(Value));
+                    Value=MI_A.Get(MediaInfoLib::Stream_General, 0, "Title");
+                    Check(Value==Files[i].Title, What+", Title", "result is "+Printable(Value));
+                }
+            }
+            MediaInfoLib::MediaInfoW MI_W;
+            size_t Opened_W=MI_W.Open(Path_Wide);
+            Check(Opened_W, "MediaInfoW::Open("+Shown+")", "file not opened");
+            if (Opened_W)
+            {
+                Check(MI_W.Get(MediaInfoLib::Stream_General, 0, L"CompleteName")==Path_Wide, "MediaInfoW::Get("+Shown+", CompleteName)", "wrong name");
+                Check(MI_W.Get(MediaInfoLib::Stream_General, 0, L"Title")==Title_Wide, "MediaInfoW::Get("+Shown+", Title)", "wrong title");
+            }
+        }
+        #endif //!defined(_WIN32)
     }
 
     // Narrow API, text which is not a file name: encoding of the locale, or UTF-8 with an ASCII locale or the UTF-8 option
@@ -593,6 +623,44 @@ int main(int argc, char* argv[])
         else
             Check(Count>=1, "MediaInfoListA_Open(list)", "listed:"+Listed_Shown); // e.g. cp932, names which can be decoded
     #endif
+
+    // C++ classes with UTF-8 or wide strings, directory listing: all the names, with their bytes where the names are UTF-8 (not the names in a
+    // locale which is neither ASCII nor UTF-8, decoded with it)
+    #if !defined(_WIN32)
+    {
+        std::wstring List_Path_Wide;
+        UTF8_To_Wide(List_Path, List_Path_Wide);
+        MediaInfoLib::MediaInfoListA List_A;
+        MediaInfoLib::MediaInfoListW List_W;
+        List_A.Open(List_Path);
+        List_W.Open(List_Path_Wide);
+        std::set<std::string> Listed_A;
+        std::set<std::wstring> Listed_W;
+        std::string Listed_A_Shown;
+        for (size_t i=0; i<List_A.Count_Get(); i++)
+        {
+            std::string Value=List_A.Get(i, MediaInfoLib::Stream_General, 0, "CompleteName");
+            Listed_A.insert(Value);
+            Listed_A_Shown+=" "+Printable(Value);
+        }
+        for (size_t i=0; i<List_W.Count_Get(); i++)
+            Listed_W.insert(List_W.Get(i, MediaInfoLib::Stream_General, 0, L"CompleteName"));
+        bool IsOK_A=List_A.Count_Get()==Expected_All.size();
+        bool IsOK_W=List_W.Count_Get()==Expected_All.size();
+        if (FileNames_IsUnicode)
+            for (std::set<std::string>::const_iterator Name=Expected.begin(); Name!=Expected.end(); ++Name)
+            {
+                std::wstring Name_Wide;
+                UTF8_To_Wide(*Name, Name_Wide);
+                if (!Listed_A.count(*Name))
+                    IsOK_A=false;
+                if (!Listed_W.count(Name_Wide))
+                    IsOK_W=false;
+            }
+        Check(IsOK_A, "MediaInfoListA::Open(list)", "listed:"+Listed_A_Shown);
+        Check(IsOK_W, "MediaInfoListW::Open(list)", "wrong names or count");
+    }
+    #endif //!defined(_WIN32)
 
     if (!Status)
         printf("OK: %u checks\n", (unsigned)Checks);
