@@ -2821,6 +2821,15 @@ struct channel_outputChannelFormatIDRef {
     string              outputChannelFormatIDRef;
 };
 
+// Information about an audioChannelFormat collected during audioBlockFormat parsing, for EBU profiles checks
+struct ebu_channelformat_info {
+    int8u Coordinates = 0; // Bit 0 = polar, bit 1 = Cartesian
+    bool UsesScreen = false;
+    bool ImportanceVaries = false;
+    string speakerLabel;
+    string importance;
+};
+
 class file_adm_private : public tfsxml
 {
 public:
@@ -2843,6 +2852,7 @@ public:
     TimeCode LastBlockFormatEnd_S;
     TimeCode Ebu_LastBlockFormatEnd;
     int64s Ebu_BlockFormat_z_Previous = -1;
+    vector<ebu_channelformat_info> Ebu_ChannelFormat_Infos;
     vector<vector<channel_list>> ChannelFormat_Matrix_coefficients;
     vector<vector<channel_list>> ChannelFormat_Matrix_outputChannelFormatIDRefs;
     vector<string> coefficients;
@@ -3880,6 +3890,27 @@ static bool Ebu_IsCommonDefinition(const string& ID) {
 }
 
 //---------------------------------------------------------------------------
+// ITU-R BS.2051 speaker label style: a letter for the vertical layer then '+' or '-' and a 3-digit azimuth (e.g. M+030), plus "SC" positions and LFE
+static bool Ebu_IsBS2051SpeakerLabel(string Label) {
+    static const char* Urn = "urn:itu:bs:2051:";
+    if (!Label.rfind(Urn, 0)) {
+        const auto Pos = Label.find(":speaker:");
+        if (Pos == string::npos) {
+            return false;
+        }
+        Label.erase(0, Pos + 9);
+    }
+    if (!Label.rfind("LFE", 0)) {
+        return Label.size() == 3 || (Label.size() == 4 && isdigit((unsigned char)Label[3]));
+    }
+    if (Label.size() < 4 || !isupper((unsigned char)Label[0]) || (Label[1] != '+' && Label[1] != '-')) {
+        return false;
+    }
+    const auto Azimuth = Label.substr(2);
+    return Azimuth == "SC" || (Azimuth.size() == 3 && isdigit((unsigned char)Azimuth[0]) && isdigit((unsigned char)Azimuth[1]) && isdigit((unsigned char)Azimuth[2]));
+}
+
+//---------------------------------------------------------------------------
 // EBU Tech 3392 and EBU Tech 3393 audioBlockFormat requirements
 // Checked during parsing as audioBlockFormat elements may not be all kept in memory, errors are filtered depending on the profiles in use
 static void Ebu_audioBlockFormat_Check(file_adm_private* File_Adm_Private, type Type, size_t BlockFormat_Pos, size_t Position_Pos, const TimeCode& rtime, const TimeCode& duration) {
@@ -4058,6 +4089,13 @@ static void Ebu_audioBlockFormat_Check(file_adm_private* File_Adm_Private, type 
             AddError("position", "position screenEdgeLock attribute count " + to_string(ScreenEdgeLock_Count) + " is not permitted, max is 2", Source_Ebu3393);
         }
         CheckCount(audioBlockFormat_speakerLabel, 1, 1, Source_Ebu3393);
+        if (!HasCartesian) {
+            for (const auto& speakerLabel : Elements[audioBlockFormat_speakerLabel]) {
+                if (!Ebu_IsBS2051SpeakerLabel(speakerLabel)) {
+                    BlockFormat.AddError(Warning, ":speakerLabel:speakerLabel element value \"" + speakerLabel + "\" does not use the ITU-R BS.2051 speaker label style (e.g. M+030)", Source_Ebu3393);
+                }
+            }
+        }
         if (HasCartesian) {
             CheckCount(audioBlockFormat_cartesian, 1, 1, Source_Ebu3393);
             if (Elements[audioBlockFormat_cartesian].size() == 1 && Elements[audioBlockFormat_cartesian][0] != "1") {
@@ -4115,6 +4153,36 @@ static void Ebu_audioBlockFormat_Check(file_adm_private* File_Adm_Private, type 
     CheckCount(audioBlockFormat_gain, 0, 1, Source_Ebu3393);
     CheckCount(audioBlockFormat_importance, 0, 1, Source_Ebu3393);
     CheckCount(audioBlockFormat_jumpPosition, 0, 1, Source_Ebu3393);
+
+    // Information for the audioProgramme level checks
+    const auto ChannelFormat_Pos = Items[item_audioChannelFormat].Items.size() - 1;
+    auto& Infos = File_Adm_Private->Ebu_ChannelFormat_Infos;
+    if (Infos.size() <= ChannelFormat_Pos) {
+        Infos.resize(ChannelFormat_Pos + 1);
+    }
+    auto& Info = Infos[ChannelFormat_Pos];
+    Info.Coordinates |= (HasPolar ? 1 : 0) | (HasCartesian ? 2 : 0);
+    if (ScreenEdgeLock_Count) {
+        Info.UsesScreen = true;
+    }
+    for (const auto& screenRef : Elements[audioBlockFormat_screenRef]) {
+        if (screenRef == "1") {
+            Info.UsesScreen = true;
+        }
+    }
+    if (!BlockFormat_Pos && !Elements[audioBlockFormat_speakerLabel].empty()) {
+        Info.speakerLabel = Elements[audioBlockFormat_speakerLabel][0];
+    }
+
+    // importance value should not vary within an audioChannelFormat (Tech 3393 recommendation)
+    const auto importance = Elements[audioBlockFormat_importance].empty() ? string("10") : Elements[audioBlockFormat_importance][0];
+    if (!BlockFormat_Pos) {
+        Info.importance = importance;
+    }
+    else if (importance != Info.importance && !Info.ImportanceVaries) {
+        Info.ImportanceVaries = true;
+        BlockFormat.AddError(Warning, ":importance:importance element value \"" + importance + "\" varies within the audioChannelFormat, previous value is \"" + Info.importance + "\"", Source_Ebu3393);
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -5692,6 +5760,9 @@ void file_adm_private::clear()
     IsLocalTimeReference = false;
     IsPartial = false;
     profileInfos.clear();
+    Ebu_LastBlockFormatEnd = {};
+    Ebu_BlockFormat_z_Previous = -1;
+    Ebu_ChannelFormat_Infos.clear();
 }
 
 int file_adm_private::coreMetadata()
@@ -7404,6 +7475,365 @@ static void Ebu_Check(file_adm_private* File_Adm_Private, const ebu_profile_limi
         }
         if (TagGroups_Other > 8) {
             AddError(item_tagList, 0, "tagGroup", "tagGroup without Layer tag count " + to_string(TagGroups_Other) + " is not permitted, max is 8");
+        }
+    }
+
+    //***********************************************************************
+    // Recommendations, as warnings
+    //***********************************************************************
+    auto AddWarning = [&](item Item_Type, size_t i, const string& Sub, const string& Message) {
+        const auto Name = item_Infos[Item_Type].Name ? (CraftName(item_Infos[Item_Type].Name) + to_string(i)) : string("audioFormatExtended");
+        Items[Item_Type].Items[i].AddError(Warning, ':' + Name + ':' + Sub + ':' + Message, Source);
+    };
+    const auto ChannelFormatMap = MakeMap(item_audioChannelFormat);
+    const auto& ChannelFormat_Infos = File_Adm_Private->Ebu_ChannelFormat_Infos;
+
+    // audioObject and audioChannelFormat elements used by an audioProgramme
+    auto ProgrammeObjects = [&](size_t i) {
+        vector<bool> Visited(Objects.size());
+        vector<size_t> ToVisit;
+        for (const auto& IDRef : Programmes[i].Elements[audioProgramme_audioContentIDRef]) {
+            const auto Content = ContentMap.find(IDRef);
+            if (Content == ContentMap.end()) {
+                continue;
+            }
+            for (const auto& IDRef2 : Contents[Content->second].Elements[audioContent_audioObjectIDRef]) {
+                const auto Object = ObjectMap.find(IDRef2);
+                if (Object != ObjectMap.end()) {
+                    ToVisit.push_back(Object->second);
+                }
+            }
+        }
+        while (!ToVisit.empty()) {
+            const auto Object = ToVisit.back();
+            ToVisit.pop_back();
+            if (Visited[Object]) {
+                continue;
+            }
+            Visited[Object] = true;
+            ToVisit.insert(ToVisit.end(), Object_Children[Object].begin(), Object_Children[Object].end());
+        }
+        return Visited;
+    };
+    auto ObjectsChannelFormats = [&](const vector<bool>& Visited, set<int>& PackTypes) {
+        vector<bool> Channels(ChannelFormats.size());
+        vector<bool> Packs_Visited(PackFormats.size());
+        vector<string> ToVisit;
+        for (size_t j = 0; j < Objects.size(); j++) {
+            if (Visited[j]) {
+                for (const auto& IDRef : Objects[j].Elements[audioObject_audioPackFormatIDRef]) {
+                    ToVisit.push_back(IDRef);
+                }
+            }
+        }
+        while (!ToVisit.empty()) {
+            const auto IDRef = ToVisit.back();
+            ToVisit.pop_back();
+            const auto Type = Ebu_TypeFromID(IDRef);
+            if (Type) {
+                PackTypes.insert(Type);
+            }
+            const auto Pack = PackFormatMap.find(IDRef);
+            if (Pack == PackFormatMap.end() || Packs_Visited[Pack->second]) {
+                continue;
+            }
+            Packs_Visited[Pack->second] = true;
+            const auto& PackFormat = PackFormats[Pack->second];
+            for (const auto& IDRef2 : PackFormat.Elements[audioPackFormat_audioChannelFormatIDRef]) {
+                const auto Channel = ChannelFormatMap.find(IDRef2);
+                if (Channel != ChannelFormatMap.end()) {
+                    Channels[Channel->second] = true;
+                }
+            }
+            const auto& IDRefs = PackFormat.Elements[audioPackFormat_audioPackFormatIDRef];
+            ToVisit.insert(ToVisit.end(), IDRefs.begin(), IDRefs.end());
+        }
+        return Channels;
+    };
+
+    // Sub-elements of each audioProgramme and audioObject, in order of appearance
+    vector<size_t> Programme_loudnessMetadatas; // Positions in loudnessMetadata items
+    for (size_t j = 0; j < File_Adm_Private->loudnessMetadata_Source.size() && j < LoudnessMetadatas.size(); j++) {
+        if (File_Adm_Private->loudnessMetadata_Source[j] == 'P') {
+            Programme_loudnessMetadatas.push_back(j);
+        }
+    }
+    auto& AuthoringInformations = Items[item_authoringInformation].Items;
+    auto& PositionOffsets = Items[item_positionOffset].Items;
+    auto& ObjectInteractions = Items[item_audioObjectInteraction].Items;
+    auto& PositionInteractionRanges = Items[item_positionInteractionRange].Items;
+    auto CoordinateBit = [](const string& Coordinate) -> int8u {
+        if (Coordinate == "azimuth" || Coordinate == "elevation" || Coordinate == "distance") {
+            return 1;
+        }
+        if (Coordinate == "X" || Coordinate == "Y" || Coordinate == "Z") {
+            return 2;
+        }
+        return 0;
+    };
+    vector<int8u> Object_Coordinates(Objects.size());
+    {
+        size_t PositionOffset_Pos = 0;
+        size_t ObjectInteraction_Pos = 0;
+        size_t PositionInteractionRange_Pos = 0;
+        for (size_t j = 0; j < Objects.size(); j++) {
+            for (size_t k = 0; k < Objects[j].Elements[audioObject_positionOffset].size() && PositionOffset_Pos < PositionOffsets.size(); k++, PositionOffset_Pos++) {
+                Object_Coordinates[j] |= CoordinateBit(PositionOffsets[PositionOffset_Pos].Attributes[positionOffset_coordinate]);
+            }
+            for (size_t k = 0; k < Objects[j].Elements[audioObject_audioObjectInteraction].size() && ObjectInteraction_Pos < ObjectInteractions.size(); k++, ObjectInteraction_Pos++) {
+                const auto Count = ObjectInteractions[ObjectInteraction_Pos].Elements[audioObjectInteraction_positionInteractionRange].size();
+                for (size_t l = 0; l < Count && PositionInteractionRange_Pos < PositionInteractionRanges.size(); l++, PositionInteractionRange_Pos++) {
+                    Object_Coordinates[j] |= CoordinateBit(PositionInteractionRanges[PositionInteractionRange_Pos].Attributes[positionInteractionRange_coordinate]);
+                }
+            }
+        }
+    }
+
+    // audioProgramme
+    vector<double> Programme_Durations(Programmes.size(), -1);
+    size_t Programme_loudnessMetadata_Pos = 0;
+    size_t AuthoringInformation_Pos = 0;
+    for (size_t i = 0; i < Programmes.size(); i++) {
+        const auto& Programme = Programmes[i];
+        if (Programme.Attributes_Present[audioProgramme_start] && Programme.Attributes_Present[audioProgramme_end]) {
+            const auto Start = Ebu_Time(Programme.Attributes[audioProgramme_start]);
+            const auto End = Ebu_Time(Programme.Attributes[audioProgramme_end]);
+            if (Start >= 0 && End >= Start) {
+                Programme_Durations[i] = End - Start;
+            }
+        }
+        const auto Duration = Programme_Durations[i];
+        vector<size_t> loudnessMetadatas;
+        for (size_t k = 0; k < Programme.Elements[audioProgramme_loudnessMetadata].size() && Programme_loudnessMetadata_Pos < Programme_loudnessMetadatas.size(); k++) {
+            loudnessMetadatas.push_back(Programme_loudnessMetadatas[Programme_loudnessMetadata_Pos++]);
+        }
+        bool HasRenderer = false;
+        for (size_t k = 0; k < Programme.Elements[audioProgramme_authoringInformation].size() && AuthoringInformation_Pos < AuthoringInformations.size(); k++, AuthoringInformation_Pos++) {
+            if (!AuthoringInformations[AuthoringInformation_Pos].Elements[authoringInformation_renderer].empty()) {
+                HasRenderer = true;
+            }
+        }
+
+        const auto Visited = ProgrammeObjects(i);
+        set<int> PackTypes;
+        const auto Channels = ObjectsChannelFormats(Visited, PackTypes);
+        int8u Coordinates = 0;
+        bool UsesScreen = false;
+        for (size_t j = 0; j < Channels.size(); j++) {
+            if (Channels[j] && j < ChannelFormat_Infos.size()) {
+                Coordinates |= ChannelFormat_Infos[j].Coordinates;
+                UsesScreen |= ChannelFormat_Infos[j].UsesScreen;
+            }
+        }
+        for (size_t j = 0; j < Objects.size(); j++) {
+            if (Visited[j]) {
+                Coordinates |= Object_Coordinates[j];
+            }
+        }
+
+        if (Is3392) {
+            if (!loudnessMetadatas.empty() && (PackTypes.size() > 1 || (PackTypes.size() == 1 && *PackTypes.begin() != 1))) {
+                AddWarning(item_audioProgramme, i, "loudnessMetadata", "loudnessMetadata element is present but this audioProgramme does not contain only DirectSpeakers content");
+            }
+            if (Duration >= 0 && Duration < 120) {
+                for (const auto k : loudnessMetadatas) {
+                    if (!LoudnessMetadatas[k].Elements[loudnessMetadata_loudnessRange].empty()) {
+                        AddWarning(item_audioProgramme, i, "loudnessMetadata", "loudnessRange element is present but the audioProgramme duration is under 2 minutes");
+                    }
+                    if (LoudnessMetadatas[k].Elements[loudnessMetadata_maxShortTerm].empty()) {
+                        AddWarning(item_audioProgramme, i, "loudnessMetadata", "maxShortTerm element is not present but the audioProgramme duration is under 2 minutes");
+                    }
+                }
+            }
+            if (UsesScreen && Programme.Elements[audioProgramme_audioProgrammeReferenceScreen].empty()) {
+                AddWarning(item_audioProgramme, i, "audioProgrammeReferenceScreen", "audioProgrammeReferenceScreen element is not present but screen-related parameters are used");
+            }
+        }
+        else {
+            if (Coordinates == 3) {
+                AddWarning(item_audioProgramme, i, "GeneralCompliance", "polar and Cartesian coordinates are mixed in this audioProgramme");
+            }
+            if (PackTypes.count(3) && !HasRenderer) {
+                for (const auto k : loudnessMetadatas) {
+                    const auto& loudnessMethod = LoudnessMetadatas[k].Attributes[loudnessMetadata_loudnessMethod];
+                    if (!loudnessMethod.rfind("ITU-R BS.1770-", 0) && strtoul(loudnessMethod.c_str() + 14, nullptr, 10) >= 5 && LoudnessMetadatas[k].Elements[loudnessMetadata_renderer].empty()) {
+                        AddWarning(item_audioProgramme, i, "authoringInformation", "renderer element is not present but Objects are used with " + loudnessMethod + " loudness");
+                    }
+                }
+            }
+        }
+    }
+    double Programme_Duration_First = -1;
+    for (size_t i = 0; i < Programmes.size(); i++) {
+        if (Programme_Durations[i] < 0) {
+            continue;
+        }
+        if (Programme_Duration_First < 0) {
+            Programme_Duration_First = Programme_Durations[i];
+        }
+        else if (Programme_Durations[i] != Programme_Duration_First) {
+            AddWarning(item_audioProgramme, i, "GeneralCompliance", "this audioProgramme does not have the same length as the other audioProgramme elements");
+        }
+    }
+
+    if (Is3393) {
+        // audioObject
+        size_t Importance_Count = 0;
+        set<string> Importance_Values;
+        for (size_t i = 0; i < Objects.size(); i++) {
+            const auto& Object = Objects[i];
+            if (Object.Attributes_Present[audioObject_importance]) {
+                Importance_Count++;
+                Importance_Values.insert(Object.Attributes[audioObject_importance]);
+            }
+            const auto IsTimeLimited = Object.Attributes_Present[audioObject_start] || Object.Attributes_Present[audioObject_duration];
+            if (IsTimeLimited && !Object.Elements[audioObject_audioObjectIDRef].empty()) {
+                AddWarning(item_audioObject, i, "audioObjectIDRef", "audioObjectIDRef element is present but this audioObject is time-limited");
+            }
+            if (Object.Attributes_Present[audioObject_duration]) {
+                const auto Duration = Ebu_Time(Object.Attributes[audioObject_duration]);
+                if (Duration >= 0 && Duration < 0.1) {
+                    AddWarning(item_audioObject, i, "duration", "duration attribute value is less than the minimum duration of 100 ms");
+                }
+            }
+            if (!Object.Elements[audioObject_audioComplementaryObjectIDRef].empty()) {
+                if (Object.Attributes[audioObject_interact] != "1") {
+                    AddWarning(item_audioObject, i, "interact", "interact attribute value is not 1 but this audioObject contains audioComplementaryObjectIDRef");
+                }
+                for (const auto& IDRef : Object.Elements[audioObject_audioComplementaryObjectIDRef]) {
+                    const auto Found = ObjectMap.find(IDRef);
+                    if (Found != ObjectMap.end() && Objects[Found->second].Attributes[audioObject_interact] != "1") {
+                        AddWarning(item_audioObject, Found->second, "interact", "interact attribute value is not 1 but this audioObject is in a complementary group");
+                    }
+                }
+            }
+        }
+        if (Importance_Count > 1 && Importance_Values.size() == 1) {
+            AddWarning(item_audioObject, 0, "importance", "importance attribute has the same value for all audioObject elements, no prioritisation is possible");
+        }
+
+        // audioObject dialogue should not contradict audioContent dialogue
+        for (const auto& Content : Contents) {
+            const auto& Dialogues = Content.Elements[audioContent_dialogue];
+            if (Dialogues.size() != 1) {
+                continue;
+            }
+            for (const auto& IDRef : Content.Elements[audioContent_audioObjectIDRef]) {
+                const auto Found = ObjectMap.find(IDRef);
+                if (Found == ObjectMap.end()) {
+                    continue;
+                }
+                const auto& Object = Objects[Found->second];
+                if (Object.Attributes_Present[audioObject_dialogue] && Object.Attributes[audioObject_dialogue] != Dialogues[0]) {
+                    AddWarning(item_audioObject, Found->second, "dialogue", "dialogue attribute value \"" + Object.Attributes[audioObject_dialogue] + "\" contradicts the dialogue element value \"" + Dialogues[0] + "\" of audioContent \"" + Content.Attributes[audioContent_audioContentID] + "\"");
+                }
+            }
+        }
+
+        // Custom DirectSpeakers audioChannelFormat elements use a unique speakerLabel
+        map<string, size_t> speakerLabels;
+        for (const auto i : ChannelFormats_NonCommon) {
+            if (i >= ChannelFormat_Infos.size() || ChannelFormat_Infos[i].speakerLabel.empty()) {
+                continue;
+            }
+            const auto& ChannelFormat = ChannelFormats[i];
+            if (Ebu_Type(ChannelFormat, audioChannelFormat_typeLabel, audioChannelFormat_typeDefinition, audioChannelFormat_audioChannelFormatID) != 1) {
+                continue;
+            }
+            const auto& speakerLabel = ChannelFormat_Infos[i].speakerLabel;
+            const auto Inserted = speakerLabels.emplace(speakerLabel, i);
+            if (!Inserted.second) {
+                AddWarning(item_audioChannelFormat, i, "speakerLabel", "speakerLabel value \"" + speakerLabel + "\" is also used by audioChannelFormat \"" + ChannelFormats[Inserted.first->second].Attributes[audioChannelFormat_audioChannelFormatID] + "\"");
+            }
+        }
+
+        // Hierarchical Layers
+        auto& TagGroups = Items[item_tagGroup].Items;
+        auto& Tags = Items[item_tag].Items;
+        struct layer {
+            size_t TagGroup_Pos;
+            set<string> Programmes;
+            set<string> Contents;
+            set<string> Objects;
+        };
+        map<unsigned long, layer> Layers;
+        size_t Tag_Pos = 0;
+        for (size_t i = 0; i < TagGroups.size(); i++) {
+            const auto& TagGroup = TagGroups[i];
+            const auto& TagValues = TagGroup.Elements[tagGroup_tag];
+            for (size_t j = 0; j < TagValues.size() && Tag_Pos < Tags.size(); j++, Tag_Pos++) {
+                auto Class = Tags[Tag_Pos].Attributes[tag_class];
+                transform(Class.begin(), Class.end(), Class.begin(), [](unsigned char c) { return (char)tolower(c); });
+                const auto& Value = TagValues[j];
+                if (Class != "urn:profile:production:layer" || Value.empty() || Value.find_first_not_of("0123456789") != string::npos) {
+                    continue;
+                }
+                auto& Layer = Layers[strtoul(Value.c_str(), nullptr, 10)];
+                Layer.TagGroup_Pos = i;
+                Layer.Programmes.insert(TagGroup.Elements[tagGroup_audioProgrammeIDRef].begin(), TagGroup.Elements[tagGroup_audioProgrammeIDRef].end());
+                Layer.Contents.insert(TagGroup.Elements[tagGroup_audioContentIDRef].begin(), TagGroup.Elements[tagGroup_audioContentIDRef].end());
+                Layer.Objects.insert(TagGroup.Elements[tagGroup_audioObjectIDRef].begin(), TagGroup.Elements[tagGroup_audioObjectIDRef].end());
+            }
+        }
+        map<string, size_t> Object_ContentReferences;
+        for (const auto& Content : Contents) {
+            for (const auto& IDRef : Content.Elements[audioContent_audioObjectIDRef]) {
+                Object_ContentReferences[IDRef]++;
+            }
+        }
+        const layer* Previous = nullptr;
+        unsigned long Previous_Number = 0;
+        for (const auto& Layer_Item : Layers) {
+            const auto Number = Layer_Item.first;
+            const auto& Layer = Layer_Item.second;
+            const auto TagGroup_Pos = Layer.TagGroup_Pos;
+            if (Previous) {
+                if (Layer.Objects.size() >= Previous->Objects.size()) {
+                    AddWarning(item_tagGroup, TagGroup_Pos, "GeneralCompliance", "Layer " + to_string(Number) + " audioObject count " + to_string(Layer.Objects.size()) + " is not less than Layer " + to_string(Previous_Number) + " audioObject count " + to_string(Previous->Objects.size()));
+                }
+                if (Layers.begin()->second.Objects.size() < 4 && Previous == &Layers.begin()->second) {
+                    AddWarning(item_tagGroup, TagGroup_Pos, "GeneralCompliance", "Layer " + to_string(Number) + " is present but the first Layer has less than 4 audioObject elements");
+                }
+                for (const auto& ID : Layer.Objects) {
+                    const auto Found = ObjectMap.find(ID);
+                    if (Found == ObjectMap.end()) {
+                        continue;
+                    }
+                    const auto& IDRefs = Objects[Found->second].Elements[audioObject_audioObjectIDRef];
+                    if (IDRefs.size() > 3) {
+                        AddWarning(item_audioObject, Found->second, "audioObjectIDRef", "audioObjectIDRef element count " + to_string(IDRefs.size()) + " is more than 3 audioObject elements of the Layer below");
+                    }
+                    for (const auto& IDRef : IDRefs) {
+                        if (Number != Previous_Number + 1 || !Previous->Objects.count(IDRef)) {
+                            AddWarning(item_audioObject, Found->second, "audioObjectIDRef", "audioObjectIDRef value \"" + IDRef + "\" is not in the Layer directly below");
+                        }
+                    }
+                    const auto References = Object_ContentReferences.find(ID);
+                    if (References == Object_ContentReferences.end() || References->second != 1) {
+                        AddWarning(item_audioObject, Found->second, "GeneralCompliance", "this Layer " + to_string(Number) + " audioObject is not referenced by a single audioContent");
+                    }
+                }
+            }
+            if (Layer.Programmes.empty()) {
+                AddWarning(item_tagGroup, TagGroup_Pos, "audioProgrammeIDRef", "Layer " + to_string(Number) + " has no audioProgramme");
+            }
+            for (const auto& ID : Layer.Programmes) {
+                size_t Programme_Pos = 0;
+                while (Programme_Pos < Programmes.size() && Programmes[Programme_Pos].Attributes[audioProgramme_audioProgrammeID] != ID) {
+                    Programme_Pos++;
+                }
+                if (Programme_Pos == Programmes.size()) {
+                    continue;
+                }
+                const auto& ContentIDRefs = Programmes[Programme_Pos].Elements[audioProgramme_audioContentIDRef];
+                for (const auto& Content : Layer.Contents) {
+                    if (find(ContentIDRefs.begin(), ContentIDRefs.end(), Content) == ContentIDRefs.end()) {
+                        AddWarning(item_audioProgramme, Programme_Pos, "audioContentIDRef", "Layer " + to_string(Number) + " audioContent \"" + Content + "\" is not referenced by this Layer audioProgramme");
+                    }
+                }
+            }
+            Previous = &Layer;
+            Previous_Number = Number;
         }
     }
 }
