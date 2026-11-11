@@ -32,7 +32,7 @@
     #endif
 #endif //defined(_WIN32) && !defined(__MINGW32__)
 
-#if !defined(__WINDOWS__)
+#if !defined(_WIN32)
     #define __stdcall //Supported only on windows
 #endif //!defined(_WIN32)
 //---------------------------------------------------------------------------
@@ -69,14 +69,14 @@ public :
         /// @param File_Size Total size of the file
         /// @retval 0 File not opened
         /// @retval 1 File opened
-    size_t Open (const ZenLib::int8u* Begin, size_t Begin_Size, const ZenLib::int8u* End=NULL, size_t End_Size=0, ZenLib::int64u File_Size=0);
+    size_t Open (const MediaInfo_int8u* Begin, size_t Begin_Size, const MediaInfo_int8u* End=NULL, size_t End_Size=0, MediaInfo_int64u File_Size=0);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Init)
         /// @param File_Size Estimated file size
         /// @param File_Offset Offset of the file (if we don't have the beginning of the file)
         /// @retval 0 File not opened
         /// @retval 1 File opened
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Continue)
         /// @param Buffer pointer to the stream
@@ -88,12 +88,12 @@ public :
         ///         bit 3: Is Finalized (No more data is needed, will not use further data)
         ///         bit 4-15: Reserved
         ///         bit 16-31: User defined
-    size_t Open_Buffer_Continue (const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    size_t Open_Buffer_Continue (const MediaInfo_int8u* Buffer, size_t Buffer_Size);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Get the needed file Offset)
         /// @return the needed offset of the file \n
         ///         File size if no more bytes are needed
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get ();
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get ();
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Finalize)
         /// @retval 0 failed
@@ -267,10 +267,10 @@ public :
     MediaInfoA ();
     ~MediaInfoA ();
     size_t Open (const std::string &File_Name);
-    size_t Open (const ZenLib::int8u* Begin, size_t Begin_Size, const ZenLib::int8u* End=NULL, size_t End_Size=0, ZenLib::int64u File_Size=0);
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
-    size_t Open_Buffer_Continue (const ZenLib::int8u* Buffer, size_t Buffer_Size);
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get ();
+    size_t Open (const MediaInfo_int8u* Begin, size_t Begin_Size, const MediaInfo_int8u* End=NULL, size_t End_Size=0, MediaInfo_int64u File_Size=0);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
+    size_t Open_Buffer_Continue (const MediaInfo_int8u* Buffer, size_t Buffer_Size);
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get ();
     size_t Open_Buffer_Finalize ();
     size_t Open_NextPacket ();
     size_t Save ();
@@ -302,10 +302,10 @@ public :
     MediaInfoW ();
     ~MediaInfoW ();
     size_t Open (const std::wstring &File_Name);
-    size_t Open (const ZenLib::int8u* Begin, size_t Begin_Size, const ZenLib::int8u* End=NULL, size_t End_Size=0, ZenLib::int64u File_Size=0);
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
-    size_t Open_Buffer_Continue (const ZenLib::int8u* Buffer, size_t Buffer_Size);
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get ();
+    size_t Open (const MediaInfo_int8u* Begin, size_t Begin_Size, const MediaInfo_int8u* End=NULL, size_t End_Size=0, MediaInfo_int64u File_Size=0);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
+    size_t Open_Buffer_Continue (const MediaInfo_int8u* Buffer, size_t Buffer_Size);
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get ();
     size_t Open_Buffer_Finalize ();
     size_t Open_NextPacket ();
     size_t Save ();

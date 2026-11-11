@@ -9,6 +9,7 @@
 #ifndef MediaInfo_EventsH
 #define MediaInfo_EventsH
 
+#include <limits.h>
 #ifdef __cplusplus
 #include <stdlib.h>
 #include <string.h>

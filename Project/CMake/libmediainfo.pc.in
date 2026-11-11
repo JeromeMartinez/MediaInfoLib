@@ -7,7 +7,6 @@ Libs_Static=${libdir}/libmediainfo.a ${libdir}/libzen.a -lpthread -lz@CURL_LIB@
 Name: libmediainfo
 Version: @MediaInfoLib_VERSION@
 Description: MediaInfoLib
-Requires: libzen
-Requires.private:@CURL_PC@
+Requires.private: libzen@CURL_PC@
 Libs: -L${libdir} -lmediainfo -lz
 Cflags: -I${includedir}
