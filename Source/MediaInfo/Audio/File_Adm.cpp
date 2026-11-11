@@ -2855,6 +2855,7 @@ public:
     TimeCode Ebu_LastBlockFormatEnd;
     int64s Ebu_BlockFormat_z_Previous = -1;
     vector<ebu_channelformat_info> Ebu_ChannelFormat_Infos;
+    vector<size_t> Ebu_Renderer_Programme; // audioProgramme of each authoringInformation renderer, -1 for loudnessMetadata renderer
     vector<vector<channel_list>> ChannelFormat_Matrix_coefficients;
     vector<vector<channel_list>> ChannelFormat_Matrix_outputChannelFormatIDRefs;
     vector<string> coefficients;
@@ -5867,6 +5868,7 @@ void file_adm_private::clear()
     Ebu_LastBlockFormatEnd = {};
     Ebu_BlockFormat_z_Previous = -1;
     Ebu_ChannelFormat_Infos.clear();
+    Ebu_Renderer_Programme.clear();
 }
 
 int file_adm_private::coreMetadata()
@@ -6061,7 +6063,7 @@ int file_adm_private::audioFormatExtended()
             ELEMENT_I(loudnessMetadata, maxMomentary)
             ELEMENT_I(loudnessMetadata, maxShortTerm)
             ELEMENT_I(loudnessMetadata, dialogueLoudness)
-            ELEMENT_S(loudnessMetadata, renderer)
+            ELEMENT_s(loudnessMetadata, renderer, Ebu_Renderer_Programme.push_back((size_t)-1))
                 ATTRIBUTE(renderer, uri)
                 ATTRIBUTE(renderer, name)
                 ATTRIBUTE(renderer, version)
@@ -6097,7 +6099,7 @@ int file_adm_private::audioFormatExtended()
                 ELEMENT_M(referenceLayout)
                 ELEMENT__(referenceLayout, audioPackFormatIDRef)
                 ELEMENT_E(referenceLayout, authoringInformation)
-            ELEMENT_S(authoringInformation, renderer)
+            ELEMENT_s(authoringInformation, renderer, Ebu_Renderer_Programme.push_back(Items[item_audioProgramme].Items.size() - 1))
                 ATTRIBUTE(renderer, uri)
                 ATTRIBUTE(renderer, name)
                 ATTRIBUTE(renderer, version)
@@ -6131,7 +6133,7 @@ int file_adm_private::audioFormatExtended()
             ELEMENT_I(loudnessMetadata, maxMomentary)
             ELEMENT_I(loudnessMetadata, maxShortTerm)
             ELEMENT_I(loudnessMetadata, dialogueLoudness)
-            ELEMENT_S(loudnessMetadata, renderer)
+            ELEMENT_s(loudnessMetadata, renderer, Ebu_Renderer_Programme.push_back((size_t)-1))
                 ATTRIBUTE(renderer, uri)
                 ATTRIBUTE(renderer, name)
                 ATTRIBUTE(renderer, version)
@@ -7756,6 +7758,21 @@ static void Ebu_Check(file_adm_private* File_Adm_Private, const ebu_profile_limi
         else {
             if (Coordinates == 3) {
                 AddWarning(item_audioProgramme, i, "GeneralCompliance", "polar and Cartesian coordinates are mixed in this audioProgramme");
+            }
+            else if (Coordinates) {
+                // renderer coordinateMode should match the coordinate system used in the audioProgramme
+                const auto& Renderers = Items[item_renderer].Items;
+                const auto& Renderer_Programme = File_Adm_Private->Ebu_Renderer_Programme;
+                const char* Expected = Coordinates == 1 ? "polar" : "cartesian";
+                for (size_t k = 0; k < Renderers.size() && k < Renderer_Programme.size(); k++) {
+                    if (Renderer_Programme[k] != i || !Renderers[k].Attributes_Present[renderer_coordinateMode]) {
+                        continue;
+                    }
+                    const auto& coordinateMode = Renderers[k].Attributes[renderer_coordinateMode];
+                    if (coordinateMode != Expected) {
+                        AddWarning(item_renderer, k, "coordinateMode", "coordinateMode attribute value \"" + coordinateMode + "\" does not match the coordinate system used in audioProgramme \"" + Programme.Attributes[audioProgramme_audioProgrammeID] + "\" (" + Expected + ")");
+                    }
+                }
             }
             if (PackTypes.count(3) && !HasRenderer) {
                 for (const auto k : loudnessMetadatas) {
