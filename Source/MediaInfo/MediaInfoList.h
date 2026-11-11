@@ -223,7 +223,8 @@ private :
 
 //***************************************************************************
 /// @brief MediaInfoList with narrow or wide strings, whatever the Unicode mode of the library
-/// The functions of MediaInfoList with the strings of MediaInfoA (encoding of the locale) or of MediaInfoW (wide strings), see MediaInfoA
+/// The functions of MediaInfoList with the strings of MediaInfoA (encoding of the locale, or UTF-8 with the CharSet option) or of MediaInfoW
+/// (wide strings), see MediaInfoA
 //***************************************************************************
 
 class MEDIAINFO_EXP MediaInfoListA

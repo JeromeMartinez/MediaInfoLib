@@ -252,9 +252,10 @@ private :
 //***************************************************************************
 /// @brief MediaInfo with narrow or wide strings, whatever the Unicode mode of the library
 /// The functions of MediaInfo for a program which is not compiled with the Unicode mode of the library (UNICODE), with the same results with
-/// and without Unicode, as the C interface: MediaInfoA with strings in the encoding of the locale (the code page on Windows), as the narrow
-/// functions of the C interface (MediaInfoA_*) without the CharSet option, MediaInfoW with wide strings (the strings of the library with
-/// Unicode). The strings are given and returned up to their first NUL character.
+/// and without Unicode, as the C interface: MediaInfoA with strings in the encoding of the locale (the code page on Windows), or in UTF-8 with
+/// the option CharSet set to UTF-8, as the narrow functions of the C interface (MediaInfoA_*), MediaInfoW with wide strings (the strings of the
+/// library with Unicode). The CharSet option of MediaInfoA is independent from the one of the C interface: Option() for this object,
+/// Option_Static() for the next objects and the static functions. The strings are given and returned up to their first NUL character.
 //***************************************************************************
 
 class MEDIAINFO_EXP MediaInfoA

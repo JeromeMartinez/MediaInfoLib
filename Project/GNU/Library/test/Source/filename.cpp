@@ -517,23 +517,39 @@ int main(int argc, char* argv[])
         MediaInfo_Delete(MI);
 
         // C++ classes with narrow or wide strings, the same results with the library with and without Unicode (e.g. a program which is not
-        // compiled with the Unicode mode of the library), MediaInfoA as the narrow API without the UTF-8 option
+        // compiled with the Unicode mode of the library), MediaInfoA as the narrow API: with the encoding of the locale whatever the UTF-8
+        // option of the C interface, and with its own UTF-8 option when the test uses the one of the C interface
         #if !defined(_WIN32)
         {
-            std::string Path_Local, Title_Local;
-            if (To_Locale(Path, Path_Local))
+            for (int UTF8=0; UTF8<(CharSet_UTF8?2:1); UTF8++)
             {
+                std::string Path_A, Title_A;
+                bool Title_IsEncoded=true;
+                if (UTF8)
+                {
+                    Path_A=Path;
+                    Title_A=Files[i].Title;
+                }
+                else
+                {
+                    if (!To_Locale(Path, Path_A))
+                        continue;
+                    Title_IsEncoded=To_Locale(Files[i].Title, Title_A);
+                }
+                std::string What="MediaInfoA::Open("+Shown+(UTF8?"), UTF-8 option":")");
                 MediaInfoLib::MediaInfoA MI_A;
-                size_t Opened_A=MI_A.Open(Path_Local);
-                Check(Opened_A, "MediaInfoA::Open("+Shown+")", "file not opened");
+                if (UTF8)
+                    Check(MI_A.Option("CharSet", "UTF-8").empty(), What+", option", "not empty");
+                size_t Opened_A=MI_A.Open(Path_A);
+                Check(Opened_A, What, "file not opened");
                 if (Opened_A)
                 {
                     std::string Value=MI_A.Get(MediaInfoLib::Stream_General, 0, "CompleteName");
-                    Check(Value==Path_Local, "MediaInfoA::Get("+Shown+", CompleteName)", "result is "+Printable(Value));
-                    if (To_Locale(Files[i].Title, Title_Local))
+                    Check(Value==Path_A, What+", CompleteName", "result is "+Printable(Value));
+                    if (Title_IsEncoded)
                     {
                         Value=MI_A.Get(MediaInfoLib::Stream_General, 0, "Title");
-                        Check(Value==Title_Local, "MediaInfoA::Get("+Shown+", Title)", "result is "+Printable(Value));
+                        Check(Value==Title_A, What+", Title", "result is "+Printable(Value));
                     }
                 }
             }
@@ -639,43 +655,54 @@ int main(int argc, char* argv[])
             Check(Count>=1, "MediaInfoListA_Open(list)", "listed:"+Listed_Shown); // e.g. cp932, names which can be decoded
     #endif
 
-    // C++ classes with narrow or wide strings, directory listing: MediaInfoListA as the narrow API without the UTF-8 option, MediaInfoListW with
-    // all the names, as they are where the names are UTF-8
+    // C++ classes with narrow or wide strings, directory listing: MediaInfoListA as the narrow API (with the encoding of the locale, and with its
+    // UTF-8 option when the test uses the one of the C interface), MediaInfoListW with all the names, as they are where the names are UTF-8
     #if !defined(_WIN32)
     {
-        std::string List_Path_Local;
-        if (!To_Locale(List_Path, List_Path_Local))
-            List_Path_Local=List_Path; // e.g. EUC-JP, ASCII name
         std::wstring List_Path_Wide;
         UTF8_To_Wide(List_Path, List_Path_Wide);
-        MediaInfoLib::MediaInfoListA List_A;
         MediaInfoLib::MediaInfoListW List_W;
-        List_A.Open(List_Path_Local);
         List_W.Open(List_Path_Wide);
-        std::set<std::string> Listed_A;
         std::set<std::wstring> Listed_W;
-        std::string Listed_A_Shown;
-        for (size_t i=0; i<List_A.Count_Get(); i++)
-        {
-            std::string Value=List_A.Get(i, MediaInfoLib::Stream_General, 0, "CompleteName");
-            Listed_A.insert(Value);
-            Listed_A_Shown+=" "+Printable(Value);
-        }
         for (size_t i=0; i<List_W.Count_Get(); i++)
             Listed_W.insert(List_W.Get(i, MediaInfoLib::Stream_General, 0, L"CompleteName"));
-        bool IsOK_A;
-        if (FileNames_IsUnicode && !Locale_IsUTF8)
-            IsOK_A=List_A.Count_Get()==Expected.size(); // e.g. macOS with a locale which is neither ASCII nor UTF-8, names not all encodable
-        else if (!Locale_IsUTF8)
+        for (int UTF8=0; UTF8<(CharSet_UTF8?2:1); UTF8++)
         {
-            // Bytes from 0x80 to 0x9F may be C1 control characters, replaced in the values
-            IsOK_A=List_A.Count_Get()==Expected_All.size();
-            for (std::set<std::string>::const_iterator Name=Expected_All.begin(); Name!=Expected_All.end(); ++Name)
-                if (!Has_C1(*Name) && !Listed_A.count(*Name))
-                    IsOK_A=false;
+            // With the UTF-8 option of these classes for the next objects, when the test uses the one of the C interface
+            std::string List_Path_A;
+            if (UTF8 || !To_Locale(List_Path, List_Path_A))
+                List_Path_A=List_Path; // e.g. EUC-JP, ASCII name
+            if (UTF8)
+                Check(MediaInfoLib::MediaInfoListA::Option_Static("CharSet", "UTF-8").empty(), "MediaInfoListA::Option_Static(CharSet)", "not empty");
+            MediaInfoLib::MediaInfoListA List_A;
+            if (UTF8)
+                MediaInfoLib::MediaInfoListA::Option_Static("CharSet", ""); // Encoding of the locale again for the next objects
+            List_A.Open(List_Path_A);
+            std::set<std::string> Listed_A;
+            std::string Listed_A_Shown;
+            for (size_t i=0; i<List_A.Count_Get(); i++)
+            {
+                std::string Value=List_A.Get(i, MediaInfoLib::Stream_General, 0, "CompleteName");
+                Listed_A.insert(Value);
+                Listed_A_Shown+=" "+Printable(Value);
+            }
+            bool IsOK_A;
+            if (UTF8)
+                IsOK_A=List_A.Count_Get()==Expected_All.size(); // The option is for valid UTF-8, so not the bytes of all names
+            else if (FileNames_IsUnicode && !Locale_IsUTF8)
+                IsOK_A=List_A.Count_Get()==Expected.size(); // e.g. macOS with a locale which is neither ASCII nor UTF-8, names not all encodable
+            else if (!Locale_IsUTF8)
+            {
+                // Bytes from 0x80 to 0x9F may be C1 control characters, replaced in the values
+                IsOK_A=List_A.Count_Get()==Expected_All.size();
+                for (std::set<std::string>::const_iterator Name=Expected_All.begin(); Name!=Expected_All.end(); ++Name)
+                    if (!Has_C1(*Name) && !Listed_A.count(*Name))
+                        IsOK_A=false;
+            }
+            else
+                IsOK_A=Listed_A==Expected_All;
+            Check(IsOK_A, std::string("MediaInfoListA::Open(list)")+(UTF8?", UTF-8 option":""), "listed:"+Listed_A_Shown);
         }
-        else
-            IsOK_A=Listed_A==Expected_All;
         bool IsOK_W=List_W.Count_Get()==Expected_All.size();
         if (FileNames_IsUnicode)
             for (std::set<std::string>::const_iterator Name=Expected.begin(); Name!=Expected.end(); ++Name)
@@ -685,7 +712,6 @@ int main(int argc, char* argv[])
                 if (!Listed_W.count(Name_Wide))
                     IsOK_W=false;
             }
-        Check(IsOK_A, "MediaInfoListA::Open(list)", "listed:"+Listed_A_Shown);
         Check(IsOK_W, "MediaInfoListW::Open(list)", "wrong names or count");
     }
     #endif //!defined(_WIN32)
