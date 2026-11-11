@@ -15,7 +15,9 @@
 
 //---------------------------------------------------------------------------
 #include "MediaInfo/MediaInfo.h"
+#include "MediaInfo/MediaInfoList.h"
 #include "MediaInfo/MediaInfo_Internal.h"
+#include "ZenLib/OS_Utils.h"
 #if defined(_MSC_VER) && _MSC_VER >= 1800 && _MSC_VER < 1900 && defined(_M_X64)
     #include <math.h> // needed for _set_FMA3_enable()
 #endif
@@ -239,5 +241,110 @@ size_t MediaInfo::State_Get ()
 {
     return Internal->State_Get();
 }
+
+//***************************************************************************
+// MediaInfoA, MediaInfoW, MediaInfoListA, MediaInfoListW
+//***************************************************************************
+
+//---------------------------------------------------------------------------
+//Strings of these classes to and from String, up to the first NUL character as with the C interface: in the encoding of the locale (the code
+//page on Windows) as with the narrow functions of the C interface without the CharSet option, or wide strings (the strings with Unicode)
+static String In(const std::string& Value)
+{
+    return Ztring().From_Local(Value.c_str());
+}
+
+static String In_FileName(const std::string& Value)
+{
+    return FileName_From_Native(Value.c_str());
+}
+
+static std::string Out_Local(const String& Value)
+{
+    return Ztring(Value).To_Local();
+}
+
+#if defined(UNICODE)
+static String In(const std::wstring& Value)
+{
+    return Value.c_str();
+}
+
+static std::wstring Out_Wide(const String& Value)
+{
+    return Value.c_str();
+}
+#elif !defined(WSTRING_MISSING)
+static String In(const std::wstring& Value)
+{
+    return Ztring().From_Unicode(Value.c_str());
+}
+
+static std::wstring Out_Wide(const String& Value)
+{
+    return Ztring(Value).To_Unicode();
+}
+#endif //!defined(WSTRING_MISSING)
+
+#if !defined(WSTRING_MISSING)
+static String In_FileName(const std::wstring& Value)
+{
+    return In(Value);
+}
+#endif //!defined(WSTRING_MISSING)
+
+//---------------------------------------------------------------------------
+//The functions of MediaInfo and MediaInfoList with the strings of the class _CLASS (_STRING, String from _OUT)
+#define MEDIAINFO_STRINGS(_CLASS, _STRING, _OUT) \
+    _CLASS::_CLASS() : Object(new MediaInfo) {} \
+    _CLASS::~_CLASS() {delete Object;} \
+    size_t _CLASS::Open(const _STRING &File_Name) {return Object->Open(In_FileName(File_Name));} \
+    size_t _CLASS::Open(const int8u* Begin, size_t Begin_Size, const int8u* End, size_t End_Size, int64u File_Size) {return Object->Open(Begin, Begin_Size, End, End_Size, File_Size);} \
+    size_t _CLASS::Open_Buffer_Init(int64u File_Size, int64u File_Offset) {return Object->Open_Buffer_Init(File_Size, File_Offset);} \
+    size_t _CLASS::Open_Buffer_Continue(const int8u* Buffer, size_t Buffer_Size) {return Object->Open_Buffer_Continue(Buffer, Buffer_Size);} \
+    int64u _CLASS::Open_Buffer_Continue_GoTo_Get() {return Object->Open_Buffer_Continue_GoTo_Get();} \
+    size_t _CLASS::Open_Buffer_Finalize() {return Object->Open_Buffer_Finalize();} \
+    size_t _CLASS::Open_NextPacket() {return Object->Open_NextPacket();} \
+    size_t _CLASS::Save() {return Object->Save();} \
+    void _CLASS::Close() {Object->Close();} \
+    _STRING _CLASS::Inform(size_t Reserved) {return _OUT(Object->Inform(Reserved));} \
+    _STRING _CLASS::Get(stream_t StreamKind, size_t StreamNumber, size_t Parameter, info_t InfoKind) {return _OUT(Object->Get(StreamKind, StreamNumber, Parameter, InfoKind));} \
+    _STRING _CLASS::Get(stream_t StreamKind, size_t StreamNumber, const _STRING &Parameter, info_t InfoKind, info_t SearchKind) {return _OUT(Object->Get(StreamKind, StreamNumber, In(Parameter), InfoKind, SearchKind));} \
+    size_t _CLASS::Set(const _STRING &ToSet, stream_t StreamKind, size_t StreamNumber, size_t Parameter, const _STRING &OldValue) {return Object->Set(In(ToSet), StreamKind, StreamNumber, Parameter, In(OldValue));} \
+    size_t _CLASS::Set(const _STRING &ToSet, stream_t StreamKind, size_t StreamNumber, const _STRING &Parameter, const _STRING &OldValue) {return Object->Set(In(ToSet), StreamKind, StreamNumber, In(Parameter), In(OldValue));} \
+    size_t _CLASS::Output_Buffer_Get(const _STRING &Value) {return Object->Output_Buffer_Get(In(Value));} \
+    size_t _CLASS::Output_Buffer_Get(size_t Pos) {return Object->Output_Buffer_Get(Pos);} \
+    _STRING _CLASS::Option(const _STRING &Option, const _STRING &Value) {return _OUT(Object->Option(In(Option), In(Value)));} \
+    _STRING _CLASS::Option_Static(const _STRING &Option, const _STRING &Value) {return _OUT(MediaInfo::Option_Static(In(Option), In(Value)));} \
+    size_t _CLASS::State_Get() {return Object->State_Get();} \
+    size_t _CLASS::Count_Get(stream_t StreamKind, size_t StreamNumber) {return Object->Count_Get(StreamKind, StreamNumber);}
+
+#define MEDIAINFOLIST_STRINGS(_CLASS, _STRING, _OUT) \
+    _CLASS::_CLASS(size_t Count_Init) : Object(new MediaInfoList(Count_Init)) {} \
+    _CLASS::~_CLASS() {delete Object;} \
+    size_t _CLASS::Open(const _STRING &File, const fileoptions_t Options) {return Object->Open(In_FileName(File), Options);} \
+    size_t _CLASS::Open_Buffer_Init(int64u File_Size, int64u File_Offset) {return Object->Open_Buffer_Init(File_Size, File_Offset);} \
+    size_t _CLASS::Open_Buffer_Continue(size_t FilePos, const int8u* Buffer, size_t Buffer_Size) {return Object->Open_Buffer_Continue(FilePos, Buffer, Buffer_Size);} \
+    int64u _CLASS::Open_Buffer_Continue_GoTo_Get(size_t FilePos) {return Object->Open_Buffer_Continue_GoTo_Get(FilePos);} \
+    size_t _CLASS::Open_Buffer_Finalize(size_t FilePos) {return Object->Open_Buffer_Finalize(FilePos);} \
+    size_t _CLASS::Save(size_t FilePos) {return Object->Save(FilePos);} \
+    void _CLASS::Close(size_t FilePos) {Object->Close(FilePos);} \
+    _STRING _CLASS::Inform(size_t FilePos, size_t Reserved) {return _OUT(Object->Inform(FilePos, Reserved));} \
+    _STRING _CLASS::Get(size_t FilePos, stream_t StreamKind, size_t StreamNumber, size_t Parameter, info_t KindOfInfo) {return _OUT(Object->Get(FilePos, StreamKind, StreamNumber, Parameter, KindOfInfo));} \
+    _STRING _CLASS::Get(size_t FilePos, stream_t StreamKind, size_t StreamNumber, const _STRING &Parameter, info_t KindOfInfo, info_t KindOfSearch) {return _OUT(Object->Get(FilePos, StreamKind, StreamNumber, In(Parameter), KindOfInfo, KindOfSearch));} \
+    size_t _CLASS::Set(const _STRING &ToSet, size_t FilePos, stream_t StreamKind, size_t StreamNumber, size_t Parameter, const _STRING &OldValue) {return Object->Set(In(ToSet), FilePos, StreamKind, StreamNumber, Parameter, In(OldValue));} \
+    size_t _CLASS::Set(const _STRING &ToSet, size_t FilePos, stream_t StreamKind, size_t StreamNumber, const _STRING &Parameter, const _STRING &OldValue) {return Object->Set(In(ToSet), FilePos, StreamKind, StreamNumber, In(Parameter), In(OldValue));} \
+    _STRING _CLASS::Option(const _STRING &Option, const _STRING &Value) {return _OUT(Object->Option(In(Option), In(Value)));} \
+    _STRING _CLASS::Option_Static(const _STRING &Option, const _STRING &Value) {return _OUT(MediaInfoList::Option_Static(In(Option), In(Value)));} \
+    size_t _CLASS::State_Get() {return Object->State_Get();} \
+    size_t _CLASS::Count_Get(size_t FilePos, stream_t StreamKind, size_t StreamNumber) {return Object->Count_Get(FilePos, StreamKind, StreamNumber);} \
+    size_t _CLASS::Count_Get() {return Object->Count_Get();}
+
+MEDIAINFO_STRINGS(MediaInfoA, std::string, Out_Local)
+MEDIAINFOLIST_STRINGS(MediaInfoListA, std::string, Out_Local)
+#if !defined(WSTRING_MISSING)
+MEDIAINFO_STRINGS(MediaInfoW, std::wstring, Out_Wide)
+MEDIAINFOLIST_STRINGS(MediaInfoListW, std::wstring, Out_Wide)
+#endif //!defined(WSTRING_MISSING)
 
 } //NameSpace
