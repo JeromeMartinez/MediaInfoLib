@@ -16,9 +16,15 @@
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
+#include <cstddef>
 #include <sstream>
 #include <string>
-#include <ZenLib/Conf.h>
+//---------------------------------------------------------------------------
+
+//---------------------------------------------------------------------------
+/// @brief Integer types of the interface, as in the C interface (MediaInfoDLL.h)
+typedef unsigned char       MediaInfo_int8u;
+typedef unsigned long long  MediaInfo_int64u;
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib

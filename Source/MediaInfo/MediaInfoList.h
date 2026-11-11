@@ -35,7 +35,7 @@
     #endif
 #endif //defined(_WIN32) && !defined(__MINGW32__)
 
-#if !defined(__WINDOWS__)
+#if !defined(_WIN32)
     #define __stdcall //Supported only on windows
 #endif //!defined(_WIN32)
 //---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ public :
         /// @param File_Offset Offset of the file (if we don't have the beginning of the file)
         /// @retval 0 failed
         /// @retval 1 succeed
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Continue)
         /// @param FilePos File position
@@ -82,13 +82,13 @@ public :
         /// @param Buffer_Size Count of bytes to read
         /// @retval 0 failed
         /// @retval 1 succeed
-    size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    size_t Open_Buffer_Continue (size_t FilePos, const MediaInfo_int8u* Buffer, size_t Buffer_Size);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Get the needed file Offset)
         /// @param FilePos File position
         /// @return the needed offset of the file \n
         ///         File size if no more bytes are needed
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Finalize)
         /// @param FilePos File position
@@ -234,9 +234,9 @@ public :
     MediaInfoListA (size_t Count_Init=64);
     ~MediaInfoListA ();
     size_t Open (const std::string &File, const fileoptions_t Options=FileOption_Nothing);
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
-    size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
+    size_t Open_Buffer_Continue (size_t FilePos, const MediaInfo_int8u* Buffer, size_t Buffer_Size);
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
     size_t Open_Buffer_Finalize (size_t FilePos);
     size_t Save (size_t FilePos);
     void Close (size_t FilePos=(size_t)-1);
@@ -266,9 +266,9 @@ public :
     MediaInfoListW (size_t Count_Init=64);
     ~MediaInfoListW ();
     size_t Open (const std::wstring &File, const fileoptions_t Options=FileOption_Nothing);
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
-    size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
+    size_t Open_Buffer_Continue (size_t FilePos, const MediaInfo_int8u* Buffer, size_t Buffer_Size);
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
     size_t Open_Buffer_Finalize (size_t FilePos);
     size_t Save (size_t FilePos);
     void Close (size_t FilePos=(size_t)-1);
