@@ -6504,6 +6504,15 @@ void File_Adm::Streams_Fill()
                 Errors_Value[Error].push_back("audioProgrammeName length is more than EBU Tech 3392 constraint");
             }
         }
+        if (Config_AdmProfile.Ebu3393==1)
+        {
+            const string& audioProgrammeName = File_Adm_Private->Items[item_audioProgramme].Items[i].Attributes[audioProgramme_audioProgrammeName];
+            if (Ztring().From_UTF8(audioProgrammeName).size() > 128)
+            {
+                Errors_Field[Error].push_back("audioProgramme");
+                Errors_Value[Error].push_back("audioProgrammeName length is more than EBU Tech 3393 constraint");
+            }
+        }
         #endif // MEDIAINFO_CONFORMANCE
     }
 

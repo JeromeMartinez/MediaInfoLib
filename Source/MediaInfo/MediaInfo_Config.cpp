@@ -3941,6 +3941,13 @@ string MediaInfo_Config::AdmProfile(const Ztring& Value2)
             else
                 return "Unknown ADM profile " + Item;
         }
+        else if (Item.rfind("urn:ebu:tech:3393:1.0:", 0) == 0)
+        {
+            if (Item.size() == 23 && Item[22] == '1')
+                Adm_Profile.Ebu3393 = Item[22] - '0';
+            else
+                return "Unknown ADM profile " + Item;
+        }
         else
             return "Unknown ADM profile " + Item;
     }
@@ -3961,6 +3968,8 @@ string MediaInfo_Config::AdmProfile_List()
         Result += "urn:ebu:tech:3392:1.0:" + to_string(i);
         Result += LineSep;
     }
+    Result += "urn:ebu:tech:3393:1.0:1";
+    Result += LineSep;
     Result.erase(Result.size() - LineSep.size());
     return Result;
 }

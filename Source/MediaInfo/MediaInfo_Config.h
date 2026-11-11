@@ -381,11 +381,13 @@ public :
               bool Auto;
               int8u BS2076;
               int8u Ebu3392;
+              int8u Ebu3393;
 
               adm_profile() :
                   Auto(false),
                   BS2076((int8u)-1),
-                  Ebu3392((int8u)-1)
+                  Ebu3392((int8u)-1),
+                  Ebu3393((int8u)-1)
               {}
           };
           adm_profile   AdmProfile();
