@@ -258,7 +258,10 @@ private :
 /// library with Unicode). The CharSet option of MediaInfoA is independent from the one of the C interface: Option() for this object,
 /// Option_Static() for the next objects and the static functions. The strings are given and returned up to their first NUL character.
 /// Except on Windows, a file name given to MediaInfoA without the UTF-8 option is the name as the system gives it (e.g. an argument of
-/// main()): a file which exists with this name is opened with it as it is, whatever the encoding of the name and the locale.
+/// main()): a file which exists with this name is opened with it as it is, whatever the encoding of the name and the locale. The option
+/// FileName_System of MediaInfoA (and of the narrow functions of the C interface) gives the name of a file for the narrow functions of the
+/// system (e.g. to create it) as the library gives it to the system: the same name, except where the system has another encoding for the
+/// names of the files (e.g. UTF-8 on macOS with a locale in another encoding).
 //***************************************************************************
 
 class MEDIAINFO_EXP MediaInfoA

@@ -143,6 +143,18 @@ static const wchar_t* MB2WC(void* Handle, size_t Pos, const char* Text, bool IsF
     #endif //UNICODE
 }
 
+//---------------------------------------------------------------------------
+//FileName_System option of the narrow functions: name of a file for the narrow functions of the system, as the library gives a name of these
+//functions to the system (see MediaInfoA)
+static const char* FileName_System(void* Handle, const char* Name)
+{
+    mi_outputs::iterator MI_Output=MI_Outputs_Find(Handle);
+    if (!Name)
+        Name="";
+    MI_Output->second->Ansi=FileName_To_Native(utf8?Ztring().From_UTF8(Name):FileName_From_Native(Name));
+    return MI_Output->second->Ansi.c_str();
+}
+
 //***************************************************************************
 //
 //***************************************************************************
@@ -496,6 +508,8 @@ size_t          __stdcall MediaInfoA_Output_Buffer_GetI (void* Handle, size_t Po
 
 const char*     __stdcall MediaInfoA_Option (void* Handle, const char* Option, const char* Value)
 {
+    if (Option && !strcmp(Option, "FileName_System"))
+        return FileName_System(Handle, Value);
     return WC2MB(Handle, MediaInfo_Option(Handle, MB2WC(Handle, 0, Option), MB2WC(Handle, 1, Value)));
 }
 
@@ -573,6 +587,8 @@ size_t          __stdcall MediaInfoListA_Set (void* Handle, const char* ToSet, s
 
 const char*     __stdcall MediaInfoListA_Option (void* Handle, const char* Option, const char* Value)
 {
+    if (Option && !strcmp(Option, "FileName_System"))
+        return FileName_System(Handle, Value);
     return WC2MB(Handle, MediaInfoList_Option(Handle, MB2WC(Handle, 0, Option), MB2WC(Handle, 1, Value)));
 }
 

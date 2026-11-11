@@ -486,6 +486,12 @@ int main(int argc, char* argv[])
             if (List)
                 MediaInfoListA_Delete(List);
 
+            // Name for the narrow functions of the system (FileName_System option): the name of the file as the file system has it
+            #if !defined(_WIN32)
+            Value=MediaInfoA_Option(NULL, "FileName_System", Path_Narrow.c_str());
+            Check(Value && Files[i].Path_System==Value, "MediaInfoA_Option(FileName_System, "+Shown+")", "result is "+Printable(Value));
+            #endif
+
             // Without Unicode, the C++ API with the bytes of the name given as they are (e.g. the arguments of main() put in a String without
             // conversion): the name of the file is UTF-8 text, as the other strings (FileName_Existing() of ZenLib)
             #if !defined(UNICODE)
@@ -542,6 +548,8 @@ int main(int argc, char* argv[])
                     Check(MI_A.Option("CharSet", "UTF-8").empty(), What+", option", "not empty");
                 size_t Opened_A=MI_A.Open(Path_A);
                 Check(Opened_A, What, "file not opened");
+                std::string System_A=MI_A.Option("FileName_System", Path_A);
+                Check(System_A==Files[i].Path_System, What+", FileName_System", "result is "+Printable(System_A));
                 if (Opened_A)
                 {
                     std::string Value=MI_A.Get(MediaInfoLib::Stream_General, 0, "CompleteName");

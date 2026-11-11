@@ -308,6 +308,18 @@ static bool CharSet_Option(const std::string& Option, const std::string& Value, 
     return true;
 }
 
+//---------------------------------------------------------------------------
+//FileName_System option of MediaInfoA and MediaInfoListA: name of a file for the narrow functions of the system (e.g. to create it), as the
+//library gives a name of these classes to the system, so the same name except where the system has another encoding for the names of the
+//files (e.g. UTF-8 on macOS with a locale in another encoding)
+static bool FileName_System_Option(const std::string& Option, const std::string& Value, bool UTF8, std::string& ToReturn)
+{
+    if (strcmp(Option.c_str(), "FileName_System"))
+        return false;
+    ToReturn=FileName_To_Native(In_FileName(Value, UTF8));
+    return true;
+}
+
 namespace
 {
     //Objects of MediaInfoA and MediaInfoListA, with their CharSet option
@@ -412,34 +424,46 @@ size_t MediaInfoListW::Open(const std::wstring &File, const fileoptions_t Option
 #endif //!defined(WSTRING_MISSING)
 
 //---------------------------------------------------------------------------
-//Options, with the CharSet option of MediaInfoA and MediaInfoListA
+//Options, with the CharSet and FileName_System options of MediaInfoA and MediaInfoListA
 std::string MediaInfoA::Option(const std::string &Option, const std::string &Value)
 {
     bool& UTF8=static_cast<MediaInfoA_Object*>(Object)->UTF8;
+    std::string Name;
     if (CharSet_Option(Option, Value, UTF8))
         return std::string();
+    if (FileName_System_Option(Option, Value, UTF8, Name))
+        return Name;
     return Out_Narrow(Object->Option(In(Option, UTF8), In(Value, UTF8)), UTF8);
 }
 
 std::string MediaInfoA::Option_Static(const std::string &Option, const std::string &Value)
 {
+    std::string Name;
     if (CharSet_Option(Option, Value, CharSet_UTF8))
         return std::string();
+    if (FileName_System_Option(Option, Value, CharSet_UTF8, Name))
+        return Name;
     return Out_Narrow(MediaInfo::Option_Static(In(Option, CharSet_UTF8), In(Value, CharSet_UTF8)), CharSet_UTF8);
 }
 
 std::string MediaInfoListA::Option(const std::string &Option, const std::string &Value)
 {
     bool& UTF8=static_cast<MediaInfoListA_Object*>(Object)->UTF8;
+    std::string Name;
     if (CharSet_Option(Option, Value, UTF8))
         return std::string();
+    if (FileName_System_Option(Option, Value, UTF8, Name))
+        return Name;
     return Out_Narrow(Object->Option(In(Option, UTF8), In(Value, UTF8)), UTF8);
 }
 
 std::string MediaInfoListA::Option_Static(const std::string &Option, const std::string &Value)
 {
+    std::string Name;
     if (CharSet_Option(Option, Value, CharSet_UTF8))
         return std::string();
+    if (FileName_System_Option(Option, Value, CharSet_UTF8, Name))
+        return Name;
     return Out_Narrow(MediaInfoList::Option_Static(In(Option, CharSet_UTF8), In(Value, CharSet_UTF8)), CharSet_UTF8);
 }
 
