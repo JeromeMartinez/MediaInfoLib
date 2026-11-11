@@ -74,7 +74,7 @@ public :
         /// @param File_Offset Offset of the file (if we don't have the beginning of the file)
         /// @retval 0 failed
         /// @retval 1 succeed
-    size_t Open_Buffer_Init (ZenLib::int64u File_Size=(ZenLib::int64u)-1, ZenLib::int64u File_Offset=0);
+    size_t Open_Buffer_Init (MediaInfo_int64u File_Size=(MediaInfo_int64u)-1, MediaInfo_int64u File_Offset=0);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Continue)
         /// @param FilePos File position
@@ -82,13 +82,13 @@ public :
         /// @param Buffer_Size Count of bytes to read
         /// @retval 0 failed
         /// @retval 1 succeed
-    size_t Open_Buffer_Continue (size_t FilePos, const ZenLib::int8u* Buffer, size_t Buffer_Size);
+    size_t Open_Buffer_Continue (size_t FilePos, const MediaInfo_int8u* Buffer, size_t Buffer_Size);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Get the needed file Offset)
         /// @param FilePos File position
         /// @return the needed offset of the file \n
         ///         File size if no more bytes are needed
-    ZenLib::int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
+    MediaInfo_int64u Open_Buffer_Continue_GoTo_Get (size_t FilePos);
         /// Open a stream and collect information about it (technical information and tags)
         /// @brief Open a stream (Finalize)
         /// @param FilePos File position
