@@ -130,7 +130,7 @@ Ztring MediaInfo_Config_PerPackage::Event_CallBackFunction_Get ()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_EVENTS
-void MediaInfo_Config_PerPackage::Event_Send (File__Analyze* Source, const int8u* Data_Content, size_t Data_Size, const Ztring &File_Name)
+void MediaInfo_Config_PerPackage::Event_Send (File__Analyze* /*Source*/, const int8u* Data_Content, size_t Data_Size, const Ztring &/*File_Name*/)
 {
     CriticalSectionLocker CSL(CS);
 
@@ -141,14 +141,14 @@ void MediaInfo_Config_PerPackage::Event_Send (File__Analyze* Source, const int8u
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_EVENTS
-void MediaInfo_Config_PerPackage::FrameForAlignment (File__Analyze* Source, bool IsClosedGop)
+void MediaInfo_Config_PerPackage::FrameForAlignment (File__Analyze* /*Source*/, bool /*IsClosedGop*/)
 {
 }
 #endif //MEDIAINFO_EVENTS
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_EVENTS
-void MediaInfo_Config_PerPackage::IsClosedGOP (File__Analyze* Source)
+void MediaInfo_Config_PerPackage::IsClosedGOP (File__Analyze* /*Source*/)
 {
 }
 #endif //MEDIAINFO_EVENTS

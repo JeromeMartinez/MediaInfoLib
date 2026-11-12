@@ -1693,7 +1693,7 @@ void File_Mk::Read_Buffer_Unsynched()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_SEEK
-size_t File_Mk::Read_Buffer_Seek(size_t Method, int64u Value, int64u ID)
+size_t File_Mk::Read_Buffer_Seek(size_t /*Method*/, int64u /*Value*/, int64u /*ID*/)
 {
     //Currently stupidely go back to 0 //TODO: 
     GoTo(Buffer_TotalBytes_FirstSynched);

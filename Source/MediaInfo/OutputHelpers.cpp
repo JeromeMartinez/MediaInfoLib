@@ -45,7 +45,7 @@ Ztring XML_Encode (const Ztring& Data)
                 if (Pos+1<Data.size() && Data[Pos+1]==__T('\n')) // translate the #xD #xA sequence to a single #xA character
                     Pos++;
             break;
-            default: if (Data[Pos]<0x0 || Data[Pos]>=0x20) Result+=Data[Pos]; // Ignore others control characters
+            default: if ((int32u)Data[Pos]>=0x20) Result+=Data[Pos]; // Ignore others control characters
         }
     }
     return Result;

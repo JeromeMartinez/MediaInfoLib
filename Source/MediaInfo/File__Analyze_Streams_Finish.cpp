@@ -91,23 +91,6 @@ static string_view Find_Replacement(const char* Database, const string& ToFind) 
         return { Location, Size };
     }
 }
-static bool IsPresent(const char* Database, const string& ToFind) {
-    if (ToFind.empty() || !ToFind.front()) {
-        return false; // Nothing to search
-    }
-    auto Current = Database;
-    for (;;) {
-        auto Location = strstr(Current, ToFind.c_str());
-        if (!Location) {
-            return false; // No more to search
-        }
-        if ((Location != Database && Location[-1] != '\n') || Location[ToFind.size()] != '\n') {
-            Current = Location + 1;
-            continue; // Not a full match
-        }
-        return true;
-    }
-}
 class NewlineRange
 {
 public:
@@ -2229,17 +2212,13 @@ void Merge_FillTimeCode(File__Analyze& In, const string& Prefix, const TimeCode&
         // With subframes
         constexpr TimeCode::rounding TC_Frames_Sub_Rounding=TimeCode::Ceil;
         TimeCode TC_Frames_Sub=TC_Time.ToRescaled(FramesPerSecondI*100-1, TimeCode::DropFrame(DropFrame).FPS1001(FramesPerSecondI!=FramesPerSecondF), TC_Frames_Sub_Rounding);
-        bool IsRounded=false;
         if (TC_Frames_Sub_Rounding==TimeCode::Floor)
         {
             //Handling TC_Time rounding issue
             TimeCode TC_Frames_Sub1=TC_Frames_Sub+1;
             TimeCode TC_Frames_Sub1_InTime=TC_Frames_Sub1.ToRescaled(TC_Time.GetFramesMax(), TimeCode::flags(), TimeCode::Floor);
             if (TC_Time==TC_Frames_Sub1_InTime)
-            {
                 TC_Frames_Sub=TC_Frames_Sub1;
-                IsRounded=true;
-            }
         }
         if (TC_Frames_Sub_Rounding==TimeCode::Ceil)
         {
@@ -2247,10 +2226,7 @@ void Merge_FillTimeCode(File__Analyze& In, const string& Prefix, const TimeCode&
             TimeCode TC_Frames_Sub1=TC_Frames_Sub-1;
             TimeCode TC_Frames_Sub1_InTime=TC_Frames_Sub1.ToRescaled(TC_Time.GetFramesMax(), TimeCode::flags(), TimeCode::Ceil);
             if (TC_Time==TC_Frames_Sub1_InTime)
-            {
                 TC_Frames_Sub=TC_Frames_Sub1;
-                IsRounded=true;
-            }
         }
         int64_t SubFrames=TC_Frames_Sub.ToFrames();
         int64_t SubFrames_Main=SubFrames/100;
@@ -3168,7 +3144,7 @@ void File__Analyze::Streams_Finish_StreamOnly_General(size_t StreamPos)
         {
             const auto& PerformerItem = PerformerList[i];
             auto ShortAndContainsHardwareCompanyName = PerformerItem.size() - Hardware_CompanyName.size() <= 16 && PerformerItem.rfind(Hardware_CompanyName + __T(' '), 0) == 0;
-            if (ShortAndContainsHardwareCompanyName || Hardware_CompanyName == __T("Samsung") && PerformerItem.size() <= 32 && PerformerItem.rfind(__T("Galaxy "), 0) == 0)
+            if (ShortAndContainsHardwareCompanyName || (Hardware_CompanyName == __T("Samsung") && PerformerItem.size() <= 32 && PerformerItem.rfind(__T("Galaxy "), 0) == 0))
             {
                 ZtringList Items;
                 Items.Separator_Set(0, __T(" "));
@@ -3690,7 +3666,7 @@ void File__Analyze::Streams_Finish_StreamOnly_General_Curate(size_t StreamPos)
     FillModelName(General_Encoded_Hardware_CompanyName, General_Encoded_Hardware_Model, General_Encoded_Hardware_Name);
 
     // Attempt to derive Samsung Galaxy model number
-    auto DetermineModel = [&](size_t Parameter_CompanyName, size_t Parameter_Name, size_t Parameter_Application, size_t Parameter_Model) {
+    auto DetermineModel = [&](size_t Parameter_CompanyName, size_t Parameter_Application, size_t Parameter_Model) {
         if (!Retrieve_Const(Stream_General, StreamPos, Parameter_Model).empty())
             return;
         const auto& CompanyName = Retrieve_Const(Stream_General, StreamPos, Parameter_CompanyName).To_UTF8();
@@ -3718,16 +3694,15 @@ void File__Analyze::Streams_Finish_StreamOnly_General_Curate(size_t StreamPos)
             }
         }
         };
-    DetermineModel(General_Encoded_Hardware_CompanyName, General_Encoded_Hardware_Name, General_Encoded_Application, General_Encoded_Hardware_Model);
+    DetermineModel(General_Encoded_Hardware_CompanyName, General_Encoded_Application, General_Encoded_Hardware_Model);
 
     // Crosscheck
     auto Crosscheck = [&](size_t Parameter_CompanyName_Source, size_t Parameter_Start, bool CheckName) {
         const auto& CompanyName = Retrieve_Const(Stream_General, StreamPos, Parameter_CompanyName_Source);
         if (!CompanyName.empty()) {
             const auto Parameter = Parameter_Start;
-            const auto Parameter_String = ++Parameter_Start;
-            const auto Parameter_CompanyName = ++Parameter_Start;
-            const auto Parameter_Name = ++Parameter_Start;
+            const auto Parameter_CompanyName = Parameter_Start + 2;
+            const auto Parameter_Name = Parameter_Start + 3;
             const auto& Application_CompanyName = Retrieve_Const(Stream_General, StreamPos, Parameter_CompanyName);
             if (Application_CompanyName.empty()) {
                 const auto& Application = Retrieve_Const(Stream_General, StreamPos, CheckName ? Parameter_Name : Parameter);
@@ -4466,7 +4441,7 @@ void File__Analyze::Streams_Finish_StreamOnly_Audio(size_t Pos)
         int64u StreamSize_Encoded=Retrieve(Stream_Audio, Pos, Audio_StreamSize_Encoded).To_int64u();
         for (size_t i=Pos+1; i<Count_Get(Stream_Audio);)
         {
-            size_t OtherID_Count;
+            size_t OtherID_Count=0;
             Ztring OtherStreamOrder;
             Ztring OtherID;
             Ztring OtherID_String;
@@ -4698,7 +4673,6 @@ void File__Analyze::Streams_Finish_StreamOnly_Audio(size_t Pos)
         for (size_t i=0; i<NumberOfSubstreams; i++)
         {
             static const char* const Places[]={ "ChannelLayout", "BedChannelConfiguration" };
-            static constexpr size_t Places_Size=sizeof(Places)/sizeof(decltype(*Places));
             for (const auto Place : Places)
             {
                 ZtringList AdditionaChannelLayout_List;

@@ -615,7 +615,7 @@ void File_Eia608::XDS_Current_ProgramName()
 {
     string ValueS;
     for (size_t Pos=2; Pos<XDS_Data[XDS_Level].size()-2; Pos++)
-        ValueS.append(1, (const char)(XDS_Data[XDS_Level][Pos]));
+        ValueS.append(1, (char)(XDS_Data[XDS_Level][Pos]));
     Ztring Value;
     Value.From_UTF8(ValueS.c_str());
     Element_Info1(__T("Program Name=")+Value);
@@ -647,7 +647,7 @@ void File_Eia608::XDS_Channel_NetworkName()
 {
     string ValueS;
     for (size_t Pos=2; Pos<XDS_Data[XDS_Level].size()-2; Pos++)
-        ValueS.append(1, (const char)(XDS_Data[XDS_Level][Pos]));
+        ValueS.append(1, (char)(XDS_Data[XDS_Level][Pos]));
     Ztring Value;
     Value.From_UTF8(ValueS.c_str());
     Element_Info1(__T("Network Name=")+Value);
@@ -728,7 +728,7 @@ void File_Eia608::PreambleAddressCode(int8u cc_data_1, int8u cc_data_2)
     //Horizontal position
     if (!TextMode)
     {
-        if (Streams[StreamPos]->Count_CurrentHasContent && !Streams[StreamPos]->InBack && !Streams[StreamPos]->RollUpLines && Streams[StreamPos]->y!=Eia608_PAC_Row[cc_data_1&0x07]+((cc_data_2&0x20)?1:0))
+        if (Streams[StreamPos]->Count_CurrentHasContent && !Streams[StreamPos]->InBack && !Streams[StreamPos]->RollUpLines && Streams[StreamPos]->y!=(size_t)(Eia608_PAC_Row[cc_data_1&0x07]+((cc_data_2&0x20)?1:0)))
         {
             Streams[StreamPos]->Count_PaintOn++;
             Streams[StreamPos]->Count_CurrentHasContent=false;
@@ -1372,7 +1372,7 @@ void File_Eia608::HasChanged()
 }
 
 //---------------------------------------------------------------------------
-void File_Eia608::Illegal(int8u cc_data_1, int8u cc_data_2)
+void File_Eia608::Illegal(int8u /*cc_data_1*/, int8u /*cc_data_2*/)
 {
 }
 

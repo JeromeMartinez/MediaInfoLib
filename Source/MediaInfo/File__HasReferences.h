@@ -59,7 +59,7 @@ public:
     void ReferenceFiles_Finish() {}
 
     // Buffer - Global
-    size_t ReferenceFiles_Seek(size_t Method, int64u Value, int64u ID) {return (size_t)-1;}
+    size_t ReferenceFiles_Seek(size_t /*Method*/, int64u /*Value*/, int64u /*ID*/) {return (size_t)-1;}
 };
 #endif //defined(MEDIAINFO_REFERENCES_YES)
 

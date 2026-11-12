@@ -787,13 +787,13 @@ void File_AribStdB24B37::data_unit_data(int64u End)
                 Add((Char)header);
             }
             else if (header&0x80) // GR //TODO: buffer check //Note about Caption_conversion_type == Mobile closed caption: see B37 Figure 3-4 Code Ranges for Mobile Closed Caption
-                Character(Caption_conversion_type==4?GS_Kanji:Streams[(size_t)(Element_Code-1)].G[Streams[(size_t)(Element_Code-1)].GR],
+                Character(Caption_conversion_type==4?(int16u)GS_Kanji:Streams[(size_t)(Element_Code-1)].G[Streams[(size_t)(Element_Code-1)].GR],
                           Streams[(size_t)(Element_Code-1)].GR,
                           Buffer[Buffer_Offset+Element_Offset]&0x7F,
                           End-Element_Offset>=2?Buffer[Buffer_Offset+Element_Offset+1]&0x7F:0);
             else // GL
             {
-                Character(Caption_conversion_type==4?GS_DRCS:Streams[(size_t)(Element_Code-1)].G[Streams[(size_t)(Element_Code-1)].GL_SS?Streams[(size_t)(Element_Code-1)].GL_SS:Streams[(size_t)(Element_Code-1)].GL],
+                Character(Caption_conversion_type==4?(int16u)GS_DRCS:Streams[(size_t)(Element_Code-1)].G[Streams[(size_t)(Element_Code-1)].GL_SS?Streams[(size_t)(Element_Code-1)].GL_SS:Streams[(size_t)(Element_Code-1)].GL],
                           Streams[(size_t)(Element_Code-1)].GL_SS?Streams[(size_t)(Element_Code-1)].GL_SS:Streams[(size_t)(Element_Code-1)].GL,
                           Buffer[Buffer_Offset+Element_Offset],
                           End-Element_Offset>=2?Buffer[Buffer_Offset+Element_Offset+1]:0);
@@ -834,6 +834,7 @@ void File_AribStdB24B37::JIS (int8u Row, int8u Column)
             Add (Ztring().From_Unicode(Temp));
         }
     #else // __WINDOWS__
+        (void)Row;
         //TODO
     #endif // __WINDOWS__
 }

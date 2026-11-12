@@ -1163,7 +1163,7 @@ Node* EbuCore_Transform_AcquisitionMetadata_Parameter_Begin(Node* Parent, line& 
 }
 
 //---------------------------------------------------------------------------
-void EbuCore_Transform_AcquisitionMetadata_Common(Node* Cur_Node, line& Line, size_t& Values_Begin, size_t Values_End, float64 FrameRate)
+void EbuCore_Transform_AcquisitionMetadata_Common(Node* Cur_Node, line& Line, size_t& Values_Begin, size_t Values_End, float64 /*FrameRate*/)
 {
     //if (Values_End - Values_Begin>1)
     //{
@@ -1309,7 +1309,6 @@ void EbuCore_Transform_AcquisitionMetadata(Node* Parent, MediaInfo_Internal &MI,
         FrameRate=FrameRate_String.To_float64();
     if (FrameRate)
        EbuCore_WithFactor(Child, "ebucore:acquisitionFrameRate", FrameRate_String, FrameRate_Num_String, FrameRate_Den_String);
-    int64u FrameCount=MI.Get(Stream_Other, StreamPos, Other_FrameCount).To_int64u();
 
     vector<size_t> Lines_Unique;
     vector<size_t> Lines_Multiple;

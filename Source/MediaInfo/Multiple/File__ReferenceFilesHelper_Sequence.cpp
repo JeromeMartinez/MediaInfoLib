@@ -74,7 +74,7 @@ sequence::~sequence()
 //***************************************************************************
 
 //---------------------------------------------------------------------------
-void sequence::AddFileName(const Ztring& FileName, size_t Pos)
+void sequence::AddFileName(const Ztring& FileName, size_t /*Pos*/)
 {
     FileNames.push_back(FileName);
 }

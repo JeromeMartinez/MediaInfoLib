@@ -173,22 +173,6 @@ static const char* Tiff_Compression_Mode(int32u Compression)
     }
 }
 
-//---------------------------------------------------------------------------
-static const char* Tiff_PhotometricInterpretation(int32u PhotometricInterpretation)
-{
-    switch (PhotometricInterpretation)
-    {
-        case     0 :
-        case     1 : return "B/W or Grey scale";
-        case     2 : return "RGB";
-        case     3 : return "Palette";
-        case     4 : return "Transparency mask";
-        case     5 : return "CMYK";
-        case     6 : return "YCbCr";
-        case     8 : return "CIELAB";
-        default    : return ""; //Unknown
-    }
-}
 
 //---------------------------------------------------------------------------
 static const char* Tiff_PhotometricInterpretation_ColorSpace (int32u PhotometricInterpretation)

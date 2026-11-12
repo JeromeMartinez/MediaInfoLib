@@ -7808,12 +7808,6 @@ void File_Mxf::Streams_Finish_Descriptor(const int128u DescriptorUID, const int1
     }
 
     //Locators
-    size_t Before_Count[Stream_Max];
-    for (size_t Pos=0; Pos<Stream_Max; Pos++)
-        Before_Count[Pos]=(size_t)-1;
-    Before_Count[Stream_Video]=Count_Get(Stream_Video);
-    Before_Count[Stream_Audio]=Count_Get(Stream_Audio);
-    Before_Count[Stream_Text]=Count_Get(Stream_Text);
     for (size_t Locator_Pos=0; Locator_Pos<Descriptor->second.Locators.size(); Locator_Pos++)
     {
         //Locator
@@ -9606,14 +9600,20 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
         Error("Preface is missing");
         return Errors; //Next items depend on the Preface
     }
-    if (!IsSD && Test(PrefaceProperties->second, {
-        {0x3B05, "Preface Version", {UInt(0x0103, 2)}, false},
-    }))
-        return Errors;
-    if (!IsXdf && !IsSD && Test(PrefaceProperties->second, {
-        {Elements::IsRIPPresent, "Is RIP Present", {UInt(1, 1)}, false},
-    }))
-        return Errors;
+    if (!IsSD)
+    {
+        if (Test(PrefaceProperties->second, {
+            {0x3B05, "Preface Version", {UInt(0x0103, 2)}, false},
+        }))
+            return Errors;
+    }
+    if (!IsXdf && !IsSD)
+    {
+        if (Test(PrefaceProperties->second, {
+            {Elements::IsRIPPresent, "Is RIP Present", {UInt(1, 1)}, false},
+        }))
+            return Errors;
+    }
     const auto OperationalPattern=Get(PrefaceProperties->second, 0x3B09);
     if ((!OperationalPattern || OperationalPattern->size()!=16 || !IsOP1a(BigEndian2int64u(OperationalPattern->data()), BigEndian2int64u(OperationalPattern->data()+8))) && Error(OperationalPattern?"Preface Operational Pattern is wrong (actual "+Raw_Text(*OperationalPattern)+", expected OP1a with internal essence)":string("Preface Operational Pattern is missing")))
         return Errors;
@@ -10020,19 +10020,24 @@ File_Mxf::conformance_errors File_Mxf::CompliantWith_ArdZdf (size_t Profile_Pos,
                              || TestRange(AVCSubDescriptorProperties->second, Elements::AVCAverageBitRate, "AVC Average Bitrate", 110000000, 115000000))
                                 return Errors;
                         }
-                        else if (Test(AVCSubDescriptorProperties->second, IsIntra?vector<property_expected>{
-                            {Elements::AVCCodedContentKind, "AVC Coded Content Kind", {UInt(1, 1)}, false},
-                            {Elements::AVCMaximumGOPSize, "AVC Maximum GOP Size", {UInt(1, 2)}, false},
-                            {Elements::AVCMaximumBPictureCount, "AVC Maximum B Picture Count", {UInt(0, 2)}, false},
-                            {Elements::AVCMaximumBitRate, "AVC Maximum Bitrate", {UInt(500121600, 4)}, false},
-                            {Elements::AVCProfile, "AVC Profile", {UInt(122, 1)}, false},
-                            {Elements::AVCProfileConstraint, "AVC Profile Constraint", {UInt(0x10, 1)}, false},
-                            {Elements::AVCLevel, "AVC Level", {UInt(52, 1)}, false},
-                            {Elements::AVCDecodingDelay, "AVC Decoding Delay", {UInt(0, 1)}, false},
-                            {Elements::AVCMaximumRefFrames, "AVC Maximum Ref Frames", {UInt(0, 1)}, false},
-                            {Elements::AVCSequenceParameterSetFlag, "AVC Sequence Parameter Set Flag", {UInt(0x20, 1)}, false},
-                            {Elements::AVCPictureParameterSetFlag, "AVC Picture Parameter Set Flag", {UInt(0x20, 1)}, false},
-                        }:vector<property_expected>{
+                        else if (IsIntra)
+                        {
+                            if (Test(AVCSubDescriptorProperties->second, {
+                                {Elements::AVCCodedContentKind, "AVC Coded Content Kind", {UInt(1, 1)}, false},
+                                {Elements::AVCMaximumGOPSize, "AVC Maximum GOP Size", {UInt(1, 2)}, false},
+                                {Elements::AVCMaximumBPictureCount, "AVC Maximum B Picture Count", {UInt(0, 2)}, false},
+                                {Elements::AVCMaximumBitRate, "AVC Maximum Bitrate", {UInt(500121600, 4)}, false},
+                                {Elements::AVCProfile, "AVC Profile", {UInt(122, 1)}, false},
+                                {Elements::AVCProfileConstraint, "AVC Profile Constraint", {UInt(0x10, 1)}, false},
+                                {Elements::AVCLevel, "AVC Level", {UInt(52, 1)}, false},
+                                {Elements::AVCDecodingDelay, "AVC Decoding Delay", {UInt(0, 1)}, false},
+                                {Elements::AVCMaximumRefFrames, "AVC Maximum Ref Frames", {UInt(0, 1)}, false},
+                                {Elements::AVCSequenceParameterSetFlag, "AVC Sequence Parameter Set Flag", {UInt(0x20, 1)}, false},
+                                {Elements::AVCPictureParameterSetFlag, "AVC Picture Parameter Set Flag", {UInt(0x20, 1)}, false},
+                            }))
+                                return Errors;
+                        }
+                        else if (Test(AVCSubDescriptorProperties->second, {
                             {Elements::AVCCodedContentKind, "AVC Coded Content Kind", {UInt(1, 1)}, false},
                             {Elements::AVCMaximumGOPSize, "AVC Maximum GOP Size", {UInt(24, 2)}, false},
                             {Elements::AVCMaximumBPictureCount, "AVC Maximum B Picture Count", {UInt(2, 2)}, false},
@@ -10270,7 +10275,7 @@ void File_Mxf::Fill_PreChargeRollOut(stream_t StreamKind, size_t StreamPos, int6
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::Streams_Finish_Component(const int128u ComponentUID, float64 EditRate, int32u TrackID, int64s Origin, const size_t* StreamCount_BeforeEssence)
+void File_Mxf::Streams_Finish_Component(const int128u ComponentUID, float64 EditRate, int32u /*TrackID*/, int64s Origin, const size_t* StreamCount_BeforeEssence)
 {
     components::iterator Component=Components.find(ComponentUID);
     if (Component==Components.end())
@@ -10422,7 +10427,7 @@ void File_Mxf::Streams_Finish_Component(const int128u ComponentUID, float64 Edit
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::Streams_Finish_Component_ForTimeCode(const int128u ComponentUID, float64 EditRate, int32u TrackID, int64s Origin, bool IsSourcePackage, const Ztring& TrackName)
+void File_Mxf::Streams_Finish_Component_ForTimeCode(const int128u ComponentUID, float64 /*EditRate*/, int32u TrackID, int64s Origin, bool IsSourcePackage, const Ztring& TrackName)
 {
     components::iterator Component=Components.find(ComponentUID);
     if (Component==Components.end())
@@ -10531,7 +10536,7 @@ void File_Mxf::Streams_Finish_Component_ForTimeCode(const int128u ComponentUID, 
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::Streams_Finish_Component_ForAS11(const int128u ComponentUID, float64 EditRate, int32u TrackID, int64s Origin)
+void File_Mxf::Streams_Finish_Component_ForAS11(const int128u ComponentUID, float64 /*EditRate*/, int32u TrackID, int64s /*Origin*/)
 {
     components::iterator Component=Components.find(ComponentUID);
     if (Component==Components.end())
@@ -12257,7 +12262,6 @@ void File_Mxf::Header_Parse()
     }
 
     //Filling
-    int32u Code_Compare3=Code.lo>>32;
     bool IsFiller=(Code.hi>>24)==0x060E2B3401
               && (Code.lo==Elements::FillerData || Code.lo==Elements::TerminatingFillerData);
     if (IsFiller)
@@ -12813,7 +12817,7 @@ void File_Mxf::Data_Parse()
                     ChooseParser__FromCodingScheme(Essence, Descriptor); //Searching by the descriptor
                     if (Essence->second.Parsers.empty())
                         ChooseParser__FromEssence(Essence, Descriptor); //Searching by the track identifier
-                    if ((Essence->second.Parsers.size()==1 || Essence->second.StreamKind==Stream_Video) && Descriptor->second.Infos["Format_Settings_Wrapping"].rfind(__T("Frame"), 0)==0 || Essence->second.Infos["Format_Settings_Wrapping"].rfind(__T("Frame"), 0)==0) //TODO: Parsers.size()==1 is for avoiding Dolby E issues, it should be fixed instead
+                    if (((Essence->second.Parsers.size()==1 || Essence->second.StreamKind==Stream_Video) && Descriptor->second.Infos["Format_Settings_Wrapping"].rfind(__T("Frame"), 0)==0) || Essence->second.Infos["Format_Settings_Wrapping"].rfind(__T("Frame"), 0)==0) //TODO: Parsers.size()==1 is for avoiding Dolby E issues, it should be fixed instead
                         for (const auto Parser : Essence->second.Parsers)
                             Parser->FrameIsAlwaysComplete=true;
 
@@ -17112,7 +17116,6 @@ void File_Mxf::FileDescriptor_EssenceContainer()
     FILLING_BEGIN();
         int8u Code6=(int8u)((EssenceContainer.lo&0x0000000000FF0000LL)>>16);
         int8u Code7=(int8u)((EssenceContainer.lo&0x000000000000FF00LL)>> 8);
-        int8u Code8=(int8u)((EssenceContainer.lo&0x00000000000000FFLL)    );
 
         Descriptors[InstanceUID].EssenceContainer=EssenceContainer;
         Descriptor_Fill("Format_Settings_Wrapping", Mxf_EssenceContainer_Mapping(EssenceContainer.lo));
@@ -22461,7 +22464,7 @@ void File_Mxf::ChooseParser__FromEssence(const essences::iterator &Essence, cons
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Avc(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Avc(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -22480,7 +22483,7 @@ void File_Mxf::ChooseParser_Avc(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_DV(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_DV(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -22498,7 +22501,7 @@ void File_Mxf::ChooseParser_DV(const essences::iterator &Essence, const descript
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Mpeg4v(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Mpeg4v(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -22518,7 +22521,7 @@ void File_Mxf::ChooseParser_Mpeg4v(const essences::iterator &Essence, const desc
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Mpegv(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Mpegv(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -22549,7 +22552,7 @@ void File_Mxf::ChooseParser_Mpegv(const essences::iterator &Essence, const descr
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Raw(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Raw(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -22562,7 +22565,7 @@ void File_Mxf::ChooseParser_Raw(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_RV24(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_RV24(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -22595,7 +22598,7 @@ void File_Mxf::ChooseParser_Vc3(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_TimedText(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_TimedText(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Text;
 
@@ -22613,7 +22616,7 @@ void File_Mxf::ChooseParser_TimedText(const essences::iterator &Essence, const d
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Aac(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Aac(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -22631,7 +22634,7 @@ void File_Mxf::ChooseParser_Aac(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Adif(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Adif(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -22651,7 +22654,7 @@ void File_Mxf::ChooseParser_Adif(const essences::iterator &Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Adts(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Adts(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -22671,7 +22674,7 @@ void File_Mxf::ChooseParser_Adts(const essences::iterator &Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Latm(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Latm(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -22691,7 +22694,7 @@ void File_Mxf::ChooseParser_Latm(const essences::iterator &Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Ac3(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Ac3(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -22709,7 +22712,7 @@ void File_Mxf::ChooseParser_Ac3(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Alaw(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Alaw(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -22846,7 +22849,7 @@ void File_Mxf::ChooseParser_ChannelSplitting(const essences::iterator &Essence, 
     ChooseParser_Pcm(Essence, Descriptor);
 }
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Mpega(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Mpega(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -23043,7 +23046,7 @@ void File_Mxf::ChooseParser_Jpeg2000(const essences::iterator &Essence, const de
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_ProRes(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_ProRes(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -23089,7 +23092,6 @@ void File_Mxf::ChooseParser_Ffv1(const essences::iterator &Essence, const descri
 
     //Filling
     #if defined(MEDIAINFO_FFV1_YES)
-        File__Analyze* Parser=NULL;
         if (Descriptor!=Descriptors.end())
         {
             if (Descriptor->second.Parser)
@@ -23159,7 +23161,7 @@ void File_Mxf::ChooseParser_Phdr(const essences::iterator& Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_HdrVivid(const essences::iterator& Essence, const descriptors::iterator& Descriptor)
+void File_Mxf::ChooseParser_HdrVivid(const essences::iterator& Essence, const descriptors::iterator& /*Descriptor*/)
 {
     Essence->second.StreamKind = Stream_Other;
     Essence->second.Infos["MuxingMode_MoreInfo"] = "Contains additional metadata for other tracks";
@@ -23178,7 +23180,7 @@ void File_Mxf::ChooseParser_HdrVivid(const essences::iterator& Essence, const de
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_DolbyVisionFrameData(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_DolbyVisionFrameData(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     //Filling
     #if 1 // TODO
@@ -23194,7 +23196,7 @@ void File_Mxf::ChooseParser_DolbyVisionFrameData(const essences::iterator &Essen
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Iab(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Iab(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -23212,7 +23214,7 @@ void File_Mxf::ChooseParser_Iab(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Mga(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Mga(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Audio;
 
@@ -23230,14 +23232,14 @@ void File_Mxf::ChooseParser_Mga(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Mxf(const essences::iterator& Essence, const descriptors::iterator& Descriptor)
+void File_Mxf::ChooseParser_Mxf(const essences::iterator& Essence, const descriptors::iterator& /*Descriptor*/)
 {
     if (!IsSub)
         Essence->second.Parsers.push_back(new File_Mxf());
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Vc1(const essences::iterator& Essence, const descriptors::iterator& Descriptor)
+void File_Mxf::ChooseParser_Vc1(const essences::iterator& Essence, const descriptors::iterator& /*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -23255,7 +23257,7 @@ void File_Mxf::ChooseParser_Vc1(const essences::iterator& Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Vbi(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Vbi(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     //Filling
     #if defined(MEDIAINFO_VBI_YES)
@@ -23272,7 +23274,7 @@ void File_Mxf::ChooseParser_Vbi(const essences::iterator &Essence, const descrip
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Ancillary(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Ancillary(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     //Filling
     #if defined(MEDIAINFO_ANCILLARY_YES)
@@ -23291,7 +23293,7 @@ void File_Mxf::ChooseParser_Ancillary(const essences::iterator &Essence, const d
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_xAnc(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_xAnc(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     //Filling
     #if 0
@@ -23306,7 +23308,7 @@ void File_Mxf::ChooseParser_xAnc(const essences::iterator &Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Hdcam(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Hdcam(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -23323,7 +23325,7 @@ void File_Mxf::ChooseParser_Hdcam(const essences::iterator &Essence, const descr
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser_Hevc(const essences::iterator &Essence, const descriptors::iterator &Descriptor)
+void File_Mxf::ChooseParser_Hevc(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/)
 {
     Essence->second.StreamKind=Stream_Video;
 
@@ -23342,7 +23344,7 @@ void File_Mxf::ChooseParser_Hevc(const essences::iterator &Essence, const descri
 }
 
 //---------------------------------------------------------------------------
-void File_Mxf::ChooseParser(const essences::iterator &Essence, const descriptors::iterator &Descriptor, stream_t StreamKind, const char* Format)
+void File_Mxf::ChooseParser(const essences::iterator &Essence, const descriptors::iterator &/*Descriptor*/, stream_t StreamKind, const char* Format)
 {
     Essence->second.StreamKind=StreamKind;
 
@@ -23447,7 +23449,7 @@ void File_Mxf::ColorLevels_Compute(descriptors::iterator Descriptor, bool Force,
         }
     }
 
-    if (!Force && (Descriptor->second.MinRefLevel==(int32u)-1 || Descriptor->second.MaxRefLevel==(int32u)-1) || (Descriptor->second.Type!=descriptor::Type_RGBA && Descriptor->second.ColorRange==(int32u)-1))
+    if ((!Force && (Descriptor->second.MinRefLevel==(int32u)-1 || Descriptor->second.MaxRefLevel==(int32u)-1)) || (Descriptor->second.Type!=descriptor::Type_RGBA && Descriptor->second.ColorRange==(int32u)-1))
         return;
 
     // Listing values

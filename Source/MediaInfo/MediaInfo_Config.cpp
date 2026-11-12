@@ -3903,7 +3903,7 @@ void MediaInfo_Config::Event_Send (const int8u* Data_Content, size_t Data_Size)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_EVENTS
-void MediaInfo_Config::Event_Send (const int8u* Data_Content, size_t Data_Size, const Ztring &File_Name)
+void MediaInfo_Config::Event_Send (const int8u* Data_Content, size_t Data_Size, const Ztring &/*File_Name*/)
 {
     CriticalSectionLocker CSL(CS);
 

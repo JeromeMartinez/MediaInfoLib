@@ -576,22 +576,12 @@ Ztring HighestFormat(stream_t StreamKind, size_t Parameter, const ZtringList& In
     static const Char* AC3=__T("AC-3");
     static const Char* EAC3=__T("E-AC-3");
     static const Char* EAC3Dep=__T("E-AC-3+Dep");
-    static const Char* EAC3JOC=__T("E-AC-3 JOC");
     static const Char* AAC=__T("AAC");
-    static const Char* AACLC=__T("AAC LC");
-    static const Char* AACLTP=__T("AAC LTP");
-    static const Char* AACMain=__T("AAC Main");
-    static const Char* AACSSR=__T("AAC SSR");
-    static const Char* AACLCSBR=__T("AAC LC SBR");
-    static const Char* AACLCSBRPS=__T("AAC LC SBR PS");
     static const Char* Core=__T("Core");
     static const Char* Discrete=__T("ES Discrete without ES Matrix");
     static const Char* Dep=__T("Dep");
     static const Char* DTS=__T("DTS");
     static const Char* ERAAC=__T("ER AAC");
-    static const Char* ERAACLC=__T("ER AAC LC");
-    static const Char* ERAACLTP=__T("ER AAC LTP");
-    static const Char* ERAACScalable=__T("ER AAC scalable");
     static const Char* ESMatrix=__T("ES Matrix");
     static const Char* ESDiscrete=__T("ES Discrete");
     static const Char* Express=__T("Express");
@@ -610,13 +600,9 @@ Ztring HighestFormat(stream_t StreamKind, size_t Parameter, const ZtringList& In
     static const Char* Main=__T("Main");
     static const Char* MLP=__T("MLP");
     static const Char* MLPFBA=__T("MLP FBA");
-    static const Char* NonCore=__T("non-core");
     static const Char* Scalable=__T("scalable");
     static const Char* SSR=__T("SSR");
     static const Char* XBR=__T("XBR");
-    static const Char* XCh=__T("XCh");
-    static const Char* XCH=__T("XCH");
-    static const Char* XXCh=__T("XXCh");
     static const Char* XXCH=__T("XXCH");
     static const Char* X96=__T("X96");
     static const Char* x96=__T("x96");
@@ -1973,7 +1959,6 @@ Ztring MediaInfo_Internal::Get(stream_t StreamKind, size_t StreamPos, size_t Par
                 {
                     if (i)
                         Temp+=__T(" / ");
-                    size_t Temp_Size=Temp.size();
                     Temp+=Get(StreamKind2, i, Parameter2, Info_Text);
                 }
                 return (Temp.size()>(Count-1)*3)?Temp:Ztring();
@@ -1995,7 +1980,6 @@ Ztring MediaInfo_Internal::Get(stream_t StreamKind, size_t StreamPos, size_t Par
                 {
                     if (i)
                         Temp+=__T(" / ");
-                    size_t Temp_Size=Temp.size();
                     Temp+=Get(StreamKind2, i, Parameter2, Info_Text);
                 }
                 return (Temp.size()>(Count-1)*3)?Temp:Ztring();
@@ -2016,7 +2000,6 @@ Ztring MediaInfo_Internal::Get(stream_t StreamKind, size_t StreamPos, size_t Par
                 {
                     if (i)
                         Temp+=__T(" / ");
-                    size_t Temp_Size=Temp.size();
                     Temp+=Get(StreamKind2, i, Parameter2, Info_Text);
                     Ztring Hint=Get(StreamKind2, i, File__Analyze::Fill_Parameter(StreamKind2, Generic_CodecID_Hint), Info_Text);
                     if (!Hint.empty())
@@ -2044,7 +2027,6 @@ Ztring MediaInfo_Internal::Get(stream_t StreamKind, size_t StreamPos, size_t Par
                 {
                     if (i)
                         Temp+=__T(" / ");
-                    size_t Temp_Size=Temp.size();
                     Temp+=Get(StreamKind2, i, Parameter2, Info_Text);
                 }
                 return (Temp.size()>(Count-1)*3)?Temp:Ztring();

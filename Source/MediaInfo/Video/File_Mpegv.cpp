@@ -3076,7 +3076,7 @@ void File_Mpegv::slice_start_macroblock_motion_vectors(bool s)
 //---------------------------------------------------------------------------
 // Packet Packet "01" --> "AF", slice_start, macroblock, motion_vectors, motion_vector
 #if MEDIAINFO_MACROBLOCKS
-void File_Mpegv::slice_start_macroblock_motion_vectors_motion_vector(bool r, bool s)
+void File_Mpegv::slice_start_macroblock_motion_vectors_motion_vector(bool /*r*/, bool s)
 {
     Element_Trace_Begin1("motion_vector");
     size_t motion_code_;

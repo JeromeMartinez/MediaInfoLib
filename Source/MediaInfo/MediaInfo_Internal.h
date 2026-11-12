@@ -164,7 +164,7 @@ public :
     #if defined(MEDIAINFO_FILE_YES)
         int  ListFormats(const String &File_Name=String());
     #else //!defined(MEDIAINFO_FILE_YES)
-        int  ListFormats(const String &File_Name=String()) {return 0;}
+        int  ListFormats(const String &/*File_Name*/=String()) {return 0;}
     #endif //!defined(MEDIAINFO_FILE_YES)
     MediaInfo_Config_MediaInfo Config;
 

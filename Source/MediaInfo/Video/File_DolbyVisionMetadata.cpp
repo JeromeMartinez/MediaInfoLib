@@ -1290,6 +1290,9 @@ struct xsd_attribute
     bool                Required;
     const xsd_value*    Value;
     const char*         Fixed;          // Fixed value
+
+    constexpr xsd_attribute(const char* Name_ = nullptr, bool Required_ = false, const xsd_value* Value_ = nullptr, const char* Fixed_ = nullptr)
+        : Name(Name_), Required(Required_), Value(Value_), Fixed(Fixed_) {}
 };
 
 enum xsd_flags : int8u
@@ -1315,6 +1318,9 @@ struct xsd_element
     const xsd_element*      Children;   // Terminated by a null name
     const xsd_attribute*    Attributes; // Terminated by a null name
     int8u                   Flags;
+
+    constexpr xsd_element(const char* Name_ = nullptr, int8u Min_ = 0, int8u Max_ = 0, int8u Versions_ = 0, const xsd_value* Value_ = nullptr, const xsd_element* Children_ = nullptr, const xsd_attribute* Attributes_ = nullptr, int8u Flags_ = 0)
+        : Name(Name_), Min(Min_), Max(Max_), Versions(Versions_), Value(Value_), Children(Children_), Attributes(Attributes_), Flags(Flags_) {}
 };
 
 //---------------------------------------------------------------------------

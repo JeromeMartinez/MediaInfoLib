@@ -427,7 +427,7 @@ void            __stdcall MediaInfoA_Close (void* Handle)
     MediaInfo_Close(Handle);
 }
 
-const char*     __stdcall MediaInfoA_Inform (void* Handle, size_t Reserved)
+const char*     __stdcall MediaInfoA_Inform (void* Handle, size_t /*Reserved*/)
 {
         return WC2MB(Handle, MediaInfo_Inform(Handle, 0));
 }
@@ -514,7 +514,7 @@ void            __stdcall MediaInfoListA_Close (void* Handle, size_t  FilePos)
     MediaInfoList_Close(Handle, FilePos);
 }
 
-const char*     __stdcall MediaInfoListA_Inform (void* Handle, size_t  FilePos, size_t Reserved)
+const char*     __stdcall MediaInfoListA_Inform (void* Handle, size_t  FilePos, size_t /*Reserved*/)
 {
     return WC2MB(Handle, MediaInfoList_Inform(Handle, FilePos, 0));
 }
@@ -716,7 +716,7 @@ void            __stdcall MediaInfo_Close (void* Handle)
                     )
 }
 
-const wchar_t*  __stdcall MediaInfo_Inform (void* Handle, size_t Reserved)
+const wchar_t*  __stdcall MediaInfo_Inform (void* Handle, size_t /*Reserved*/)
 {
     MANAGE_STRING(  "Inform",
                     MediaInfo,
@@ -944,7 +944,7 @@ size_t          __stdcall MediaInfoList_Open (void* Handle, const wchar_t* File,
                     Debug+=", File=";Debug+=Ztring(File).To_UTF8();Debug+=", Options=";Debug+=Ztring(Options).To_UTF8();)
 }
 
-size_t          __stdcall MediaInfoList_Open_Buffer (void* Handle, const unsigned char* Begin, size_t  Begin_Size, const unsigned char* End, size_t  End_Size)
+size_t          __stdcall MediaInfoList_Open_Buffer (void* /*Handle*/, const unsigned char* /*Begin*/, size_t  /*Begin_Size*/, const unsigned char* /*End*/, size_t  /*End_Size*/)
 {
     return 0; // Not implemented
 }
@@ -965,7 +965,7 @@ void            __stdcall MediaInfoList_Close (void* Handle, size_t  FilePos)
                     )
 }
 
-const wchar_t*  __stdcall MediaInfoList_Inform (void* Handle, size_t  FilePos, size_t Reserved)
+const wchar_t*  __stdcall MediaInfoList_Inform (void* Handle, size_t  FilePos, size_t /*Reserved*/)
 {
     MANAGE_STRING(  "Inform",
                     MediaInfoList,
@@ -993,7 +993,7 @@ const wchar_t*  __stdcall MediaInfoList_Get (void* Handle, size_t  FilePos, Medi
                     Debug+=", StreamKind=";Debug+=Ztring::ToZtring((size_t)StreamKind).To_UTF8();Debug+=", StreamNumber=";Debug+=Ztring::ToZtring(StreamNumber).To_UTF8();Debug+=", Parameter=";Debug+=Ztring(Parameter).To_UTF8();Debug+=", KindOfInfo=";Debug+=Ztring::ToZtring(KindOfInfo).To_UTF8();Debug+=", KindOfSearch=";Debug+=Ztring::ToZtring(KindOfSearch).To_UTF8();)
 }
 
-size_t          __stdcall MediaInfoList_SetI (void* Handle, const wchar_t* ToSet, size_t  FilePos, MediaInfo_stream_t StreamKind, size_t StreamNumber, size_t  Parameter, const wchar_t* OldParameter)
+size_t          __stdcall MediaInfoList_SetI (void* Handle, const wchar_t* ToSet, size_t  FilePos, MediaInfo_stream_t StreamKind, size_t StreamNumber, size_t  Parameter, const wchar_t* /*OldParameter*/)
 {
     StreamKind=(MediaInfo_stream_t)(((size_t)StreamKind)&0xFF);
     MANAGE_SIZE_T(  "SetI",

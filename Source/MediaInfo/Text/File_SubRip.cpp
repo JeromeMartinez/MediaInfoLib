@@ -522,7 +522,7 @@ bool File_SubRip::FileHeader_Begin()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_SEEK
-size_t File_SubRip::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
+size_t File_SubRip::Read_Buffer_Seek (size_t /*Method*/, int64u /*Value*/, int64u /*ID*/)
 {
     GoTo(0);
     #if MEDIAINFO_DEMUX

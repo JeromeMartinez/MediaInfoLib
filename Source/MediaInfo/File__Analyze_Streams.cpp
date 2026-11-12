@@ -207,7 +207,7 @@ bool Location_Compare(const string& Current, const string& CompareTo, bool& Repl
     size_t Start0 = 0;
     bool Fail = false;
     size_t Pos[2][3][3];
-    size_t Size[2][3][3];
+    size_t Size[2][3][3]{};
     Fail |= Split(Current, Start0, Pos[0][0], Size[0][0]);
     Start0++;
     Fail |= Split(Current, Start0, Pos[0][1], Size[0][1]);
@@ -4178,7 +4178,7 @@ void File__Analyze::Fill (stream_t StreamKind, size_t StreamPos, const char* Par
     if (Value.size()!=Id.size())
     {
         Value.Separator_Set(0, __T(" / "));
-        Fill(StreamKind, StreamPos, Parameter, Value.Read());
+        Fill(StreamKind, StreamPos, Parameter, Value.Read(), Replace);
         return;
     }
 
@@ -4187,7 +4187,7 @@ void File__Analyze::Fill (stream_t StreamKind, size_t StreamPos, const char* Par
     for (size_t i=0; i<Value.size(); i++)
         if (!Value[i].empty()) // Only if there is a content
             List.push_back(Value[i]+(Id[i].empty()?Ztring():(__T(" (")+Id[i]+__T(')'))));
-    Fill(StreamKind, StreamPos, Parameter, List.Read());
+    Fill(StreamKind, StreamPos, Parameter, List.Read(), Replace);
 }
 
 //---------------------------------------------------------------------------
@@ -6330,7 +6330,7 @@ void File__Analyze::CodecID_Fill(const Ztring &Value, stream_t StreamKind, size_
 }
 
 //---------------------------------------------------------------------------
-void File__Analyze::PixelAspectRatio_Fill(const Ztring &Value, stream_t StreamKind, size_t StreamPos, size_t Parameter_Width, size_t Parameter_Height, size_t Parameter_PixelAspectRatio, size_t Parameter_DisplayAspectRatio)
+void File__Analyze::PixelAspectRatio_Fill(const Ztring &Value, stream_t StreamKind, size_t StreamPos, size_t Parameter_Width, size_t Parameter_Height, size_t /*Parameter_PixelAspectRatio*/, size_t Parameter_DisplayAspectRatio)
 {
     if (Value.empty() || !Retrieve(StreamKind, StreamPos, Parameter_DisplayAspectRatio).empty())
         return;

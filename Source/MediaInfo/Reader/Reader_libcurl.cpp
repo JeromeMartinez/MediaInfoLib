@@ -284,7 +284,7 @@ string PercentDecode(const string& In)
                     C2-='A'-10;
                 else
                     C2-='0';
-                Result+=(const char)((C1<<4)|C2);
+                Result+=(char)((C1<<4)|C2);
                 continue;
             }
             default:
@@ -829,7 +829,7 @@ size_t libcurl_WriteData_CallBack(void *ptr, size_t size, size_t nmemb, void *da
     }
 
     #if MEDIAINFO_EVENTS
-        if (size*nmemb)
+        if (size*nmemb!=0)
         {
             struct MediaInfo_Event_Global_BytesRead_0 Event;
             memset(&Event, 0xFF, sizeof(struct MediaInfo_Event_Generic));

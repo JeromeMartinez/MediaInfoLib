@@ -792,7 +792,7 @@ void File_Nsv::Data_Parse()
             if (Stream.Parser->Status[IsAccepted])
             {
                 Demux(Buffer+Buffer_Offset+(size_t)Element_Offset-len, len, ContentType_MainStream);
-                if (FrameInfo.DUR!=-1)
+                if (FrameInfo.DUR!=(int64u)-1)
                 {
                     switch(Stream_Type[i])
                     {
@@ -1386,7 +1386,6 @@ void File_StarDiva::Read_Buffer_Continue()
 
         //Filling
         size_t Seqs_Pos=0;
-        size_t Subtitles_Index=1;
         Offsets.resize(Times.size());
         Fill(Stream_Menu, StreamPos_Last, Menu_Chapters_Pos_Begin, Count_Get(Stream_Menu, StreamPos_Last), 10, true);
         for (size_t i = 0; i < Times.size(); i++)

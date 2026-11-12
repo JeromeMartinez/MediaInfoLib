@@ -72,7 +72,7 @@ constexpr auto HAVE_DolbyVision_DMI = 2;
 constexpr auto HAVE_SLHDR2_DMI = 4;
 constexpr auto HAVE_HDR10plus_DMI = 8;
 
-#define Patch_Start_Code(sc)            ((sc)>=0x00 && (sc)<=0x7F)
+#define Patch_Start_Code(sc)            ((sc)<=0x7F)
 #define Patch_End_Code                  0x8F
 #define Video_Sequence_Start_Code       0xB0
 #define Video_Sequence_End_Code         0xB1

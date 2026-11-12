@@ -1971,7 +1971,7 @@ size_t File__Analyze::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_SEEK
-size_t File__Analyze::Read_Buffer_Seek_OneFramePerFile (size_t Method, int64u Value, int64u ID)
+size_t File__Analyze::Read_Buffer_Seek_OneFramePerFile (size_t Method, int64u Value, int64u /*ID*/)
 {
     //Parsing
     switch (Method)
@@ -2504,6 +2504,8 @@ void File__Analyze::TS_Ajust(int64s Ticks)
         if (PTSb!=NoTs)
             PTSb+=Ticks;
     }
+#else //MEDIAINFO_ADVANCED2
+    (void)Ticks;
 #endif //MEDIAINFO_ADVANCED2
 }
 
@@ -2861,7 +2863,6 @@ bool File__Analyze::Header_Manage()
     }
 
     //Going in a lower level
-    auto S = Element_Level;
     Element_Size=Elem.Next-(File_Offset+Buffer_Offset+Element_Offset);
     Elem.UnTrusted=false;
     if (Elem.Next<File_Offset+Buffer_Offset+Element_Offset || Buffer_Offset+Element_Size>Buffer_Size) //Also when the data is after the end of this level, see Header_Fill_Size()
@@ -3776,7 +3777,7 @@ void File__Analyze::Element_Prepare (int64u Size)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_TRACE
-void File__Analyze::Info(const std::string& Value, size_t Element_Level_Minus)
+void File__Analyze::Info(const std::string& Value, size_t /*Element_Level_Minus*/)
 {
     if (Config_Trace_Format==MediaInfo_Config::Trace_Format_CSV)
         return; //Do not display info
@@ -3996,7 +3997,7 @@ void File__Analyze::Accept (File__Analyze* Parser)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_TRACE
-void File__Analyze::Update (const char* ParserName_Char)
+void File__Analyze::Update (const char* /*ParserName_Char*/)
 #else //MEDIAINFO_TRACE
 void File__Analyze::Update ()
 #endif //MEDIAINFO_TRACE
@@ -4061,7 +4062,7 @@ void File__Analyze::Fill (File__Analyze* Parser)
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_TRACE
-void File__Analyze::Finish (const char* ParserName_Char)
+void File__Analyze::Finish (const char* /*ParserName_Char*/)
 #else //MEDIAINFO_TRACE
 void File__Analyze::Finish ()
 #endif //MEDIAINFO_TRACE
@@ -4717,7 +4718,7 @@ void File__Analyze::Event_Prepare(struct MediaInfo_Event_Generic* Event, int32u 
 // Demux
 //***************************************************************************
 #if MEDIAINFO_DEMUX
-void File__Analyze::Demux (const int8u* Buffer, size_t Buffer_Size, contenttype Content_Type, const int8u* xx, size_t xxx)
+void File__Analyze::Demux (const int8u* Buffer, size_t Buffer_Size, contenttype Content_Type, const int8u* /*xx*/, size_t /*xxx*/)
 {
     if (!(Config_Demux&Demux_Level))
         return;
@@ -5127,7 +5128,7 @@ void File__Analyze::IsTruncated(int64u ExpectedSize, bool MoreThan, const char* 
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_CONFORMANCE
-void File__Analyze::DurationIssue(int64u ActualDuration, int64u ExpectedDuration, bool MoreThan, const char* Prefix)
+void File__Analyze::DurationIssue(int64u ActualDuration, int64u ExpectedDuration, bool /*MoreThan*/, const char* Prefix)
 {
     auto ExpectedDuration_Min = ExpectedDuration;
     auto ExpectedDurationI = ((int64u)(ExpectedDuration / 1000)) * 1000;

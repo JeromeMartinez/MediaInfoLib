@@ -136,7 +136,7 @@ static const int8u DolbyE_Channels[64]=
 {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 6, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 //---------------------------------------------------------------------------
-const int8u DolbyE_Channels_PerProgram(int8u program_config, int8u program)
+int8u DolbyE_Channels_PerProgram(int8u program_config, int8u program)
 {
     switch (program_config)
     {
@@ -3194,7 +3194,7 @@ void File_DolbyE::audio_segment()
     Element_Begin1("audio_segment");
     #if MEDIAINFO_TRACE
         //CRC test
-        size_t Pos_Begin=0;
+        //size_t Pos_Begin=0;
     #endif //MEDIAINFO_TRACE
     for (int8u Channel=0; Channel<DolbyE_Channels[program_config]; Channel++)
     {
@@ -3243,8 +3243,8 @@ void File_DolbyE::audio_segment()
 
         #if MEDIAINFO_TRACE
             //CRC test
-            if ((Channel%(DolbyE_Channels[program_config]/2))==0)
-                Pos_Begin=Buffer_Offset*8+(size_t)Element_Size*8-Data_BS_Remain();
+            //if ((Channel%(DolbyE_Channels[program_config]/2))==0)
+            //    Pos_Begin=Buffer_Offset*8+(size_t)Element_Size*8-Data_BS_Remain();
         #endif //MEDIAINFO_TRACE
 
         Element_Begin1(__T("Channel ")+Ztring::ToZtring(Channel));
@@ -3328,7 +3328,7 @@ void File_DolbyE::metadata_extension_segment()
 
     #if MEDIAINFO_TRACE
         //CRC test
-        size_t Pos_Begin=Buffer_Offset*8+(size_t)Element_Size*8-Data_BS_Remain();
+        //size_t Pos_Begin=Buffer_Offset*8+(size_t)Element_Size*8-Data_BS_Remain();
     #endif //MEDIAINFO_TRACE
 
     size_t  metadata_extension_segment_BitCountAfter=Data_BS_Remain();
@@ -3392,7 +3392,7 @@ void File_DolbyE::audio_extension_segment()
     Element_Begin1("audio_extension_segment");
     #if MEDIAINFO_TRACE
         //CRC test
-        size_t Pos_Begin=0;
+        //size_t Pos_Begin=0;
     #endif //MEDIAINFO_TRACE
     for (int8u Channel=0; Channel<DolbyE_Channels[program_config]; Channel++)
     {
@@ -3441,8 +3441,8 @@ void File_DolbyE::audio_extension_segment()
 
         #if MEDIAINFO_TRACE
             //CRC test
-            if ((Channel%(DolbyE_Channels[program_config]/2))==0)
-                Pos_Begin=Buffer_Offset*8+(size_t)Element_Size*8-Data_BS_Remain();
+            //if ((Channel%(DolbyE_Channels[program_config]/2))==0)
+            //    Pos_Begin=Buffer_Offset*8+(size_t)Element_Size*8-Data_BS_Remain();
         #endif //MEDIAINFO_TRACE
 
         Element_Begin1(__T("Channel ")+Ztring::ToZtring(Channel));

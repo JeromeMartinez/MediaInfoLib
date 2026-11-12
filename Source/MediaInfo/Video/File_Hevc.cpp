@@ -1932,30 +1932,24 @@ void File_Hevc::video_parameter_set()
                     if (direct_dependency_flag[i][k] && DependencyFlag[k][j])
                         DependencyFlag[i][j] = 1;
             }
-        int8u IdDirectRefLayer[64][64];
-        int8u IdRefLayer[64][64];
         int8u IdPredictedLayer[64][64];
         int8u NumDirectRefLayers[64];
-        int8u NumRefLayers[64];
         int8u NumPredictedLayers[64];
         int8u TreePartitionLayerIdList[64][64];
         int8u NumLayersInTreePartition[64];
         for (int i = 0; i <= MaxLayersMinus1; i++)
         {
             auto iNuhLId = layer_id_in_nuh[i];
-            int8u d = 0, r = 0, p = 0;
+            int8u d = 0, p = 0;
             for (int j = 0; j <= MaxLayersMinus1; j++)
             {
                 auto jNuhLid = layer_id_in_nuh[j];
                 if (direct_dependency_flag[i][j])
-                    IdDirectRefLayer[iNuhLId][d++] = jNuhLid;
-                if (DependencyFlag[i][j])
-                    IdRefLayer[iNuhLId][r++] = jNuhLid;
+                    d++;
                 if (DependencyFlag[j][i])
                     IdPredictedLayer[iNuhLId][p++] = jNuhLid;
             }
             NumDirectRefLayers[iNuhLId] = d;
-            NumRefLayers[iNuhLId] = r;
             NumPredictedLayers[iNuhLId] = p;
         }
         for (int i = 0; i <= 63; i++)
@@ -2789,7 +2783,7 @@ void File_Hevc::sei_message(int32u &seq_parameter_set_id)
 
 //---------------------------------------------------------------------------
 // SEI - 0
-void File_Hevc::sei_message_buffering_period(int32u &seq_parameter_set_id, int32u payloadSize)
+void File_Hevc::sei_message_buffering_period(int32u &seq_parameter_set_id, int32u /*payloadSize*/)
 {
     Element_Info1("buffering_period");
 
@@ -2852,7 +2846,7 @@ void File_Hevc::sei_message_buffering_period_xxl(seq_parameter_set_struct::vui_p
 
 //---------------------------------------------------------------------------
 // SEI - 1
-void File_Hevc::sei_message_pic_timing(int32u &seq_parameter_set_id, int32u payloadSize)
+void File_Hevc::sei_message_pic_timing(int32u &seq_parameter_set_id, int32u /*payloadSize*/)
 {
     Element_Info1("pic_timing");
 
@@ -3412,7 +3406,7 @@ void File_Hevc::three_dimensional_reference_displays_info(int32u payloadSize)
     BS_Begin();
     auto End=Data_BS_Remain()-payloadSize*8;
     int32u prec_ref_display_width, prec_ref_viewing_dist=0, num_ref_displays_minus1;
-    int32u left_view_id0, right_view_id0;
+    //int32u left_view_id0, right_view_id0;
     bool ref_viewing_distance_flag;
     Get_UE (prec_ref_display_width,                             "prec_ref_display_width");
     if (prec_ref_display_width>=32)
@@ -3444,11 +3438,11 @@ void File_Hevc::three_dimensional_reference_displays_info(int32u payloadSize)
         int8u exponent_ref_display_width;
         Get_UE (left_view_id,                                   "left_view_id");
         Get_UE (right_view_id,                                  "right_view_id");
-        if (!i)
-        {
-            left_view_id0=left_view_id;
-            right_view_id0=right_view_id;
-        }
+        //if (!i)
+        //{
+        //    left_view_id0=left_view_id;
+        //    right_view_id0=right_view_id;
+        //}
         Get_S1 (6, exponent_ref_display_width,                  "exponent_ref_display_width");
         if (exponent_ref_display_width>=63)
         {

@@ -485,7 +485,7 @@ void File_Av2::sequence_header_obu()
     }
     int32u bit_depth_idc;
     Get_uvlc(chroma_format_idc,                                 "chroma_format_idc"); Param_Info1(chroma_format_idc == 0 ? "4:2:0" : chroma_format_idc == 2 ? "4:4:4" : chroma_format_idc == 3 ? "4:2:2" : "");
-    Get_uvlc(bit_depth_idc,                                     "bit_depth_idc"); Param_Info2(bit_depth_idc == 0 ? "10" : (bit_depth_idc == 1 ? "8" : ""), " bits");
+    Get_uvlc(bit_depth_idc,                                     "bit_depth_idc"); Param_Info2C(bit_depth_idc <= 1, std::to_string(bit_depth_idc ? 8 : 10), " bits");
     int8u max_tlayer_id, max_mlayer_id;
     if (single_picture_header_flag) {
         // seq_lcr_id = 0
@@ -1500,7 +1500,7 @@ void File_Av2::frame_header(bool isFirst)
 }
 
 //---------------------------------------------------------------------------
-void File_Av2::tile_params(int16u frameWidth, int16u frameHeight, int8u uniformSbSize, int8u sbSize, bool isBridge)
+void File_Av2::tile_params(int16u frameWidth, int16u frameHeight, int8u /*uniformSbSize*/, int8u sbSize, bool isBridge)
 {
     const int8u Num_4x4_Blocks_Wide[BLOCK_SIZES] = {
         1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8,

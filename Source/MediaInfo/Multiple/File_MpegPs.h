@@ -236,6 +236,9 @@ private :
 #if MEDIAINFO_SEEK
                     if(IsSub)
                        Parsers[Pos]->Unsynch_Frame_Count = Count;
+#else //MEDIAINFO_SEEK
+                    (void)Count;
+                    (void)IsSub;
 #endif //MEDIAINFO_SEEK
                     Parsers[Pos]->Open_Buffer_Unsynch();
                 }

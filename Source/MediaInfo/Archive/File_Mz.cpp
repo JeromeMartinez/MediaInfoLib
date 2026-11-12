@@ -576,7 +576,7 @@ void File_Mz::Parse_Resources(size_t Depth) {
         Element_End0();
         
     }
-    for (const int& directory_offset : OffsetToDirectories) {
+    for (const auto directory_offset : OffsetToDirectories) {
         if (Depth >= 8 || !Resource_Directories_Parsed.insert(directory_offset).second)
             continue; // Too deep or already parsed (loop)
         Element_Offset = directory_offset;
@@ -584,7 +584,7 @@ void File_Mz::Parse_Resources(size_t Depth) {
         Parse_Resources(Depth + 1);
     }
     auto rsrc = to_parse[State::Resources];
-    for (const int& data_offset : OffsetsToData) {
+    for (const auto data_offset : OffsetsToData) {
         Element_Offset = data_offset;
         if (Element_Offset > Element_Size) Element_Offset = Element_Size;
         auto resource_name_ = Named_Resource.find((int32u)Element_Offset);

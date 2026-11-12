@@ -251,13 +251,13 @@ private :
         string Language;
 
         presentation() :
-            presentation_config((int8u)-1),
             mdcompat((int8u)-1),
             presentation_id((int32u)-1),
-            frame_rate_fraction_minus1(0),
             dolby_atmos_indicator(false),
             substream_index((int8u)-1),
+            presentation_config((int8u)-1),
             b_multi_pid_PresentAndValue((int8u)-1),
+            frame_rate_fraction_minus1(0),
             pres_ch_mode((int8u)-1),
             pres_ch_mode_core((int8u)-1),
             pres_immersive_stereo((int8u)-1),
@@ -314,11 +314,11 @@ private :
             substream_index((int8u)-1),
             sus_ver(false),
             ch_mode((int8u)-1),
-            ch_mode_core((int8u)-1),
-            immersive_stereo((int8u)-1),
             top_channels_present((int8u)-1),
             hsf_substream_index((int8u)-1),
-            nonstd_bed_channel_assignment_mask((int32u)-1)
+            nonstd_bed_channel_assignment_mask((int32u)-1),
+            ch_mode_core((int8u)-1),
+            immersive_stereo((int8u)-1)
         {}
     };
     struct group
@@ -367,8 +367,7 @@ private :
                     memcpy(Data, Data_ToDelete, Offset);
                 delete[] Data_ToDelete;
             }
-            if (Data+Offset)
-                memcpy(Data+Offset, BufferToAdd, SizeToAdd);
+            memcpy(Data+Offset, BufferToAdd, SizeToAdd);
             Offset=NewOffset;
         }
 

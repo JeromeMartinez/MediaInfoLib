@@ -121,7 +121,7 @@ int main(int ac, char *av[])
     mi.Option(__T("Language"), opts.language);
     mi.Option(__T("Inform"), opts.out_format);
 
-    for (int i = 0; i < opts.extra_options.size(); ++i)
+    for (size_t i = 0; i < opts.extra_options.size(); ++i)
     {
         ZenLib::Ztring option = opts.extra_options.Read(i, 0);
         ZenLib::Ztring value = opts.extra_options.Read(i, 1);

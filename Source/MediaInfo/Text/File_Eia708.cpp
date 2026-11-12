@@ -1604,7 +1604,7 @@ void File_Eia708::HasChanged(bool IsReset)
 }
 
 //---------------------------------------------------------------------------
-void File_Eia708::Illegal(int8u Size, int8u cc_data_1, int8u cc_data_2, int8u cc_data_3, int8u cc_data_4, int8u cc_data_5, int8u cc_data_6)
+void File_Eia708::Illegal(int8u /*Size*/, int8u /*cc_data_1*/, int8u /*cc_data_2*/, int8u /*cc_data_3*/, int8u /*cc_data_4*/, int8u /*cc_data_5*/, int8u /*cc_data_6*/)
 {
 }
 

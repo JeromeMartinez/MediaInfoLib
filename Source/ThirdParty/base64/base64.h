@@ -46,7 +46,7 @@ inline std::string Base64::encode(const std::string &sString) {
   sResult.reserve(nLength * 8 / 6 + 1);
 
   for(std::string::size_type nPos = 0; nPos < nLength; nPos++) {
-    char cCode;
+    unsigned char cCode;
   
     // Encode the first 6 bits
     cCode = (sString[nPos] >> 2) & 0x3f;

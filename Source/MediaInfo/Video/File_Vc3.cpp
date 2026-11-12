@@ -99,7 +99,7 @@ static const char* Vc3_FromCID_Level(int32u CompressionID)
 }
 
 //---------------------------------------------------------------------------
-static const bool Vc3_FromCID_IsSupported (int32u CompressionID)
+static bool Vc3_FromCID_IsSupported (int32u CompressionID)
 {
     switch (CompressionID)
     {
@@ -123,7 +123,7 @@ static const bool Vc3_FromCID_IsSupported (int32u CompressionID)
 }
 
 //---------------------------------------------------------------------------
-static const int32u Vc3_CompressedFrameSize_RI(int64u Size, int16u Width, int16u Height)
+static int32u Vc3_CompressedFrameSize_RI(int64u Size, int16u Width, int16u Height)
 {
     int32u WidthBlock = Width / 16;
     if (Width % 16)
@@ -149,7 +149,7 @@ static const int32u Vc3_CompressedFrameSize_RI(int64u Size, int16u Width, int16u
 }
 
 //---------------------------------------------------------------------------
-static const int32u Vc3_CompressedFrameSize(int32u CompressionID, int16u Width, int16u Height)
+static int32u Vc3_CompressedFrameSize(int32u CompressionID, int16u Width, int16u Height)
 {
     int32u Size;
     switch (CompressionID)
@@ -192,7 +192,7 @@ static const int32u Vc3_CompressedFrameSize(int32u CompressionID, int16u Width, 
 };
 
 //---------------------------------------------------------------------------
-static const int8u Vc3_SBD(int32u SBD) //Sample Bit Depth
+static int8u Vc3_SBD(int32u SBD) //Sample Bit Depth
 {
     switch (SBD)
     {
@@ -204,7 +204,7 @@ static const int8u Vc3_SBD(int32u SBD) //Sample Bit Depth
 };
 
 //---------------------------------------------------------------------------
-static const int8u Vc3_SBD_FromCID (int32u CompressionID)
+static int8u Vc3_SBD_FromCID (int32u CompressionID)
 {
     switch (CompressionID)
     {
@@ -291,7 +291,7 @@ static const char* Vc3_SST_FromCID (int32u CompressionID)
 }
 
 //---------------------------------------------------------------------------
-static const int16u Vc3_SPL_FromCID (int32u CompressionID)
+static int16u Vc3_SPL_FromCID (int32u CompressionID)
 {
     switch (CompressionID)
     {
@@ -318,7 +318,7 @@ static const int16u Vc3_SPL_FromCID (int32u CompressionID)
 }
 
 //---------------------------------------------------------------------------
-static const int16u Vc3_ALPF_PerFrame_FromCID (int32u CompressionID)
+static int16u Vc3_ALPF_PerFrame_FromCID (int32u CompressionID)
 {
     switch (CompressionID)
     {

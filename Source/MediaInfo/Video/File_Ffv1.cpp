@@ -1298,7 +1298,7 @@ void File_Ffv1::Parameters()
 }
 
 //---------------------------------------------------------------------------
-void File_Ffv1::SliceContent(states &States)
+void File_Ffv1::SliceContent(states &/*States*/)
 {
     Element_Begin1("SliceContent");
 
@@ -1888,7 +1888,7 @@ bool File_Ffv1::QuantizationTablePerContext(size_t i, size_t j, FFV1::pixel_t &s
     quant_tables[i][j][128] = -quant_tables[i][j][127];
 
     scale *= 2 * v - 1;
-    if (scale > 32768U)
+    if ((unsigned)scale > 32768U)
     {
         Element_Error("FFV1-HEADER-QuantizationTable-scale:1");
         Element_End0();

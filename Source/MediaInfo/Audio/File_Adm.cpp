@@ -86,91 +86,6 @@ static string Hex2String(int Value, size_t Size)
     return Result;
 }
 
-//---------------------------------------------------------------------------
-static int32u pow10(int i)
-{
-    static int pow10[10] =
-    {
-        1,
-        10,
-        100,
-        1000,
-        10000, 
-        100000,
-        1000000,
-        10000000,
-        100000000,
-        1000000000,
-    };
-    return pow10[i];
-}
-
-static float32 TimeCodeToFloat(string v)
-{
-    if (v.size() < 8 || v[2] != ':' || v[5] != ':')
-        return 0;
-    for (int i = 0; i < 8; i++)
-    {
-        switch (i)
-        {
-        case 2:
-        case 5:
-            if (v[i] != ':')
-                return 0;
-            break;
-        default:
-            if (v[i] < '0' || v[i] > '9')
-                return 0;
-        }
-    }
-    int32u  Value = (v[0] - '0') * 10 * 6 * 10 * 6 * 10
-                  + (v[1] - '0')      * 6 * 10 * 6 * 10
-                  + (v[3] - '0')          * 10 * 6 * 10
-                  + (v[4] - '0')               * 6 * 10
-                  + (v[6] - '0')                   * 10
-                  + (v[7] - '0')                       ;
-    if (v.size() < 9 || v[8] != '.')
-        return Value;
-    size_t i = 9;
-    int32u ValueF = 0;
-    int ValueF_Exponent = 0;
-    const int Exponent_Max = 9;
-    while (i < v.size() && v[i] >= '0' && v[i] <= '9')
-    {
-        ValueF_Exponent++;
-        if (ValueF_Exponent <= Exponent_Max)
-        {
-            ValueF *= 10;
-            ValueF += v[i] - '0';
-        }
-        i++;
-    }
-    if (i >= v.size() || v[i] != 'S')
-        return Value + (float32)ValueF / pow10(ValueF_Exponent <= Exponent_Max ? ValueF_Exponent : Exponent_Max);
-    int32u SampleRate = 0;
-    int SampleRate_Exponent = 0;
-    i++;
-    while (i < v.size() && v[i] >= '0' && v[i] <= '9')
-    {
-        SampleRate_Exponent++;
-        if (SampleRate_Exponent <= Exponent_Max)
-        {
-            SampleRate *= 10;
-            SampleRate += v[i] - '0';
-        }
-        i++;
-    }
-    while (SampleRate_Exponent > Exponent_Max)
-    {
-        if (ValueF_Exponent < Exponent_Max)
-            ValueF_Exponent /= 10;
-        if (ValueF_Exponent)
-            ValueF_Exponent--;
-        SampleRate_Exponent--;
-    }
-    return Value + (float32)ValueF / SampleRate;
-}
-
 static char* strnstr(const char* Str, size_t Size, const char* ToSearch)
 {
     size_t ToSearch_Size = strlen(ToSearch);
@@ -2372,7 +2287,7 @@ static const int8u audioPackFormat_2_audioChannelFormatIDRef_Table8[] = {
 set<string> audioPackFormatID_2_audioChannelFormatIDRef (int16u audioPackFormatID_yyyy) {
     size_t Pos = 0;
     size_t i = 0;
-    auto SearchedPos = audioPackFormatID_yyyy & 0xF7FF; // 0x8xx values
+    size_t SearchedPos = audioPackFormatID_yyyy & 0xF7FF; // 0x8xx values
     auto Table = audioPackFormatID_yyyy - SearchedPos ? audioPackFormat_2_audioChannelFormatIDRef_Table8 : audioPackFormat_2_audioChannelFormatIDRef_Table;
     for (;;) {
         const auto Count = Table[i++];
@@ -2582,7 +2497,7 @@ struct Item_Struct {
         }
     }
     void AddError(error_Type Error_Type, item Item_Type, size_t i, const string& NewValue, source Source = Source_ADM) {
-        AddError(Error_Type, ':' + CraftName(item_Infos[Item_Type].Name) + (i != -1 ? to_string(i) : "") + NewValue, Source);
+        AddError(Error_Type, ':' + CraftName(item_Infos[Item_Type].Name) + (i != (size_t)-1 ? to_string(i) : "") + NewValue, Source);
     }
     void AddError(error_Type Error_Type, size_t Item_Type, size_t i, const string& NewValue, source Source = Source_ADM) {
         AddError(Error_Type, (item)Item_Type, i, NewValue, Source);
@@ -2618,8 +2533,7 @@ struct Items_Struct {
     size_t Elements_Size{};
 };
 
-static string Apply_Init(File__Analyze& F, const char* Name, size_t i, const Items_Struct& audioProgramme_List, Ztring Summary) {
-    const Item_Struct& audioProgramme = audioProgramme_List.Items[i];
+static string Apply_Init(File__Analyze& F, const char* Name, size_t i, const Items_Struct& /*audioProgramme_List*/, Ztring Summary) {
     string P = Name + to_string(i);
     F.Fill(Stream_Audio, 0, P.c_str(), Summary.empty() ? __T("Yes") : Summary);
     F.Fill(Stream_Audio, 0, (P + " Pos").c_str(), i);
@@ -2638,7 +2552,7 @@ static void Apply_SubStreams(File__Analyze& F, const string& P_And_LinkedTo, Ite
                 break;
             }
         }
-        if (Pos == -1) {
+        if (Pos == (size_t)-1) {
             // Trying case insensitive, this is permitted by specs
             auto Start = ID.rfind('_');
             if (Start != string::npos) {
@@ -2664,7 +2578,7 @@ static void Apply_SubStreams(File__Analyze& F, const string& P_And_LinkedTo, Ite
                 }
             }
         }
-        if (Pos == -1) {
+        if (Pos == (size_t)-1) {
             auto LinkedTo_Pos = P_And_LinkedTo.find(" LinkedTo_TrackUID_Pos");
             auto HasTransport = !F.Retrieve_Const(Stream_Audio, 0, "Transport0").empty();
             if (!NoError && HasTransport && LinkedTo_Pos != string::npos) { // TODO: better way to avoid common definitions
@@ -2778,7 +2692,7 @@ public:
     int Attribute();
     int Value();
     bool IsInit() { return IsInit_; }
-    size_t Remain() { return p.len < 0 ? 0 : (size_t)p.len; }
+    size_t Remain() { return (size_t)p.len; }
 
 private:
     tfsxml_string p = {};
@@ -3156,7 +3070,7 @@ static void MoveErrors (file_adm_private* File_Adm_Private, item Up_Type) {
 static type GetType(file_adm_private* File_Adm_Private, const item item_Type, size_t i);
 
 //---------------------------------------------------------------------------
-static bool CheckErrors_ID(file_adm_private* File_Adm_Private, const string& ID, const item_info& ID_Start, vector<Item_Struct>* Items = nullptr, const char* Sub = nullptr)
+static bool CheckErrors_ID(file_adm_private* /*File_Adm_Private*/, const string& ID, const item_info& ID_Start, vector<Item_Struct>* Items = nullptr, const char* Sub = nullptr)
 {
     auto BeginSize = strlen(ID_Start.ID_Begin);
     const auto Flags = ID_Start.ID_Flags;
@@ -3309,7 +3223,6 @@ static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private
     const auto& Label = Item.Attributes[label_Info.Label_Pos];
     const auto& Definition = Item.Attributes[label_Info.Definition_Pos];
     const auto Style = label_Info.Label_Style;
-    const auto& Style_Info = Style_Infos[Style];
     const auto List = (Style == (style)-1) ? nullptr : Style_Infos[Style].formatDefinition_List;
     const unsigned long List_Size = (Style == (style)-1) ? 0 : Style_Infos[Style].formatDefinition_Size;
     unsigned long formatLabel_Int = (unsigned long)-1;
@@ -3674,37 +3587,20 @@ void loudnessMetadata_Check(file_adm_private* File_Adm_Private, item Item_Type) 
 
 //---------------------------------------------------------------------------
 void audioProgrammeReferenceScreen_Check(file_adm_private* File_Adm_Private) {
-    auto& Items = File_Adm_Private->Items;
-    auto& Programmes = Items[item_audioProgramme].Items;
-    auto& Programme = Programmes.back();
-    auto& ProgrammeReferenceScreens = Items[item_audioProgrammeReferenceScreen].Items;
-    auto& ProgrammeReferenceScreen = ProgrammeReferenceScreens.back();
-
-    size_t i = Programmes.size() - 1;
-    size_t j = Programme.Elements[audioProgramme_audioProgrammeReferenceScreen].size() - 1;
-
     MoveErrors(File_Adm_Private, item_audioProgrammeReferenceScreen);
 }
 
 //---------------------------------------------------------------------------
 void screenWidth_Check(file_adm_private* File_Adm_Private) {
     auto& Items = File_Adm_Private->Items;
-    auto& Programmes = Items[item_audioProgramme].Items;
-    auto& Programme = Programmes.back();
-    auto& ProgrammeReferenceScreens = Items[item_audioProgrammeReferenceScreen].Items;
-    auto& ProgrammeReferenceScreen = ProgrammeReferenceScreens.back();
     auto& screenWidths = Items[item_screenWidth].Items;
     auto& screenWidth = screenWidths.back();
-
-    size_t i = Programmes.size() - 1;
-    size_t j = Programme.Elements[audioProgramme_audioProgrammeReferenceScreen].size() - 1;
-    size_t k = ProgrammeReferenceScreen.Elements[audioProgrammeReferenceScreen_screenWidth].size() - 1;
 
     if (screenWidth.Attributes_Present[screenWidth_X]) {
         const auto& Element = screenWidth.Attributes[screenWidth_X];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
-        if (End - Element.c_str() != Element.size()) {
+        if ((size_t)(End - Element.c_str()) != Element.size()) {
             screenWidth.AddError(Error, ":X:X attribute value \"" + Element + "\" is malformed");
         }
         else if (Value < 0 || Value > 2) {
@@ -3715,16 +3611,6 @@ void screenWidth_Check(file_adm_private* File_Adm_Private) {
 
 //---------------------------------------------------------------------------
 void authoringInformation_Check(file_adm_private* File_Adm_Private) {
-    auto& Items = File_Adm_Private->Items;
-    auto& Programmes = Items[item_audioProgramme].Items;
-    auto& Programme = Programmes.back();
-    auto& authoringInformations = Items[item_authoringInformation].Items;
-    auto& authoringInformation = authoringInformations.back();
-
-    size_t i = Programmes.size() - 1;
-    size_t j = Programme.Elements[audioProgramme_authoringInformation].size() - 1;
-
-
     MoveErrors(File_Adm_Private, item_authoringInformation);
 }
 
@@ -3738,8 +3624,6 @@ void audioProgramme_Check(file_adm_private* File_Adm_Private) {
     auto& Items = File_Adm_Private->Items;
     auto& Programmes = Items[item_audioProgramme].Items;
     auto& Programme = Programmes.back();
-
-    size_t i = Programmes.size() - 1;
 
     CheckError_Language(File_Adm_Private, item_audioProgramme, audioProgramme_audioProgrammeLanguage);
 
@@ -3854,26 +3738,11 @@ void audioObject_Check(file_adm_private* File_Adm_Private) {
 
 //---------------------------------------------------------------------------
 void audioObjectInteraction_Check(file_adm_private* File_Adm_Private) {
-    auto& Items = File_Adm_Private->Items;
-    auto& audioObjects = Items[item_audioObject].Items;
-    auto& audioObject = audioObjects.back();
-    auto& audioObjectInteractions = Items[item_audioObjectInteraction].Items;
-    auto& audioObjectInteraction = audioObjectInteractions.back();
-
-    size_t i = audioObjects.size() - 1;
-    size_t j = audioObject.Elements[audioObject_audioObjectInteraction].size() - 1;
-
     MoveErrors(File_Adm_Private, item_audioObjectInteraction);
 }
 
 //---------------------------------------------------------------------------
 void Object_Check(file_adm_private* File_Adm_Private) {
-    auto& Items = File_Adm_Private->Items;
-    auto& Objects = Items[item_audioObject].Items;
-    auto& Object = Objects.back();
-
-    size_t i = Objects.size() - 1;
-
     MoveErrors(File_Adm_Private, item_audioObject);
 }
 
@@ -3997,7 +3866,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         const auto& Element = diffuses[k];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
-        if (End - Element.c_str() != Element.size()) {
+        if ((size_t)(End - Element.c_str()) != Element.size()) {
             BlockFormat.AddError(Error, ":diffuse" + to_string(k) + ":GeneralCompliance:diffuse element value \"" + Element + "\" is malformed");
         }
         else if (Value < 0 || Value > 1) {
@@ -4009,13 +3878,13 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
     }
 
     string Gains_Not0;
-    size_t Gains_Not0_Pos;
+    size_t Gains_Not0_Pos = 0;
     auto gains = BlockFormat.Elements[audioBlockFormat_gain];
     for (size_t k = 0; k < gains.size(); k++) {
         const auto& Element = gains[k];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
-        if (End - Element.c_str() != Element.size()) {
+        if ((size_t)(End - Element.c_str()) != Element.size()) {
             BlockFormat.AddError(Error, ":gain:gain attribute value \"" + Element + "\" is malformed");
         }
         else if (Value){
@@ -4029,7 +3898,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         const auto& Element = importances[k];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
-        if (End - Element.c_str() != Element.size()) {
+        if ((size_t)(End - Element.c_str()) != Element.size()) {
             BlockFormat.AddError(Error, ":importance:importance element value \"" + Element + "\" is malformed");
         }
         else if (Value < 0 || Value > 10) {
@@ -4078,7 +3947,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                 const auto& interpolationLength = jumpPosition.Attributes[jumpPosition_interpolationLength];
                 char* End;
                 auto Value = strtof(interpolationLength.c_str(), &End);
-                if (End - interpolationLength.c_str() != interpolationLength.size()) {
+                if ((size_t)(End - interpolationLength.c_str()) != interpolationLength.size()) {
                     BlockFormat.AddError(Error, ":jumpPosition0:interpolationLength:interpolationLength attribute value \"" + interpolationLength + "\" is malformed");
                 }
                 else {
@@ -4284,7 +4153,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                     const auto& Element = BlockFormat.Elements[audioBlockFormat_position][k];
                     char* End;
                     auto Value = strtof(Element.c_str(), &End);
-                    if (End - Element.c_str() != Element.size()) {
+                    if ((size_t)(End - Element.c_str()) != Element.size()) {
                         BlockFormat.AddError(Error, ":position" + to_string(k) + ":GeneralCompliance:position element value \"" + BlockFormat.Elements[audioBlockFormat_position][k] + "\" is malformed");
                     }
                     else if (Value < Cartesian_0_Limits[Pos][0] || Value > Cartesian_0_Limits[Pos][1]) {
@@ -4328,7 +4197,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
                     const auto& Element = BlockFormat.Elements[audioBlockFormat_position][k];
                     char* End;
                     Values[Pos] = strtof(Element.c_str(), &End);
-                    if (End - Element.c_str() != Element.size()) {
+                    if ((size_t)(End - Element.c_str()) != Element.size()) {
                         ValuesAreNok = true;
                         BlockFormat.AddError(Error, string(1, ':') + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + ':' + item_Infos[item_audioBlockFormat].Element_Infos[k].Name + " element value \"" + Element + "\" is malformed");
                     }
@@ -4410,7 +4279,7 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
         case cartesian_alreadyincoherent:
             break;
         default:
-            if (is_cartesian != File_Adm_Private->CartesianAlreadyNotCoherent - cartesian_0) {
+            if (is_cartesian != (size_t)(File_Adm_Private->CartesianAlreadyNotCoherent - cartesian_0)) {
                 BlockFormat.AddError(Error, ":cartesian:cartesian element values are not consistant between audioBlockFormat elements", Source_AdvSSE_1);
                 File_Adm_Private->CartesianAlreadyNotCoherent = cartesian_alreadyincoherent;
             }
@@ -4433,15 +4302,10 @@ void audioBlockFormat_Check(file_adm_private* File_Adm_Private) {
 //---------------------------------------------------------------------------
 void gain_Check(file_adm_private* File_Adm_Private) {
     auto& Items = File_Adm_Private->Items;
-    auto& ChannelFormats = Items[item_audioChannelFormat].Items;
-    auto& ChannelFormat = ChannelFormats.back();
     auto& BlockFormats = Items[item_audioBlockFormat].Items;
     auto& BlockFormat = BlockFormats.back();
     auto& Gains = Items[item_gain].Items;
     auto& Gain = Gains.back();
-
-    size_t i = ChannelFormats.size() - 1;
-    size_t j = ChannelFormat.Elements[audioChannelFormat_audioBlockFormat].size() - 1;
 
     static const char* gain_List[] = { "linear", "dB" };
     int Unit = -1;
@@ -4464,7 +4328,7 @@ void gain_Check(file_adm_private* File_Adm_Private) {
     const auto& Value = BlockFormat.Elements[audioBlockFormat_gain].back();
     char* End;
     auto Float = strtod(Value.c_str(), &End);
-    if (End - Value.c_str() != Value.size()) {
+    if ((size_t)(End - Value.c_str()) != Value.size()) {
         BlockFormat.AddError(Error, audioBlockFormat_gain, E::Form, File_Adm_Private, Value);
     }
     else if (Unit >= 0) {
@@ -4507,7 +4371,7 @@ void coefficient_Check(file_adm_private* File_Adm_Private) {
         const auto& Value = Coefficient.Attributes[coefficient_gain];
         char* End;
         auto Float = strtod(Value.c_str(), &End);
-        if (End - Value.c_str() != Value.size()) {
+        if ((size_t)(End - Value.c_str()) != Value.size()) {
             Coefficient.AddError(Error, 0x80 | (int8u)coefficient_gain, E::Form, File_Adm_Private, Value);
         }
         else if (Unit >= 0) {
@@ -4531,10 +4395,6 @@ void matrix_Check(file_adm_private* File_Adm_Private) {
     auto& Items = File_Adm_Private->Items;
     auto& ChannelFormats = Items[item_audioChannelFormat].Items;
     auto& ChannelFormat = ChannelFormats.back();
-    auto& BlockFormats = Items[item_audioBlockFormat].Items;
-    auto& BlockFormat = BlockFormats.back();
-    auto& Matrixes = Items[item_matrix].Items;
-    auto& Matrix = Matrixes.back();
 
     while (File_Adm_Private->ChannelFormat_Matrix_coefficients.size() < ChannelFormats.size()) {
         File_Adm_Private->ChannelFormat_Matrix_coefficients.push_back({});
@@ -4556,8 +4416,6 @@ void matrix_Check(file_adm_private* File_Adm_Private) {
 //---------------------------------------------------------------------------
 void objectDivergence_Check(file_adm_private* File_Adm_Private) {
     auto& Items = File_Adm_Private->Items;
-    auto& ChannelFormats = Items[item_audioChannelFormat].Items;
-    auto& ChannelFormat = ChannelFormats.back();
     auto& BlockFormats = Items[item_audioBlockFormat].Items;
     auto& BlockFormat = BlockFormats.back();
     auto& objectDivergence_Items = BlockFormat.Elements[audioBlockFormat_objectDivergence];
@@ -4571,7 +4429,7 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
         const auto& Element = objectDivergence.Attributes[objectDivergence_azimuthRange];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
-        if (End - Element.c_str() != Element.size()) {
+        if ((size_t)(End - Element.c_str()) != Element.size()) {
             objectDivergence.AddError(Error, 0x80 | (int8u)objectDivergence_azimuthRange, E::Form, File_Adm_Private, Element);
         }
         else if (Value < 0 || Value > 1) {
@@ -4584,7 +4442,7 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
         const auto& Element = objectDivergence.Attributes[objectDivergence_positionRange];
         char* End;
         auto Value = strtof(Element.c_str(), &End);
-        if (End - Element.c_str() != Element.size()) {
+        if ((size_t)(End - Element.c_str()) != Element.size()) {
             objectDivergence.AddError(Error, 0x80 | (int8u)objectDivergence_positionRange, E::Form, File_Adm_Private, Element);
         }
         else if (Value < 0 || Value > 1) {
@@ -4595,7 +4453,7 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
     const auto& Element = objectDivergence_Items.back();
     char* End;
     auto Value = strtof(Element.c_str(), &End);
-    if (End - Element.c_str() != Element.size()) {
+    if ((size_t)(End - Element.c_str()) != Element.size()) {
         BlockFormat.AddError(Error, (char)audioBlockFormat_objectDivergence, E::Form, File_Adm_Private, Element);
     }
     else if (Value < 0 || Value > 1) {
@@ -4606,18 +4464,13 @@ void objectDivergence_Check(file_adm_private* File_Adm_Private) {
 //---------------------------------------------------------------------------
 void zoneExclusion_Check(file_adm_private* File_Adm_Private) {
     auto& Items = File_Adm_Private->Items;
-    auto& ChannelFormats = Items[item_audioChannelFormat].Items;
-    auto& ChannelFormat = ChannelFormats.back();
     auto& BlockFormats = Items[item_audioBlockFormat].Items;
     auto& BlockFormat = BlockFormats.back();
     auto& ZoneExclusions = Items[item_zoneExclusion].Items;
     auto& ZoneExclusion = ZoneExclusions.back();
     auto& Zones = Items[item_zone].Items;
 
-    size_t i = ChannelFormats.size() - 1;
-    size_t j = ChannelFormat.Elements[audioChannelFormat_audioBlockFormat].size() - 1;
     size_t zoneExclusion_Count = BlockFormat.Elements[audioBlockFormat_zoneExclusion].size();
-    size_t zoneExclusion_Pos = ZoneExclusions.size() - zoneExclusion_Count;
     size_t zone_Count = ZoneExclusion.Elements[zoneExclusion_zone].size();
     size_t zone_Pos = Zones.size() - zone_Count;
 
@@ -4662,7 +4515,7 @@ void zoneExclusion_Check(file_adm_private* File_Adm_Private) {
                         const auto& Attribute = Zone.Attributes[m - zone_minX];
                         char* End;
                         Values.Values[m] = strtof(Attribute.c_str(), &End);
-                        if (End - Attribute.c_str() != Attribute.size()) {
+                        if ((size_t)(End - Attribute.c_str()) != Attribute.size()) {
                             ValuesAreNok = true;
                             const auto& Info = item_Infos[item_zone].Attribute_Infos[m];
                             BlockFormat.AddError(Error, ":zoneExclusion" + to_string(k) + ":zone" + to_string(l) + ':' + Info.Name + ':' + Info.Name + " attribute value \"" + Attribute + "\" is malformed");
@@ -4682,7 +4535,7 @@ void zoneExclusion_Check(file_adm_private* File_Adm_Private) {
                 }
                 if (!ValuesAreNok) {
                     auto position_Channezone_PoslAssignment = Atmos_zone_Pos(Values.Name, Values.Values);
-                    if (position_Channezone_PoslAssignment == -1) {
+                    if (position_Channezone_PoslAssignment == (size_t)-1) {
                         BlockFormat.AddError(Error, ":zoneExclusion" + to_string(k) + ":zone" + to_string(l) + ":GeneralCompliance:zone@minX maxX minY maxY minZ maxZ attributes and element value \"" + Zone.Attributes[zone_minX] + "\" \"" + Zone.Attributes[zone_maxX] + "\" \"" + Zone.Attributes[zone_minY] + "\" \"" + Zone.Attributes[zone_maxY] + "\" \"" + Zone.Attributes[zone_minZ] + "\" \"" + Zone.Attributes[zone_maxZ] + "\" \"" + ZoneExclusion.Elements[zoneExclusion_zone][l] + "\" is not valid", Source_Atmos_1_0);
                     }
                 }
@@ -5027,7 +4880,7 @@ void frameFormat_Check(file_adm_private* File_Adm_Private) {
 }
 
 //---------------------------------------------------------------------------
-void audioTrack_Check(file_adm_private* File_Adm_Private) {
+void audioTrack_Check(file_adm_private* /*File_Adm_Private*/) {
 }
 
 //---------------------------------------------------------------------------
@@ -5622,8 +5475,6 @@ int file_adm_private::audioFormatExtended()
     };
 
     Item_Struct& audioFormatExtended_Content = Items[item_audioFormatExtended].Items.back();
-    auto& Items_audioFormatExtended = Items[item_audioFormatExtended].Items;
-    auto& Items_Up = Items_audioFormatExtended;
     XML_BEGIN
     XML_ATTR_START
         if (!tfsxml_strcmp_charp(b, "version")) {
@@ -5999,8 +5850,6 @@ int file_adm_private::dbmd()
     }
 
     Item_Struct& dbmd_Content = Items[item_dbmd].Items.back();
-    auto& Items_dbmd = Items[item_dbmd].Items;
-    auto& Items_Up = Items_dbmd;
     XML_BEGIN
     XML_ATTR_START
     XML_ATTR_END
@@ -6095,8 +5944,6 @@ int file_adm_private::frameHeader()
     }
 
     Item_Struct& frameHeader_Content = Items[item_frameHeader].Items.back();
-    auto& Items_frameHeader = Items[item_frameHeader].Items;
-    auto& Items_Up = Items_frameHeader;
     XML_BEGIN
     XML_ATTR_START
     XML_ATTR_END
@@ -6187,7 +6034,7 @@ static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type,
                         }
                     }
                 }
-                auto ErrorType = WarningError ? Error : k;
+                auto ErrorType = WarningError ? (size_t)Error : k;
                 Error_Count_Per_Type[ErrorType]++;
                 if (Error_Count_Per_Type[ErrorType] < 256)
                 {
@@ -6206,7 +6053,6 @@ static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type,
                             const auto j = Value[Value_Pos];
                             Value_Pos--;
                             item_Type2 = (item)Value[Value_Pos];
-                            const auto Element_Infos = item_Infos[item_Type2].Element_Infos;
                             Field += CraftName(item_Infos[item_Type2].Name) + to_string(j) + ' ';
                         }
                         const auto& item_Info = item_Infos[item_Type2];
@@ -6219,7 +6065,7 @@ static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type,
                         }
                         Value += IsAttribute ? "attribute" : "element";
                         Value += ' ';
-                        Value += E_Strings[ErrorType];
+                        Value += E_Strings[(int8u)ErrorType];
                         auto Pos = Value.find("{}");
                         if (Pos != string::npos) {
                             Value.erase(Pos, 2);
@@ -6447,8 +6293,6 @@ void File_Adm::Streams_Fill()
             profileInfos.insert(profileInfos.begin(), ProfileInfo);
         }
     }
-    auto& ProfileLists_audioFormatExtended = File_Adm_Private->Items[item_profile_audioFormatExtended].Items;
-    auto& ProfileLists_frameHeader = File_Adm_Private->Items[item_profile_frameHeader].Items;
     auto& Profiles_audioFormatExtended = File_Adm_Private->Items[item_profile_audioFormatExtended].Items;
     auto& Profiles_frameHeader = File_Adm_Private->Items[item_profile_frameHeader].Items;
     if (!Profiles_audioFormatExtended.empty() && !Profiles_frameHeader.empty()) {
@@ -6971,13 +6815,7 @@ void File_Adm::Streams_Fill()
     auto& Objects = File_Adm_Private->Items[item_audioObject].Items;
     auto& PackFormats = File_Adm_Private->Items[item_audioPackFormat].Items;
     auto& ChannelFormats = File_Adm_Private->Items[item_audioChannelFormat].Items;
-    auto& StreamFormats = File_Adm_Private->Items[item_audioStreamFormat].Items;
-    auto& TrackFormats = File_Adm_Private->Items[item_audioTrackFormat].Items;
     auto& TrackUIDs = File_Adm_Private->Items[item_audioTrackUID].Items;
-    auto& BlockFormats = File_Adm_Private->Items[item_audioBlockFormat].Items;
-    auto& Positions = File_Adm_Private->Items[item_position].Items;
-    auto& ZoneExclusions = File_Adm_Private->Items[item_zoneExclusion].Items;
-    auto& Zones = File_Adm_Private->Items[item_zone].Items;
     auto& TransportTrackFormats = File_Adm_Private->Items[item_transportTrackFormat].Items;
     auto& frameHeaders = File_Adm_Private->Items[item_frameHeader].Items;
 
@@ -7622,13 +7460,8 @@ void File_Adm::Streams_Fill()
     }
 
     // Errors - audioChannelFormat
-    size_t BlockFormat_Pos = 0;
-    size_t Position_Pos = 0;
-    size_t zoneExclusion_Pos = 0;
-    size_t zone_Pos = 0;
     for (size_t i = 0; i < ChannelFormats.size(); i++) {
         auto& ChannelFormat = ChannelFormats[i];
-        const auto& ID = ChannelFormat.Attributes[audioChannelFormat_audioChannelFormatID];
         const auto Type = GetType(File_Adm_Private, item_audioChannelFormat, i);
 
         if (IsAdvSSE) {
@@ -7686,15 +7519,6 @@ void File_Adm::Streams_Fill()
         }
     }
 
-    // Errors - audioStreamFormat
-    for (size_t i = 0; i < StreamFormats.size(); i++) {
-        auto& StreamFormat = StreamFormats[i];
-    }
-
-    // Errors - audioTrackFormat
-    for (size_t i = 0; i < TrackFormats.size(); i++) {
-        auto& TrackFormat = TrackFormats[i];
-    }
 
     // Errors - audioTrackUID
     for (size_t i = 0; i < TrackUIDs.size(); i++) {

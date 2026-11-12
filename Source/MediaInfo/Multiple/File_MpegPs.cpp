@@ -1039,6 +1039,10 @@ void File_MpegPs::Read_Buffer_Unsynched()
 #if MEDIAINFO_SEEK
 size_t File_MpegPs::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
 {
+    #if !MEDIAINFO_IBIUSAGE
+        (void)ID;
+    #endif //MEDIAINFO_IBIUSAGE
+
     //Reset
     Seek_Value=(int64u)-1;
     Seek_ID=(int64u)-1;

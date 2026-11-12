@@ -210,7 +210,7 @@ void File_Dat::Streams_Accept()
         }
         Max_Value >>= 2;
         for (size_t i = 0; i < 4; i++) {
-            if (Max_Value < Values[i] && i != Max_Pos) {
+            if (Max_Value < Values[i] && i != (size_t)Max_Pos) {
                 return -1;
             }
         }

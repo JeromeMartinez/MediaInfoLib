@@ -325,10 +325,10 @@ const char* Avs3V_matrix_coefficients(int8u matrix_coefficients);
 //---------------------------------------------------------------------------
 File_Mpeg4::File_Mpeg4()
     :File__Analyze(), File__HasReferences(),
-    File_Buffer_Size_Hint_Pointer{}, FrameCount_MaxPerStream{}, List{}, Version_Temp{}, channelcount{}, mdat_Pos_Max{}, mdat_Pos_Temp{}, 
-    meta_iprp_ipco_Buffer_Size{}, moof_base_data_offset{}, moof_traf_default_sample_duration{}, moof_traf_default_sample_size{},
-    moov_cmov_dcom_Compressor{}, moov_meta_hdlr_Type{}, moov_trak_mdia_minf_stbl_stsd_Pos{}, moov_trak_mdia_minf_stbl_stsz_Pos{},
-    moov_trak_tkhd_DisplayAspectRatio{}, moov_trak_tkhd_Height{}, moov_trak_tkhd_Rotation{}, moov_trak_tkhd_Width{}, moov_udta_meta_keys_ilst_Pos{}
+    List{}, moov_cmov_dcom_Compressor{}, moov_meta_hdlr_Type{}, moov_trak_mdia_minf_stbl_stsd_Pos{}, moov_trak_mdia_minf_stbl_stsz_Pos{},
+    moov_trak_tkhd_Width{}, moov_trak_tkhd_Height{}, moov_trak_tkhd_DisplayAspectRatio{}, moov_trak_tkhd_Rotation{}, moov_udta_meta_keys_ilst_Pos{},
+    moof_base_data_offset{}, FrameCount_MaxPerStream{}, moof_traf_default_sample_duration{}, moof_traf_default_sample_size{},
+    meta_iprp_ipco_Buffer_Size{}, channelcount{}, Version_Temp{}, File_Buffer_Size_Hint_Pointer{}, mdat_Pos_Temp{}, mdat_Pos_Max{}
 {
     //Configuration
     ParserName="MPEG-4";

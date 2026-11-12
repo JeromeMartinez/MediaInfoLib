@@ -2341,8 +2341,8 @@ void File_Usac::UsacDecoderConfig()
 {
     #if MEDIAINFO_CONFORMANCE
         usacExtElementType_Present.clear();
-        int8u channelConfiguration_Orders_Pos;
-        int8u channelConfiguration_Orders_Max;
+        int8u channelConfiguration_Orders_Pos = 0;
+        int8u channelConfiguration_Orders_Max = 0;
         int8u CheckChannelConfiguration = (int8u)(C.channelConfigurationIndex && C.channelConfigurationIndex < Aac_Channels_Size_Usac);
         if (CheckChannelConfiguration)
         {
@@ -2370,7 +2370,7 @@ void File_Usac::UsacDecoderConfig()
                     channelConfiguration_Orders_Pos++;
             }
         #endif
-        C.usacElements.push_back({usacElementType, 0});
+        C.usacElements.push_back({usacElementType, 0, false});
         switch (usacElementType)
         {
             case ID_USAC_SCE                                    : UsacSingleChannelElementConfig(); break;
@@ -3175,7 +3175,6 @@ bool File_Usac::drcInstructionsUniDrc(bool V1, bool NoV0)
     #if MEDIAINFO_CONFORMANCE
         C.drcSetEffect |= (int8u)drcSetEffect; // We need only the 8 first bits
     #endif
-    bool IsNOK=false;
     if ((drcSetEffect & (3<<10)) == 0)
     {
         TESTELSE_SB_SKIP(                                       "limiterPeakTargetPresent");
@@ -4688,7 +4687,7 @@ void File_Usac::sbrDtdf(size_t ch, bool usacIndependencyFlag)
 }
 
 //---------------------------------------------------------------------------
-void File_Usac::sbrInvf(size_t ch)
+void File_Usac::sbrInvf(size_t /*ch*/)
 {
     Element_Begin1("sbr_invf");
     for (int8u n=0; n<C.sbrHandler.num_noise_bands; n++ )
@@ -5138,7 +5137,7 @@ void File_Usac::EcData(ec_data_type dataType, int8u paramIdx, int8u startBand, i
 }
 
 //---------------------------------------------------------------------------
-void File_Usac::GroupedPcmData(ec_data_type dataType, bool pairFlag, int8u numQuantSteps, int8u dataBands)
+void File_Usac::GroupedPcmData(ec_data_type /*dataType*/, bool pairFlag, int8u numQuantSteps, int8u dataBands)
 {
     //TODO: Check this code
     if (pairFlag)
@@ -5589,7 +5588,7 @@ void File_Usac::LsbData(ec_data_type dataType, bool bsQuantCoarseXXX, int8u data
 }
 
 //---------------------------------------------------------------------------
-void File_Usac::EcDataPair(ec_data_type dataType, int8u paramIdx, int8u setIdx, int8u dataBands, bool bsDataPairXXX, bool bsQuantCoarseXXX, bool usacIndependencyFlag)
+void File_Usac::EcDataPair(ec_data_type dataType, int8u /*paramIdx*/, int8u setIdx, int8u dataBands, bool bsDataPairXXX, bool bsQuantCoarseXXX, bool usacIndependencyFlag)
 {
     int8u numQuantSteps{};
     switch (dataType)
@@ -5852,7 +5851,7 @@ void File_Usac::Mps212Data(bool usacIndependencyFlag)
 }
 
 //---------------------------------------------------------------------------
-void File_Usac::UsacLfeElement(bool usacIndependencyFlag)
+void File_Usac::UsacLfeElement(bool /*usacIndependencyFlag*/)
 {
     Element_Begin1("UsacLfeElement");
         //fdChannelStream(0, false, false, false, usacIndependencyFlag);
@@ -6055,12 +6054,12 @@ void File_Usac::escapedValue(int32u &Value, int8u nBits1, int8u nBits2, int8u nB
 {
     Element_Begin1(Name);
     Get_S4(nBits1, Value,                                       "nBits1");
-    if (Value==((1<<nBits1)-1))
+    if (Value==((1u<<nBits1)-1))
     {
         int32u ValueAdd;
         Get_S4(nBits2, ValueAdd,                                "nBits2");
         Value+=ValueAdd;
-        if (nBits3 && ValueAdd==((1<<nBits2)-1))
+        if (nBits3 && ValueAdd==((1u<<nBits2)-1))
         {
             Get_S4(nBits3, ValueAdd,                            "nBits3");
             Value+=ValueAdd;

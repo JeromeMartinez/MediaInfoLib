@@ -233,7 +233,6 @@ struct LineCharCounter
             {
                 // UTF-8 character handling
                 size_t utf8Len = 1;
-                bool isNbsp = false;
 
                 if ((c & 0x80) == 0x00)
                 {
@@ -244,11 +243,6 @@ struct LineCharCounter
                 {
                     // 2-byte UTF-8
                     utf8Len = 2;
-                    // Check if this is a non-breaking space (U+00A0 = 0xC2 0xA0 in UTF-8)
-                    if (c == 0xC2 && text[1] && (unsigned char)text[1] == 0xA0)
-                    {
-                        isNbsp = true;
-                    }
                 }
                 else if ((c & 0xF0) == 0xE0)
                 {
@@ -555,7 +549,7 @@ void File_Ttml::Streams_Finish()
         auto Duration = Time_End - Time_Begin;
         auto Time_Begin_ms = (int64u)Time_Begin.ToMilliseconds();
         auto Time_End_ms = (int64u)Time_End.ToMilliseconds();
-        auto Duration_ms = (int64u)(Time_End - Time_Begin).ToMilliseconds();
+        auto Duration_ms = (int64u)Duration.ToMilliseconds();
         Fill(Stream_General, 0, General_Duration, Duration_ms);
         Fill(Stream_Text, 0, Text_Duration, Duration_ms);
         Fill(Stream_Text, 0, Text_Duration_Start_Command, Time_Begin_ms);
@@ -591,7 +585,7 @@ void File_Ttml::Read_Buffer_Unsynched()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_SEEK
-size_t File_Ttml::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
+size_t File_Ttml::Read_Buffer_Seek (size_t /*Method*/, int64u /*Value*/, int64u /*ID*/)
 {
     Open_Buffer_Unsynch();
     return 1;

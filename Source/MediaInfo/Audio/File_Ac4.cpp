@@ -759,35 +759,6 @@ static int32u AC4_bed_chan_assign_code_2_nonstd(int8u bed_chan_assign_code)
     return AC4_bed_chan_assign_code_2_nonstd_Values[bed_chan_assign_code];
 }
 
-//---------------------------------------------------------------------------
-static int32u AC4_nonstd_2_desc_Values[17] =
-{
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2,
-    1,
-    1,
-    1,
-};
-static string AC4_nonstd_2_desc(int32u nonstd_bed_channel_assignment_mask)
-{
-    string ToReturn="0.0.0";
-    for (int8u i=0; i<17; i++)
-        if (nonstd_bed_channel_assignment_mask&(1<<i))
-            ToReturn[2*AC4_nonstd_2_desc_Values[i]]++;
-    return ToReturn;
-}
 
 //---------------------------------------------------------------------------
 static const char* substream_type_Trace[] =
@@ -1098,7 +1069,7 @@ static const char* out_ch_config_Values[] =
 static constexpr size_t out_ch_config_Size=sizeof(out_ch_config_Values)/sizeof(const char*);
 
 //---------------------------------------------------------------------------
-static const float32 gain_f1_Values(int8u code)
+static float32 gain_f1_Values(int8u code)
 {
     if (code>=7)
         return -INFINITY;
@@ -1106,7 +1077,7 @@ static const float32 gain_f1_Values(int8u code)
 };
 
 //---------------------------------------------------------------------------
-static const float32 gain_xx_Values(int8u code)
+static float32 gain_xx_Values(int8u code)
 {
     if (code>=7)
         return -INFINITY;
@@ -1206,15 +1177,11 @@ void File_Ac4::Streams_Fill()
         Fill_Measure(Stream_Audio, 0, "IFrameInterval", IFrames_Value, __T(" frames"));
 
     //If no frame, use dac4 content
-    bool IsUsingDac4;
     if (Presentations.empty() && Groups.empty() && AudioSubstreams.empty())
     {
         Presentations=Presentations_dac4;
         Groups=Groups_dac4;
-        IsUsingDac4=true;
     }
-    else
-        IsUsingDac4=false;
 
     //Filling
     if (!Presentations.empty())
@@ -1770,7 +1737,6 @@ void File_Ac4::Streams_Fill()
         }
 
         //Info from group
-        bool b_channel_coded=false;
         bool b_de_data_present=false;
         int8u de_max_gain, de_channel_config;
         for (size_t i=0; i <Groups.size(); i++)
@@ -1782,8 +1748,7 @@ void File_Ac4::Streams_Fill()
                     if (Groups[i].b_channel_coded)
                     {
                         //Channel based
-                        b_channel_coded=true;
-                        const de_info& D=Substream_Info->second.DeInfo;
+                        //const de_info& D=Substream_Info->second.DeInfo;
                         //b_de_data_present=D.b_de_data_present;
                         //if (b_de_data_present)
                         //{
@@ -1795,7 +1760,7 @@ void File_Ac4::Streams_Fill()
                     else if (GroupInfo.b_ajoc || GroupInfo.n_objects_code!=(int8u)-1)
                     {
                         //Object based
-                        int8u n_objects;
+                        int8u n_objects=0;
                         if (!GroupInfo.b_ajoc)
                         {
                             n_objects=objs_to_n_objects(GroupInfo.n_objects_code, GroupInfo.b_lfe);
@@ -3586,7 +3551,7 @@ void File_Ac4::ac4_substream(size_t substream_index)
     }
     AudioSubstream.Buffer_Index=0;
 
-    int64u Save_Element_Size;
+    int64u Save_Element_Size=0;
     if (AudioSubstream.Buffer.Data)
     {
         //Using AudioSubstream.Buffer as temporary save
@@ -5080,7 +5045,7 @@ void File_Ac4::ac4_presentation_v1_dsi(presentation& P)
         size_t byte_align=Data_BS_Remain()%8;
         if (byte_align)
             Skip_S1(byte_align,                                 "byte_align");
-            alternative_info();
+        alternative_info();
     TEST_SB_END();
     size_t byte_align=Data_BS_Remain()%8;
     if (byte_align)

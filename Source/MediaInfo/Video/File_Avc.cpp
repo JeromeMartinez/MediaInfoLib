@@ -2431,7 +2431,6 @@ void File_Avc::slice_header()
         if ((*seq_parameter_set_Item)->vui_parameters && (*seq_parameter_set_Item)->vui_parameters->time_scale && (*seq_parameter_set_Item)->vui_parameters->num_units_in_tick)
             tc=float64_int64s(((float64)1000000000)/((float64)(*seq_parameter_set_Item)->vui_parameters->time_scale/(*seq_parameter_set_Item)->vui_parameters->num_units_in_tick/((*seq_parameter_set_Item)->pic_order_cnt_type==2?1:2)/FrameRate_Divider)/((!(*seq_parameter_set_Item)->frame_mbs_only_flag && field_pic_flag)?2:1));
 
-        int32s TemporalReferences_Offset_pic_order_cnt_lsb_Diff=0;
         if ((*seq_parameter_set_Item)->pic_order_cnt_type!=1 && first_mb_in_slice==0 && (Element_Code!=0x14 || seq_parameter_sets.empty()) && TemporalReferences_Reserved) //Not slice_layer_extension except if MVC only
         {
             if (field_pic_flag)
@@ -2604,7 +2603,6 @@ void File_Avc::slice_header()
                     for (size_t Pos=1; Pos<(size_t)TemporalReferences_Size; Pos+=2)
                         if (TemporalReferences[Pos])
                             HasOddNumbers=true;
-                    bool IsStarted=false;
                     size_t IsBeforeI_Next=0;
                     auto IsBeforeI=false;
                     for (size_t Pos=0; Pos<TemporalReferences_Reserved; Pos++)
@@ -2669,7 +2667,6 @@ void File_Avc::slice_header()
                 }
             }
 
-            TemporalReferences_Offset_pic_order_cnt_lsb_Diff=(int32s)((int32s)(TemporalReferences_Offset+pic_order_cnt)-TemporalReferences_Offset_pic_order_cnt_lsb_Last);
             TemporalReferences_Offset_pic_order_cnt_lsb_Last=(size_t)(TemporalReferences_Offset+pic_order_cnt);
             if (field_pic_flag && (*seq_parameter_set_Item)->pic_order_cnt_type==2 && TemporalReferences_Offset_pic_order_cnt_lsb_Last<TemporalReferences.size() && TemporalReferences[TemporalReferences_Offset_pic_order_cnt_lsb_Last])
                 TemporalReferences_Offset_pic_order_cnt_lsb_Last++;
@@ -3029,7 +3026,7 @@ void File_Avc::ParameterSet_Compare(bool IsPps, int32u Id)
 
 //---------------------------------------------------------------------------
 //
-void File_Avc::slice_data(bool AllCategories)
+void File_Avc::slice_data(bool /*AllCategories*/)
 {
     Element_Begin1("slice_data");
 

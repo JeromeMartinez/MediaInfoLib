@@ -346,7 +346,6 @@ void File_Tar::Header()
 //---------------------------------------------------------------------------
 void File_Tar::Payload()
 {
-    bool IsPAX   = (TypeFlag == 'x' || TypeFlag == 'g');
     bool IsGNU_L = (TypeFlag == 'L');
     bool IsGNU_K = (TypeFlag == 'K');
 

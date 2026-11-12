@@ -457,7 +457,7 @@ extern string Aac_ChannelLayout_GetString(const vector<Aac_OutputChannel>& Outpu
 
 //---------------------------------------------------------------------------
 extern const int8u Aac_ChannelMode_Max=4; // 0=Middle, 1=LFE, 2=Upper, 3=Bottom
-extern const char Aac_ChannelMode[Aac_OutputChannelPosition_Size]=
+extern const int8u Aac_ChannelMode[Aac_OutputChannelPosition_Size]=
 {
     //USAC
     0,

@@ -939,7 +939,7 @@ void File_Jpeg::Data_Parse()
         Open_Buffer_Continue(MI);
         Open_Buffer_Finalize(MI);
         stream_t StreamKind_First = Stream_General;
-        size_t StreamPos_First;
+        size_t StreamPos_First = 0;
         const auto& MuxingMode = MI->Retrieve_Const(Stream_General, 0, General_Format);
         for (size_t StreamKind = Stream_General + 1; StreamKind < Stream_Max; StreamKind++) {
             const auto StreamCount = MI->Count_Get((stream_t)StreamKind);
@@ -1984,7 +1984,7 @@ void File_Jpeg::APP2()
     while (Middle < End && *Middle) {
         ++Middle;
     }
-    auto Size = Middle - Begin;
+    auto Size = (size_t)(Middle - Begin);
     if (Size != Element_Size) {
         Size++;
         Skip_Local(Size,                                        "Signature");

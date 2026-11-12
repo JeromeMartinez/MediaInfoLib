@@ -101,8 +101,8 @@ size_t MediaInfoList_Internal::Open(const String &File_Name, const fileoptions_t
                 {
                     const Ztring& Name=List[i];
                     size_t Extension_Pos=Name.rfind(__T('.'));
-                    if (Extension_Pos!=string::npos && ExtensionsList.find(Name.substr(Extension_Pos+1))==ExtensionsList.end()
-                     || Extension_Pos==string::npos && !AcceptNoExtension)
+                    if ((Extension_Pos!=string::npos && ExtensionsList.find(Name.substr(Extension_Pos+1))==ExtensionsList.end())
+                     || (Extension_Pos==string::npos && !AcceptNoExtension))
                             List.erase(List.begin()+i);
                 }
             }

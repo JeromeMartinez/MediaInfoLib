@@ -254,7 +254,7 @@ public :
     void SetProfileLevel(int8u AudioProfileLevelIndication);
     void Fill_Conformance(const char* Field, const char* Value, bitset8 Flags={}, conformance_level Level=Error);
     void Fill_Conformance(const char* Field, const string& Value, bitset8 Flags={}, conformance_level Level=Error) { Fill_Conformance(Field, Value.c_str(), Flags, Level); }
-    void Fill_Conformance(const char* Field, const char* Value, conformance_flags Flag, conformance_level Level=Error) { Fill_Conformance(Field, Value, bitset8().set(Flag)); }
+    void Fill_Conformance(const char* Field, const char* Value, conformance_flags Flag, conformance_level Level=Error) { Fill_Conformance(Field, Value, bitset8().set(Flag), Level); }
     void Fill_Conformance(const char* Field, const string& Value, conformance_flags Flag, conformance_level Level=Error) { Fill_Conformance(Field, Value.c_str(), Flag, Level); }
     void Clear_Conformance();
     void Merge_Conformance(bool FromConfig=false);
@@ -429,6 +429,9 @@ public :
             loudnessInfoSet_HasContent[1]=V1;
             loudnessInfoSet_Present[0]=V0;
             loudnessInfoSet_Present[1]=V1;
+            #else
+            (void)V0;
+            (void)V1;
             #endif
         }
     };

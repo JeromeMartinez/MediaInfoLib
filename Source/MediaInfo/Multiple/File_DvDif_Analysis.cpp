@@ -149,11 +149,9 @@ void File_DvDif::Read_Buffer_Continue()
                         }
 
                         //Try to find a suitable and trustable Abst
-                        if (Speed_FrameCount_StartOffset==-1)
+                        if (Speed_FrameCount_StartOffset==(int64u)-1)
                             Speed_FrameCount_StartOffset=0;
                         int32s Abst_First=INT_MAX;
-                        int32s Abst_Previous=(AbstBf_Previous>>1)&0x7FFFFF;
-                        int32s Abst_Theory_Max=Abst_Previous+(DSF?12:10)*(FSC_WasSet?2:1)*2; //Max 2x the expected gap
                         for (int i=0; i<2; i++)
                         {
                             int32s AbstBf0=(int32s)AbstBf[i*3+0];
@@ -200,7 +198,6 @@ void File_DvDif::Read_Buffer_Continue()
                                         Abst_TrustMultiplier=Abst_TrustMultiplier_Save;
                                         Abst-=Dseq_Offset/2+Dseq_Offset%2;
                                     }
-                                    bool IsFound=false;
                                     size_t k=0;
                                     for (; k<AbstBf_Current_Weighted.abst[j].size(); k++)
                                     {
@@ -1868,7 +1865,7 @@ void File_DvDif::Errors_Stats_Update()
             memset(Video_Errors_PerSta, 0, sizeof(Video_Errors_PerSta));
             for (size_t i=0; i<Video_STA_Errors_ByDseq.size(); i++)
                 Video_Errors_PerSta[i%16]+=Video_STA_Errors_ByDseq[i];
-            int MaxStaErrors=((DSF?1500:1350)*(FSC_WasSet?2:1));
+            size_t MaxStaErrors=((DSF?1500:1350)*(FSC_WasSet?2:1));
             bool Video_StaNonZero=false;
             for (size_t i=0; i<16; i++)
                 if (Video_Errors_PerSta[i]==MaxStaErrors)

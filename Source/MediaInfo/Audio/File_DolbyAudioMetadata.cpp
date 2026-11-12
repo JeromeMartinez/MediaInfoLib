@@ -72,6 +72,7 @@ static const char* warp_mode_Name[] =
 };
 static size_t warp_mode_Name_Size=sizeof(warp_mode_Name)/sizeof(const char*);
 
+/*
 static const char* trim_bypass_Name[] =
 {
     "Trim applied",
@@ -79,6 +80,7 @@ static const char* trim_bypass_Name[] =
     "Not Indicated",
     NULL,
 };
+*/
 
 static const float32 frames_per_second_Values[] =
 {
@@ -346,7 +348,6 @@ void File_DolbyAudioMetadata::Dolby_Atmos_Supplemental_Metadata_Segment()
     Element_Begin1("trim_metadata");
     Skip_L1(                                                    "reserved");
     bitset<2> TrimAutoSet;
-    bool TrimNotAlwaysManual=false;
     Fill(Stream_Audio, 0, "Dolby_Atmos_Metadata TrimMode", "Yes");
     for (int cfg=0; cfg<9; cfg++)
     {
@@ -489,7 +490,7 @@ void File_DolbyAudioMetadata::Dolby_Atmos_Supplemental_Metadata_Segment()
 //***************************************************************************
 
 //---------------------------------------------------------------------------
-void File_DolbyAudioMetadata::Merge(File__Analyze& In, size_t StreamPos)
+void File_DolbyAudioMetadata::Merge(File__Analyze& In, size_t /*StreamPos*/)
 {
     const auto& FirstFrameOfAction=In.Retrieve_Const(Stream_Audio, 0, "Dolby_Atmos_Metadata FirstFrameOfAction");
     if (!FirstFrameOfAction.empty())
@@ -529,7 +530,6 @@ void File_DolbyAudioMetadata::Merge(File__Analyze& In, size_t StreamPos)
         for (const auto& Pos : TrackUID_Pos)
         {
             string Name=TrackUID_String+Pos.To_UTF8();
-            auto PosI=(size_t)Pos.To_int64u();
             if (In.Retrieve_Const(Stream_Audio, 0, Name.c_str()).empty())
                 In.Fill(Stream_Audio, 0, Name.c_str(), "Yes");
             Name+=BinauralRenderMode_String;

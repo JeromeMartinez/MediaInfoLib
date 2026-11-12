@@ -101,7 +101,7 @@ static const char* Exif_Type_Name(int16u Type)
 }
 
 //---------------------------------------------------------------------------
-static const int8u Exif_Type_Size(int16u Type)
+static int8u Exif_Type_Size(int16u Type)
 {
     switch (Type)
     {
@@ -1528,7 +1528,6 @@ std::string mp_entry::Type() const
 void File_Exif::Streams_Finish()
 {
     const auto Infos_Image_It = Infos.find(Kind_IFD0);
-    const auto Infos_Thumbnail_It = Infos.find(Kind_IFD1);
     const auto Infos_Exif_It = Infos.find(Kind_Exif);
     const auto Infos_GPS_It = Infos.find(Kind_GPS);
     const auto Infos_Interop_It = Infos.find(Kind_Interop);
@@ -2277,11 +2276,10 @@ void File_Exif::Data_Parse()
             Infos[currentIFD].clear();
 
             //Parsing new IFD
-            int32u IFDOffset{};
             while (Element_Size - Element_Offset >= 12)
                 Read_Directory();
             if (Element_Offset < Element_Size) // Some IFD does not have offset to next IFD
-                Get_IFDOffset(currentIFD == Kind_IFD0 ? Kind_IFD1 : currentIFD == Kind_IFD1 ? Kind_IFD2 : currentIFD == Kind_MPF ? Kind_MPF : (int8u)-1);
+                Get_IFDOffset(currentIFD == Kind_IFD0 ? (int8u)Kind_IFD1 : currentIFD == Kind_IFD1 ? (int8u)Kind_IFD2 : currentIFD == Kind_MPF ? (int8u)Kind_MPF : (int8u)-1);
         }
     }
     else

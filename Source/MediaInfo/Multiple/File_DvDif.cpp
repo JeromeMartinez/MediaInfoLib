@@ -222,18 +222,6 @@ static const char*  Dv_Emphasis[]=
     "Reserved",
 };
 
-//---------------------------------------------------------------------------
-static const char*  Dv_APT[] =
-{
-    "IEC",
-    "SMPTE",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "", //no info
-};
 
 //---------------------------------------------------------------------------
 static std::array<char, 10> DvDif_Date2String(int32u Value)
@@ -979,9 +967,6 @@ bool File_DvDif::Demux_UnpacketizeContainer_Test()
         Element_Code=-1;
     #ifdef MEDIAINFO_DVDIF_ANALYZE_YES
         FrameInfo.DTS=FrameInfo.PTS=Speed_FrameCount_system[0]*100100000/3+Speed_FrameCount_system[1]*40000000;
-        Speed_FrameCount_system[system]++;
-        int64u NextPTS=Speed_FrameCount_system[0]*100100000/3+Speed_FrameCount_system[1]*40000000;
-        Speed_FrameCount_system[system]--;
     #endif //MEDIAINFO_DVDIF_ANALYZE_YES
         FrameInfo.DUR=(int64u)-1; // Unknown, system flag is not yet checked
         Demux_UnpacketizeContainer_Demux();

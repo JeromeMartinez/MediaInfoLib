@@ -699,6 +699,8 @@ Ztring Export_Graph::Transform(MediaInfo_Internal &MI, Export_Graph::graph Graph
 #ifdef MEDIAINFO_GRAPHVIZ_YES
     if (Format==Format_Svg)
         ToReturn=Dot2Svg(ToReturn);
+#else //MEDIAINFO_GRAPHVIZ_YES
+    (void)Format;
 #endif //MEDIAINFO_GRAPHVIZ_YES
 
     MI.Config.File_ExpandSubs_Set(ExpandSub_Old);

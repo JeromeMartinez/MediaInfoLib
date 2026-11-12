@@ -50,8 +50,8 @@ void Pac_Convert(Ztring& ToConvert, const codepage& CodePage) {
     auto Table = CodePage.List - 0x20;
     auto Table_Size = CodePage.Size + 0x20;
     for (auto& Item : ToConvert) {
-        if (Item >= 0x20 && Item < Table_Size && Table[Item]) {
-            Item = Table[Item];
+        if (Item >= 0x20 && (size_t)Item < Table_Size && Table[(size_t)Item]) {
+            Item = Table[(size_t)Item];
         }
     }
 }
@@ -98,9 +98,9 @@ void File_Pac::Streams_Finish()
     #if MEDIAINFO_ADVANCED
         const float64 FrameRate_FromConfig = Video_FrameRate_Rounded(Config->File_DefaultFrameRate_Get());
         const auto FrameMax = (FrameRate_FromConfig && FrameRate_FromConfig >= FF_Max + 1)
-            ? ((const uint32_t)ceil(FrameRate_FromConfig) - 1)
+            ? ((uint32_t)ceil(FrameRate_FromConfig) - 1)
             : (FF_Max <= 23 ? 23 : FF_Max <= 24 ? 24 : FF_Max <= 29 ? 29 : FF_Max); // Files I have are all with frame rate of 24 fps
-        const auto FrameRate_FromFrameMax = (const float64)FrameMax + 1;
+        const auto FrameRate_FromFrameMax = (float64)FrameMax + 1;
         const auto FrameRate = FrameRate_FromConfig ? FrameRate_FromConfig : FrameRate_FromFrameMax;
         const auto FrameRateIsGuessed = FrameRate_FromConfig == 0;
         const auto DropFrame = Config->File_DefaultTimeCodeDropFrame_Get() == 1;
@@ -533,7 +533,7 @@ void File_Pac::Data_Parse()
                 }
             }
             bool FirstFrameOfVideo = !Frame_Count && Content.size() == 2 && Content[0] == __T("First Frame of Video");
-            if (Content.size() == 1 + FirstFrameOfVideo) {
+            if (Content.size() == (size_t)1 + FirstFrameOfVideo) {
                 const auto& Line = Content[FirstFrameOfVideo];
                 if (Line.rfind(__T("FRAME "), 0) == 0 && Line.find_first_not_of(__T("0123456789"), 6) == string::npos) {
                     IsFrameNumber = true;
@@ -558,7 +558,6 @@ void File_Pac::Data_Parse()
                     }
                     for (const auto& Line : Content) {
                         auto CountOfCharsPerLine = Line.size();
-                        size_t Pos = 0;
                         bool ItalicBeginFound = false;
                         for (const auto& Value : Line) {
                             if (Value < 0x20) { // Non printable

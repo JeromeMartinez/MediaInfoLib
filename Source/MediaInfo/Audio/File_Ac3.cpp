@@ -1062,7 +1062,6 @@ bool Ac3_EMDF_Test(const BitStream_Fast &Search)
     size_t Size=((size_t)Search2.Get2(16))*8+17; //emdf_container_length
     if (Size>Search2.Remain())
         return false;
-    size_t End=Search2.Remain()-Size;
     if (Search2.Get1(2)) //emdf_version
         return false;
     if (Search2.Get1(3) == 0x7) //key_id
@@ -2130,7 +2129,7 @@ void File_Ac3::Read_Buffer_Unsynched()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_SEEK
-size_t File_Ac3::Read_Buffer_Seek (size_t Method, int64u Value, int64u /*ID*/)
+size_t File_Ac3::Read_Buffer_Seek (size_t /*Method*/, int64u /*Value*/, int64u /*ID*/)
 {
     GoTo(0);
     Open_Buffer_Unsynch();
@@ -3070,7 +3069,7 @@ void File_Ac3::Core_Frame()
             TEST_SB_GET (addbsie,                                   "addbsie");
                 int8u addbsil;
                 Get_S1 (6, addbsil,                                 "addbsil");
-                if (addbsil+1!=addbsi_Buffer_Size)
+                if ((size_t)addbsil+1!=addbsi_Buffer_Size)
                 {
                     delete[] addbsi_Buffer;
                     addbsi_Buffer_Size=addbsil+1;

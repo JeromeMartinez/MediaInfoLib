@@ -1712,7 +1712,6 @@ void File_Dts_Common::FileHeader_Parse()
         return;
     int64u StreamSize{ static_cast<int64u>(-1) };
     int16u Bitw_Stream_Metadata{};
-    bool Header_Parsed{ false };
     int64u Num_Samples_Orig_Audio_At_Max_Fs{ 0 };
     int32u Num_Frames_Total{};
     int32u TimeStamp{};
@@ -1724,7 +1723,7 @@ void File_Dts_Common::FileHeader_Parse()
     int16u Codec_Delay_At_Max_Fs{ 0 };
     int8u RefClockCode{};
     int8u TC_Frame_Rate{ static_cast<int8u>(-1) };
-    while (StreamSize==-1 && Element_Size-Element_Offset>=16)
+    while (StreamSize==(int64u)-1 && Element_Size-Element_Offset>=16)
     {
         int64u Name, Size;
         Element_Begin1("Element");
@@ -1824,7 +1823,7 @@ void File_Dts_Common::FileHeader_Parse()
         }
         Element_End0();
     }
-    if (StreamSize==-1)
+    if (StreamSize==(int64u)-1)
     {
         Element_WaitForMoreData();
         return;
@@ -1876,7 +1875,7 @@ void File_Dts_Common::FileHeader_Parse()
 //---------------------------------------------------------------------------
 bool File_Dts_Common::Header_Begin()
 {
-    if (Stream_Offset_Max==-1 || File_Offset+Buffer_Offset!=Stream_Offset_Max || File_Size==-1)
+    if (Stream_Offset_Max==(int64u)-1 || File_Offset+Buffer_Offset!=Stream_Offset_Max || File_Size==(int64u)-1)
         return true;
 
     //Handling DTSHDHDR footer
@@ -2055,7 +2054,7 @@ bool File_Dts::Synched_Test()
         return false; //Need more data
     if (!Synched)
     {
-        if (Stream_Offset_Max!=-1 && File_Offset+Buffer_Offset==Stream_Offset_Max && File_Size!=-1)
+        if (Stream_Offset_Max!=(int64u)-1 && File_Offset+Buffer_Offset==Stream_Offset_Max && File_Size!=(int64u)-1)
             Synched=true; // It is the file footer
         return true;
     }
@@ -2454,7 +2453,7 @@ void File_Dts::Core()
             //No more need data
             if (!IsSub && Config->ParseSpeed<1.0)
             {
-                if (Stream_Offset_Max!=-1)
+                if (Stream_Offset_Max!=(int64u)-1)
                     GoTo(Stream_Offset_Max);
                 else
                     Finish("DTS");
@@ -2680,7 +2679,6 @@ void File_Dts::LBR()
 void File_Dts::X96()
 {
     //Coherency check
-    auto MaxSize=Element_Size-Element_Offset+3;
     if (Element_Code)
     {
         // HD
@@ -3064,7 +3062,7 @@ void File_Dts::XCh()
     int16u Begin;
     Peek_B2(Begin);
     int16u Size=Begin>>6;
-    if (Size<95 || (Size!=MaxSize && Size-1!=MaxSize)) // Is last item and manage legacy bitstreams
+    if (Size<95 || (Size!=MaxSize && (int64u)Size-1!=MaxSize)) // Is last item and manage legacy bitstreams
         return;
 
     FILLING_BEGIN();
@@ -3139,7 +3137,6 @@ void File_Dts::XBR()
     BS_End();
     Skip_B2 (                                                   "CRC16Header"); Param_Info1("OK");
     Element_End0();
-    int32u ChSetFsizeXXCHs_Total=0;
     for (auto ChSetFsize : ChSetFsizes)
         ChSetFsizes_Total+=ChSetFsize;
     if (Element_Size-Element_Offset<ChSetFsizes_Total+ChSetFsizes.size())

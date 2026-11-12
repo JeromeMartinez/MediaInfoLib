@@ -135,7 +135,7 @@ static const int8u MpegTs_DtsNeural_Channels_6[MpegTs_DtsNeural_6_Count]=
     8,
 };
 
-static const int8u MpegTs_DtsNeural_Channels(int8u Channels, int8u config_id)
+static int8u MpegTs_DtsNeural_Channels(int8u Channels, int8u config_id)
 {
     if (config_id==0)
         return 0;
@@ -973,7 +973,6 @@ void File_MpegTs::Streams_Update_Programs_PerStream(size_t StreamID)
 
                     //Look for PresentationID in descriptor
                     size_t Pos=0;
-                    bool Pos_FoundInID=false;
                     for (;;)
                     {
                         Ztring LookingFor=__T("Presentation")+Ztring::ToZtring(Pos);
@@ -2315,6 +2314,10 @@ void File_MpegTs::Read_Buffer_AfterParsing()
 #if MEDIAINFO_SEEK
 size_t File_MpegTs::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
 {
+    #if !MEDIAINFO_IBIUSAGE
+        (void)ID;
+    #endif //MEDIAINFO_IBIUSAGE
+
     //Reset
     Seek_Value=(int64u)-1;
     Seek_ID=(int64u)-1;
@@ -3023,7 +3026,7 @@ void File_MpegTs::Header_Parse_Events()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_EVENTS
-void File_MpegTs::Header_Parse_Events_Duration(int64u program_clock_reference)
+void File_MpegTs::Header_Parse_Events_Duration(int64u /*program_clock_reference*/)
 {
 }
 #endif //MEDIAINFO_EVENTS

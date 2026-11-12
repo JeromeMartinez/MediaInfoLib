@@ -188,7 +188,7 @@ void File_DtsUhd::ExtractObjectInfo(MDObject* Object)
         { 0x020000, 0x0C000000 },
         { 0x140000, 0x30000000 },
         { 0x080000, 0xC0000000 },
-        { 0 } // Terminator
+        { 0, 0 } // Terminator
     };
 
     for (int i = 0; ActivityMap[i].ActivityMask; i++)
@@ -265,7 +265,8 @@ int File_DtsUhd::ResolveAudPresParams()
         else
             Get_VR (Table, NumAudioPres,                        "NumAudioPres");
         NumAudioPres++;
-        memset(AudPresParam, 0, sizeof(AudPresParam[0])*NumAudioPres);
+        for (int32u AuPresInd=0; AuPresInd<NumAudioPres; AuPresInd++)
+            AudPresParam[AuPresInd]=UHDAudPresParam();
     }
 
     for (int32u AuPresInd=0; AuPresInd<NumAudioPres; AuPresInd++)
@@ -399,7 +400,7 @@ int File_DtsUhd::NaviFindIndex(int DesiredIndex, int32u* ListIndex)
 {
     for (auto& Navi : Audio_Chunks)
     {
-        if (Navi.Index==DesiredIndex)
+        if (Navi.Index==(int32u)DesiredIndex)
         {
             Navi.Present=true;
             *ListIndex=Navi.Index;
@@ -535,7 +536,7 @@ int File_DtsUhd::ExtractMDChunkObjIDList(MD01* MD01)
 
 
 /* Table 7-9 */
-void File_DtsUhd::ExtractLTLMParamSet(MD01* MD01, bool NominalLD_DescriptionFlag)
+void File_DtsUhd::ExtractLTLMParamSet(MD01* /*MD01*/, bool NominalLD_DescriptionFlag)
 {
     Element_Begin1("ExtractLTLMParamSet");
     Get_S1 (6, LongTermLoudnessIndex,                           "LongTermLoudnessMeasureIndex"); /* rLoudness */
@@ -727,7 +728,7 @@ int File_DtsUhd::ExtractMultiFrameDistribStaticMD(MD01* MD01)
 }
 
 /* Return 1 if suitable, 0 if not.  Table 7-18.  OBJGROUPIDSTART=224 Sec 7.8.7 p75 */
-bool File_DtsUhd::CheckIfMDIsSuitableforImplObjRenderer(MD01* MD01, int ObjectId)
+bool File_DtsUhd::CheckIfMDIsSuitableforImplObjRenderer(MD01* /*MD01*/, int ObjectId)
 {
     if (ObjectId>=224)
         return true;
@@ -750,7 +751,7 @@ bool File_DtsUhd::CheckIfMDIsSuitableforImplObjRenderer(MD01* MD01, int ObjectId
 }
 
 /* Table 7-26 */
-void File_DtsUhd::ExtractChMaskParams(MD01* MD01, MDObject* Object)
+void File_DtsUhd::ExtractChMaskParams(MD01* /*MD01*/, MDObject* Object)
 {
     Element_Begin1("ExtractChMaskParams");
     constexpr int32u MaskTable[14] = /* Table 7-27 */
@@ -864,7 +865,8 @@ int File_DtsUhd::ParseMD01(MD01 *MD01, int AuPresInd)
     }
 
     /* Table 7-16: Object metadata. */
-    memset(MD01->Object, 0, sizeof(MD01->Object));
+    for (auto& Object : MD01->Object)
+        Object=MDObject();
     if (!FullChannelBasedMixFlag)
     {
         bool MixStudioParamsPresent;
@@ -1433,7 +1435,7 @@ bool File_DtsUhd::Synched_Test()
         return false; //Need more data
     if (!Synched)
     {
-        if (Stream_Offset_Max!=-1 && File_Offset+Buffer_Offset==Stream_Offset_Max && File_Size!=-1)
+        if (Stream_Offset_Max!=(int64u)-1 && File_Offset+Buffer_Offset==Stream_Offset_Max && File_Size!=(int64u)-1)
             Synched=true; // It is the file footer
         return true;
     }
@@ -1476,7 +1478,7 @@ void File_DtsUhd::Data_Parse()
             //No more need data
             if (!IsSub && Config->ParseSpeed<1.0)
             {
-                if (Stream_Offset_Max!=-1)
+                if (Stream_Offset_Max!=(int64u)-1)
                     GoTo(Stream_Offset_Max);
                 else
                     Finish("DTS");

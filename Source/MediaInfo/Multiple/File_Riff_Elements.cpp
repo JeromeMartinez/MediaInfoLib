@@ -3662,13 +3662,6 @@ static const char* profile_names[]=
     "levelID",
 };
 static const int profile_names_size=(int)sizeof(profile_names)/sizeof(const char*);
-static const char* profile_names_InternalID[profile_names_size]=
-{
-    "Format",
-    "Version",
-    "Profile",
-    "Level",
-};
 struct profile_info
 {
     string Strings[4];

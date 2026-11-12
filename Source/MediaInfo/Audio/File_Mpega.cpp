@@ -1571,9 +1571,8 @@ bool File_Mpega::Header_Encoders()
 
 void File_Mpega::Header_Encoders_Lame()
 {
-    if (Element_Offset + 36 > Element_Size)
-        return;
-
+    if (Element_Offset + 36 <= Element_Size)
+    {
         int8u Flags, lowpass, EncodingFlags, BitRate, StereoMode;
         int16u PresetAndSurround;
         Get_String (9, Encoded_Library,                         "Encoded_Library");
@@ -1731,6 +1730,7 @@ void File_Mpega::Header_Encoders_Lame()
             }
             FILLING_END();
         }
+    }
 }
 
 void File_Mpega::Encoded_Library_Guess()

@@ -605,7 +605,7 @@ void File_N19::FileHeader_Parse()
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_SEEK
-size_t File_N19::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
+size_t File_N19::Read_Buffer_Seek (size_t /*Method*/, int64u /*Value*/, int64u /*ID*/)
 {
     #if MEDIAINFO_DEMUX
         TCO_Previous=(int32u)-1;

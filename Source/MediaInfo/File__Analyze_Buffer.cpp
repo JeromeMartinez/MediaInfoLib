@@ -1175,7 +1175,6 @@ void File__Analyze::Get_ES(int64s &Info, const char* Name)
         Size++;
         Peek_BS(Size, Size_Mark);
     }
-    size_t Remain=BS->Remain();
     BS_End();
 
     //Integrity
@@ -1264,7 +1263,6 @@ void File__Analyze::Get_VS(int64u &Info, const char* Name)
         Info=128*Info+BS->Get1(7);
     }
     while (more_data && Size<=8 && BS->Remain());
-    size_t Remain=BS->Remain();
     BS_End();
 
     //Integrity
@@ -2092,7 +2090,7 @@ void File__Analyze::Skip_PA(const char* Name)
 {
     INTEGRITY_SIZE_ATLEAST(1);
     int8u Size=Buffer[Buffer_Offset+(size_t)Element_Offset];
-    INTEGRITY_SIZE_ATLEAST(1+Size);
+    INTEGRITY_SIZE_ATLEAST(1+(int64u)Size);
     #ifdef WINDOWS
     if (Trace_Activated && Size) Param(Name, Ztring().From_Local((const char*)(Buffer+Buffer_Offset+(size_t)Element_Offset+1), (size_t)Size));
     #else //WINDOWS

@@ -73,7 +73,7 @@ bool File_HdrVividMetadata::FileHeader_Begin()
         return false;
     }
 
-    tfsxml_string p = {}, b = {}, v = {};
+    tfsxml_string p = {}, b = {};
     auto Result = tfsxml_init(&p, Buffer, Buffer_Size, 0);
     XML_ELEM_START
     ELEMENT("HDRVividMeta")

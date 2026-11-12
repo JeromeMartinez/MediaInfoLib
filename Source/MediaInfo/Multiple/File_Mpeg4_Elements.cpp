@@ -11341,7 +11341,7 @@ void File_Mpeg4::moov_trak_tkhd()
         }
         Fill(StreamKind_Last, StreamPos_Last, General_ID, moov_trak_tkhd_TrackID, 10, true);
         Streams[moov_trak_tkhd_TrackID].tkhd_Duration=Duration;
-        if (moov_trak_tkhd_Height*d)
+        if (moov_trak_tkhd_Height*d!=0)
             moov_trak_tkhd_DisplayAspectRatio=(moov_trak_tkhd_Width*a)/(moov_trak_tkhd_Height*d);
         moov_trak_tkhd_Rotation=(float32)(std::atan2(b, a)*180.0/3.14159);
         if (moov_trak_tkhd_Rotation<0)
@@ -12332,7 +12332,6 @@ void File_Mpeg4::moov_udta_xxxx()
                         string FinalValue, FinalValue_String;
                         if (name_space=="urn:mpeg:dash:role:2011")
                         {
-                            int8u Index=0;
                                  if (value=="alternate")
                             {
                                 FinalValue_String=FinalValue="Alternate";
