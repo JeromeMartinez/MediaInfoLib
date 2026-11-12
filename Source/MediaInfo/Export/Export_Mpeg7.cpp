@@ -1666,8 +1666,8 @@ void Mpeg7_Create_StreamID(Node* N, bool Extended, MediaInfo_Internal& MI, strea
         Main=StreamID.substr(0, Pos);
         Sub=StreamID.substr(Pos+1);
         auto Pos2=Sub.find(__T('-'));
-        if (Pos!=(size_t)-1)
-            Sub.resize(Pos); // Removing other subIDs
+        if (Pos2!=(size_t)-1)
+            Sub.resize(Pos2); // Removing other subIDs
     }
     else
         Main=StreamID;
