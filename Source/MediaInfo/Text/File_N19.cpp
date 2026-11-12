@@ -27,6 +27,7 @@
 #if MEDIAINFO_EVENTS
     #include "MediaInfo/MediaInfo_Events_Internal.h"
 #endif //MEDIAINFO_EVENTS
+#include <type_traits>
 using namespace std;
 //---------------------------------------------------------------------------
 
@@ -673,7 +674,7 @@ void File_N19::Data_Parse()
     {
         for (auto Value : TF)
         {
-            if ((Value>=0x20 && Value<0x7F) || (wchar_t)Value>=0xA0)
+            if ((Value>=0x20 && Value<0x7F) || (make_unsigned<Char>::type)Value>=0xA0)
                 Line_HasContent=true;
             else
             {
