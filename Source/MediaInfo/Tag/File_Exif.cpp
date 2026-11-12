@@ -2083,21 +2083,21 @@ void File_Exif::FileHeader_Parse()
             currentIFD = Kind_MakernoteNikon;
             OffsetFromContainer = 10;
         }
-        else if (Buffer_Size >= 12 &&
+        else if (Buffer_Size >= 12 && (
             (!strncmp(reinterpret_cast<const char*>(Buffer), "SONY DSC \0\0", 12)) || // the char* contains another terminating \0
             (!strncmp(reinterpret_cast<const char*>(Buffer), "SONY CAM \0\0", 12)) || // the char* contains another terminating \0
             (!strncmp(reinterpret_cast<const char*>(Buffer), "SONY MOBILE", 12))      // the char* contains a terminating \0
-            ) {
+            )) {
             Skip_String(12,                                     "Identifier");
             currentIFD = Kind_MakernoteSony;
             OffsetFromContainer = -static_cast<int64s>(MakernoteOffset);
             SkipHeader = true;
             IFD_Offsets[MakernoteOffset + static_cast<int32u>(Element_Offset)] = currentIFD;
         }
-        else if (Buffer_Size > 26 && 
+        else if (Buffer_Size > 26 && (
             (!strncmp(reinterpret_cast<const char*>(Buffer) + Buffer_Size - 8, "\x49\x49\x2A\x00", 4)) || // Canon Makernote footer
             (!strncmp(reinterpret_cast<const char*>(Buffer) + Buffer_Size - 8, "\x4D\x4D\x00\x2A", 4))
-            ) {
+            )) {
             Element_Offset = Buffer_Size - 8;
             int32u makernote_offset;
             Get_C4(Alignment,                                   "Alignment");
