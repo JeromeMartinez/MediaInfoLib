@@ -93,7 +93,7 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
             sudo apt-get update -y
-            sudo apt-get install -y ccache libbrotli-dev libxml2-utils zlib1g-dev libcurl4-gnutls-dev libmms-dev ${{ matrix.environement == 'cmake-dll' && 'g++-mingw-w64-x86-64' || '' }} ${{ env.LINK_CURL_GRAPHVIZ && 'libgraphviz-dev' || '' }}
+            sudo apt-get install -y ccache ${{ matrix.environement != 'minimal' && 'libbrotli-dev' || '' }} libxml2-utils zlib1g-dev libcurl4-gnutls-dev libmms-dev ${{ matrix.environement == 'cmake-dll' && 'g++-mingw-w64-x86-64' || '' }} ${{ env.LINK_CURL_GRAPHVIZ && 'libgraphviz-dev' || '' }}
           fi
           if [ "$RUNNER_OS" == "macOS" ]; then
             brew install brotli ccache libtool automake ${{ env.LINK_CURL_GRAPHVIZ && 'graphviz' || '' }}

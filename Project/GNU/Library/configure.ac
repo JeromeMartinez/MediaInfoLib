@@ -241,6 +241,7 @@ AC_ARG_WITH(libz_static,          AS_HELP_STRING([--with-libz-static],          
 AC_ARG_WITH(graphviz,             AS_HELP_STRING([--with-graphviz],             [Use graphviz (specific directory)]),         , with_graphviz=no)
 AC_ARG_WITH(libcurl,              AS_HELP_STRING([--with-libcurl],              [Use libcurl (specific directory)]),          , with_libcurl=no)
 AC_ARG_WITH(libmms,               AS_HELP_STRING([--with-libmms],               [Use libmms (specific directory)]),           , with_libmms=no)
+AC_ARG_WITH(brotli,               AS_HELP_STRING([--without-brotli],            [Do not use Brotli (used if found)]),         , with_brotli=check)
 AC_ARG_WITH(libaes,               AS_HELP_STRING([--with-libaes],               [Use libaes (system)]),                       , with_libaes=depend)
 AC_ARG_WITH(libmd5,               AS_HELP_STRING([--with-libmd5],               [Use libmd5 (system)]),                       , with_libmd5=depend)
 AC_ARG_WITH(libsha1,              AS_HELP_STRING([--with-libsha1],              [Use libsha1 (system)]),                      , with_libsha1=depend)
@@ -441,19 +442,24 @@ dnl -------------------------------------------------------------------------
 dnl brotli
 dnl
 
-PKG_CHECK_MODULES([BROTLI], [libbrotlidec libbrotlicommon], [
-    with_brotli="system"
-    
-    LIBS="$LIBS $BROTLI_LIBS"
-    CFLAGS="$CFLAGS $BROTLI_CFLAGS"
-    CPPFLAGS="$CPPFLAGS $BROTLI_CFLAGS"
-    
-    MediaInfoLib_LIBS="$MediaInfoLib_LIBS $BROTLI_LIBS"
-    MediaInfoLib_LIBS_Static="$MediaInfoLib_LIBS_Static $BROTLI_LIBS"
-], [
-    with_brotli="no"
-    AC_MSG_ERROR([brotli is not found, please install development package of brotli (libbrotli-dev or brotli)])
-])
+if test "$with_brotli" != "no"; then
+	PKG_CHECK_MODULES([BROTLI], [libbrotlidec libbrotlicommon], [
+		with_brotli="system"
+		AC_DEFINE(MEDIAINFO_BROTLI_YES)
+		LIBS="$LIBS $BROTLI_LIBS"
+		CFLAGS="$CFLAGS $BROTLI_CFLAGS"
+		CPPFLAGS="$CPPFLAGS $BROTLI_CFLAGS"
+		MediaInfoLib_LIBS="$MediaInfoLib_LIBS $BROTLI_LIBS"
+		MediaInfoLib_LIBS_Static="$MediaInfoLib_LIBS_Static $BROTLI_LIBS"
+		Brotli_Require=" libbrotlidec"
+		Brotli_Lib=" $BROTLI_LIBS"
+	], [
+		if test "$with_brotli" = "yes"; then
+			AC_MSG_ERROR([brotli is not found, please install development package of brotli (libbrotli-dev or brotli-devel)])
+		fi
+		with_brotli="no"
+	])
+fi
 
 dnl -------------------------------------------------------------------------
 dnl zlib
@@ -1079,6 +1085,8 @@ AC_SUBST(Graphviz_Require)
 AC_SUBST(Graphviz_Lib)
 AC_SUBST(Curl_Require)
 AC_SUBST(Curl_Lib)
+AC_SUBST(Brotli_Require)
+AC_SUBST(Brotli_Lib)
 AC_CONFIG_FILES(libmediainfo-config, [chmod u+x libmediainfo-config])
 AC_CONFIG_FILES(libmediainfo.pc)
 AC_CONFIG_FILES([Makefile test/Makefile])

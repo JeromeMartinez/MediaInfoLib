@@ -358,7 +358,9 @@ std::string File_Mpeg4_sv3d_ProjectionType(int8u Value)
 #include "ThirdParty/base64/base64.h"
 #define FMT_UNICODE 0
 #include "ThirdParty/fmt/format.h"
-#include <brotli/decode.h>
+#if defined(MEDIAINFO_BROTLI_YES)
+    #include <brotli/decode.h>
+#endif
 #include <zlib.h>
 #include <algorithm>
 #include <cmath>
@@ -1894,6 +1896,7 @@ void File_Mpeg4::brob()
     Get_C4(type,                                                "payload box type");
     Element_Info1(Ztring::ToZtring_From_CC4(type));
 
+    #if defined(MEDIAINFO_BROTLI_YES)
     // The decompressed size is not stored: the output buffer grows while the decoder needs more room, up to a limit
     const size_t decoded_size_max = 16 * 1024 * 1024;
     const auto encoded_size{ (size_t)(Element_Size - Element_Offset) };
@@ -1943,6 +1946,10 @@ void File_Mpeg4::brob()
     Buffer_Size = buffer_size_save;
     Element_Offset = element_offset_save;
     Element_Size = element_size_save;
+    #else
+    Skip_XX(Element_Size - Element_Offset,                      "compressed data");
+    Element_Info1("not decompressed, Brotli not available");
+    #endif
 }
 
 //---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ else()
   option(BUILD_ZLIB "Build bundled zlib" ON)
   option(BUILD_ZENLIB "Build bundled ZenLib" ON)
 endif()
+option(ENABLE_BROTLI "Use Brotli for Brotli-compressed boxes (used if found or bundled)" ON)
 
 set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)" )
 set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE STRING "Directory where binary will install")
@@ -88,9 +89,9 @@ else()
   set(ZLIB_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../../../zlib ${CMAKE_CURRENT_BINARY_DIR}/zlib)
 endif()
 
-if (NOT BUILD_BROTLI)
-  find_package(Brotli REQUIRED)
-else()
+if (ENABLE_BROTLI AND NOT BUILD_BROTLI)
+  find_package(Brotli)
+elseif (ENABLE_BROTLI)
   set(_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
   set(BUILD_SHARED_LIBS OFF)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../brotli ${CMAKE_CURRENT_BINARY_DIR}/brotli)
@@ -102,6 +103,7 @@ else()
     target_compile_options(brotlidec PRIVATE -fPIC)
   endif()
   set(BROTLI_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../../../brotli ${CMAKE_CURRENT_BINARY_DIR}/brotli)
+  set(BROTLI_FOUND TRUE)
 endif()
 
 if(VCPKG_TARGET_TRIPLET)
@@ -448,6 +450,15 @@ else()
   set(CURL_LIB " -lcurl")
 endif()
 
+# Brotli-compressed boxes
+if(BROTLI_FOUND)
+  target_compile_definitions(mediainfo PRIVATE MEDIAINFO_BROTLI_YES)
+  if(NOT BUILD_BROTLI)
+    set(BROTLI_PC " libbrotlidec")
+    set(BROTLI_LIB " -lbrotlidec -lbrotlicommon")
+  endif()
+endif()
+
 # enable Graphviz runtime
 target_compile_definitions(mediainfo PRIVATE MEDIAINFO_GRAPHVIZ_DLL_RUNTIME)
 
@@ -484,7 +495,7 @@ endif()
 include(EnableLatestCXX)
 enable_latest_cxx(mediainfo)
 
-if (BUILD_BROTLI)
+if (ENABLE_BROTLI AND BUILD_BROTLI)
   install(TARGETS brotlicommon brotlidec EXPORT mediainfo-export)
 endif()
 
