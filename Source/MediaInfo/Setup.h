@@ -20,6 +20,14 @@
 //Needed in the whole library
 #include "ZenLib/Conf.h"
 
+//---------------------------------------------------------------------------
+// MSVC warning suppression for the next line, other compilers warn about unknown pragmas
+#if defined(_MSC_VER)
+    #define MEDIAINFO_MSVC_SUPPRESS(...) __pragma(warning(suppress : __VA_ARGS__))
+#else
+    #define MEDIAINFO_MSVC_SUPPRESS(...)
+#endif
+
 //***************************************************************************
 // General configuration
 //***************************************************************************

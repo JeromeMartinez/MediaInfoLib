@@ -3970,7 +3970,7 @@ void File__Analyze::Accept ()
             EVENT_BEGIN (General, Parser_Selected, 0)
                 std::memset(Event.Name, 0, 16);
             if (!ParserName.empty()) {
-                #pragma warning(suppress: 4996, justification: "ensured it is null terminated") //'strncpy': This function or variable may be unsafe.
+                MEDIAINFO_MSVC_SUPPRESS(4996, justification: "ensured it is null terminated") //'strncpy': This function or variable may be unsafe.
                 strncpy(Event.Name, Ztring().From_UTF8(ParserName).To_Local().c_str(), 15);
                 Event.Name[15] = '\0';
             }

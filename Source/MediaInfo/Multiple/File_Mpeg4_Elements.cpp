@@ -1275,8 +1275,10 @@ static const char* Mpeg4_Description(int32u Description)
 //---------------------------------------------------------------------------
 void File_Mpeg4::Data_Parse()
 {
+    #if defined(_MSC_VER)
     #pragma warning(push)
     #pragma warning(disable: 4065) // switch statement contains 'default' but no 'case' labels
+    #endif
 
     //mdat
     if (IsParsing_mdat)
@@ -1765,7 +1767,9 @@ void File_Mpeg4::Data_Parse()
     LIST_SKIP(wide)
     DATA_END
 
+    #if defined(_MSC_VER)
     #pragma warning(pop)
+    #endif
 }
 
 //***************************************************************************

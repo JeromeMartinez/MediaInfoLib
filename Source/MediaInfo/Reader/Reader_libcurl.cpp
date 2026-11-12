@@ -873,7 +873,7 @@ bool Reader_libcurl_HomeIsSet()
     #ifdef WINDOWS_UWP
         return false; //Environment is not aviable
     #else
-        #pragma warning(suppress : 4996) //'getenv': This function or variable may be unsafe.
+        MEDIAINFO_MSVC_SUPPRESS(4996) //'getenv': This function or variable may be unsafe.
         return getenv("HOME")?true:false;
     #endif
 }
@@ -886,14 +886,14 @@ Ztring Reader_libcurl_ExpandFileName(const Ztring &FileName)
         Ztring FileName_Modified(FileName);
         if (FileName_Modified.find(__T("$HOME"))==0)
         {
-            #pragma warning(suppress : 4996) //'getenv': This function or variable may be unsafe.
+            MEDIAINFO_MSVC_SUPPRESS(4996) //'getenv': This function or variable may be unsafe.
             char* env=getenv("HOME");
             if (env)
                 FileName_Modified.FindAndReplace(__T("$HOME"), FileName_From_Native(env));
         }
         if (FileName_Modified.find(__T('~'))==0)
         {
-            #pragma warning(suppress : 4996) //'getenv': This function or variable may be unsafe.
+            MEDIAINFO_MSVC_SUPPRESS(4996) //'getenv': This function or variable may be unsafe.
             char* env=getenv("HOME");
             if (env)
                 FileName_Modified.FindAndReplace(__T("~"), FileName_From_Native(env));

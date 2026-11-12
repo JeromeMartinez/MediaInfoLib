@@ -3297,8 +3297,10 @@ static void CheckErrors_ID_Additions(file_adm_private* File_Adm_Private, item it
 };
 
 //---------------------------------------------------------------------------
+#if defined(_MSC_VER)
 #pragma warning( push )
 #pragma warning( disable : 26813 ) //false positive "Use 'bitwise and' to check if a flag is set."
+#endif
 static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private, item item_Type, size_t i, const label_info& label_Info) {
     const bool IsAtmos = File_Adm_Private->IsAtmos;
     auto& Item = File_Adm_Private->Items[item_Type].Items[i];
@@ -3364,7 +3366,9 @@ static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private
         }
     }
 };
+#if defined(_MSC_VER)
 #pragma warning( pop )
+#endif
 
 //---------------------------------------------------------------------------
 static void CheckErrors_Attributes(file_adm_private* File_Adm_Private, item Item_Type, const vector<size_t>& Attributes_Counts) {
@@ -3389,7 +3393,7 @@ static void CheckErrors_Attributes(file_adm_private* File_Adm_Private, item Item
         if (!Count_Max1 || Info.Flags[Atmos1] || (/*File_Adm_Private->Schema != Schema_ebuCore_2014 ||*/ strcmp(Info.Name, "typeLabel") && strcmp(Info.Name, "typeDefinition"))) {
             // Handling generic errors from arrays
             for (int k = 0; k < Info_Flag_Max; k++) {
-                #pragma warning(suppress: 6297, justification: "shifting k by 2 will not overflow an int")
+                MEDIAINFO_MSVC_SUPPRESS(6297, justification: "shifting k by 2 will not overflow an int")
                 if (!Info.Flags[Count0 + Count_Max1 + (k << 2)]) {
                     Item.AddError(Error, 0x80 | (int8u)j, E((unsigned)E::Present0 + Count_Max1), 0, (source)k);
                 }
@@ -3443,7 +3447,7 @@ static void CheckErrors_Elements(file_adm_private* File_Adm_Private, item Item_T
         if (true) {
             // Handling generic errors from arrays
             for (int k = 0; k < Info_Flag_Max; k++) {
-                #pragma warning(suppress: 6297, justification: "shifting k by 2 will not overflow an int")
+                MEDIAINFO_MSVC_SUPPRESS(6297, justification: "shifting k by 2 will not overflow an int")
                 if (!Info.Flags[Count0 + Count_Max2 + (k << 2)]) {
                     Item.AddError(Error, j, E((unsigned)E::Present0 + Count_Max2), Count <= (int8u)-1 ? (int8u)Count : (int8u)-1, (source)k);
                 }

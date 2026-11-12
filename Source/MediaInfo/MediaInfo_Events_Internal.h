@@ -105,7 +105,7 @@ namespace MediaInfoLib
         {
             string PCR_HR=Ztring().Duration_From_Milliseconds(PCR/1000000).To_UTF8();
             if (PCR_HR.size()==12)
-                #pragma warning(suppress : 4996) //'strcpy': This function or variable may be unsafe.
+                MEDIAINFO_MSVC_SUPPRESS(4996) //'strcpy': This function or variable may be unsafe.
                 strcpy(Event_PCR_HR, PCR_HR.c_str());
             else
                 memset(Event_PCR_HR, 0x00, 13);
@@ -121,7 +121,7 @@ namespace MediaInfoLib
         {
             string PTS_HR=Ztring().Duration_From_Milliseconds(PTS/1000000).To_UTF8();
             if (PTS_HR.size()==12)
-                #pragma warning(suppress : 4996) //'strcpy': This function or variable may be unsafe.
+                MEDIAINFO_MSVC_SUPPRESS(4996) //'strcpy': This function or variable may be unsafe.
                 strcpy(Event_PTS_HR, PTS_HR.c_str());
             else
                 memset(Event_PTS_HR, 0x00, 13);
@@ -137,7 +137,7 @@ namespace MediaInfoLib
         {
             string DTS_HR=Ztring().Duration_From_Milliseconds(DTS/1000000).To_UTF8();
             if (DTS_HR.size()==12)
-                #pragma warning(suppress : 4996) //'strcpy': This function or variable may be unsafe.
+                MEDIAINFO_MSVC_SUPPRESS(4996) //'strcpy': This function or variable may be unsafe.
                 strcpy(Event_DTS_HR, DTS_HR.c_str());
             else
                 memset(Event_DTS_HR, 0x00, 13);

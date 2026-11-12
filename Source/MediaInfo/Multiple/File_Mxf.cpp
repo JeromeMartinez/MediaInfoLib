@@ -132,7 +132,9 @@ using namespace std;
 namespace MediaInfoLib
 {
 
+#if defined(_MSC_VER)
 #pragma warning(disable: 4065) // switch statement contains 'default' but no 'case' labels
+#endif
 
 #if defined(MEDIAINFO_IAB_YES)
     Ztring ChannelLayout_2018_Rename(const Ztring& Channels, const Ztring& Format);

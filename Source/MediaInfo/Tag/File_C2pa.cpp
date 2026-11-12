@@ -218,8 +218,10 @@ void File_C2pa::Header_Parse()
 //---------------------------------------------------------------------------
 void File_C2pa::Data_Parse()
 {
+    #if defined(_MSC_VER)
     #pragma warning(push)
     #pragma warning(disable: 4065) // switch statement contains 'default' but no 'case' labels
+    #endif
 
     //Parsing
     DATA_BEGIN
@@ -282,7 +284,9 @@ void File_C2pa::Data_Parse()
         ATOM_END_DEFAULT
     DATA_END_DEFAULT
 
+    #if defined(_MSC_VER)
     #pragma warning(pop)
+    #endif
 }
 
 //***************************************************************************
