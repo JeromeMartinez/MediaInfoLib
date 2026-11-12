@@ -13,6 +13,7 @@ Build-Depends: debhelper (>= 9),
                libmms-dev,
                libglib2.0-dev,
                zlib1g-dev,
+               libbrotli-dev,
                pkg-config
 Standards-Version: 3.9.6
 Section: libs

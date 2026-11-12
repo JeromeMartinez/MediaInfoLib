@@ -10,14 +10,14 @@ arch=('i686' 'x86_64')
 url="http://mediaarea.net"
 license=('BSD-2-Clause')
 makedepends=('libtool' 'automake' 'autoconf' 'python')
-depends=( 'curl' 'libmms' 'libzen>=0.4.41')
+depends=( 'curl' 'libmms' 'libzen>=0.4.41' 'brotli')
 source=(${pkgname}_${pkgver}.orig.tar.xz)
 md5sums=('00000000000000000000000000000000')
 
 build() {
   cd $srcdir/MediaInfoLib/Project/GNU/Library
   sh ./autogen.sh
-  ./configure --prefix=/usr --enable-shared --disable-static --with-libcurl --with-libmms --with-graphviz=runtime
+  ./configure --prefix=/usr --enable-shared --disable-static --with-libcurl --with-libmms --with-graphviz=runtime --with-brotli
   make clean
   make
 }

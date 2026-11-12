@@ -36,11 +36,19 @@ Obsoletes:      %{name_without_0_ending}0 < %{version}
 
 Prefix:         %{_prefix}
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root
+# Brotli (Brotli-compressed boxes) where the distribution has its development package
+%if 0%{?fedora} >= 28 || 0%{?rhel} >= 8 || 0%{?suse_version} >= 1500 || 0%{?mageia}
+%global with_brotli 1
+%endif
+
 BuildRequires:  gcc-c++
 BuildRequires:  libzen-devel >= %{libzen_version}
 BuildRequires:  libcurl-devel
 BuildRequires:  pkgconfig
 BuildRequires:  zlib-devel
+%if 0%{?with_brotli}
+BuildRequires:  pkgconfig(libbrotlidec)
+%endif
 BuildRequires:  doxygen
 BuildRequires:  libtool
 BuildRequires:  automake
@@ -288,7 +296,7 @@ popd
 cp Source/Doc/*.html ./
 
 pushd Project/GNU/Library
-%configure --enable-shared --disable-static --enable-visibility --with-libcurl --with-graphviz=runtime
+%configure --enable-shared --disable-static --enable-visibility --with-libcurl --with-graphviz=runtime %{?with_brotli:--with-brotli}%{!?with_brotli:--without-brotli}
 make %{?_smp_mflags}
 popd
 

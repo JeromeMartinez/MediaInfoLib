@@ -14,6 +14,8 @@ Build-Depends: debhelper (>= 9),
                libmms-dev,
                libglib2.0-dev,
                zlib1g-dev,
+# libbrotli-dev: Debian 10 and Ubuntu 18.04 or newer, the alternative for older distributions without it
+               libbrotli-dev | pkg-config,
                pkg-config
 Standards-Version: 3.9.6
 Section: libs

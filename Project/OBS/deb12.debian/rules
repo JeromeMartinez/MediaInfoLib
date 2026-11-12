@@ -12,6 +12,7 @@ override_dh_auto_configure:
 		--enable-visibility			\
 		--with-libcurl				\
 		--with-libmms				\
+		--with-brotli				\
 		--without-libmd5                        \
 		--with-graphviz=runtime
 
