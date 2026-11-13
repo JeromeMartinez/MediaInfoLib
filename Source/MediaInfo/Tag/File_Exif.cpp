@@ -78,6 +78,7 @@ namespace Exif_Type {
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Exif_Type_Name(int16u Type)
 {
     switch (Type)
@@ -99,6 +100,7 @@ static const char* Exif_Type_Name(int16u Type)
     default                     : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static int8u Exif_Type_Size(int16u Type)
@@ -1195,6 +1197,7 @@ namespace Exif_IFD0_Orientation {
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Exif_IFD0_Orientation_Name(int16u orientation)
 {
     switch (orientation)
@@ -1210,6 +1213,7 @@ static const char* Exif_IFD0_Orientation_Name(int16u orientation)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 // Clockwise rotation, then left-right mirror, like HEIF irot and imir
@@ -1228,6 +1232,7 @@ static const struct {
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Exif_ExifIFD_Tag_LightSource_Name(int16u value) {
     switch (value) {
     case 0: return "Unknown";
@@ -1255,6 +1260,7 @@ static const char* Exif_ExifIFD_Tag_LightSource_Name(int16u value) {
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static string Exif_IFDExif_Flash_Name(int8u value) {
@@ -1283,6 +1289,7 @@ static string Exif_IFDExif_Flash_Name(int8u value) {
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Exif_IFDExif_ColorSpace_Name(int16u value)
 {
     switch (value)
@@ -1295,6 +1302,7 @@ static const char* Exif_IFDExif_ColorSpace_Name(int16u value)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Exif_IFDExif_ExposureProgram_Name(int16u value)
@@ -1325,6 +1333,7 @@ static const char* Exif_IFDExif_WhiteBalance_Name(int16u value)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Exif_IFDExif_CompositeImage_Name(int16u value)
 {
     switch (value) {
@@ -1359,6 +1368,7 @@ static const char* Exif_IFDMakernoteApple_ImageCaptureType_Name(int32s value)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Exif_IFDMakernoteApple_CameraType_Name(int32s value)
@@ -1372,6 +1382,7 @@ static const char* Exif_IFDMakernoteApple_CameraType_Name(int32s value)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Exif_IFDMakernoteNikon_CropHiSpeed_Name(int16u value) {
     switch (value) {
     case 0: return "Off";
@@ -1402,6 +1413,7 @@ static const char* Exif_IFDMakernoteNikon_ColorSpace_Name(int16u value) {
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Exif_IFDMakernoteNikon_ColorSpace_ColourPrimaries(int16u value) {
@@ -1481,6 +1493,7 @@ static const char* Exif_IFDMakernoteSony_WhiteBalance_Name(int32u value) {
 //---------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static string Mpf_ImageAttribute_Desc(int32u value)
 {
     string desc;
@@ -1504,6 +1517,7 @@ static string Mpf_ImageAttribute_Desc(int32u value)
     }
     return desc;
 }
+#endif //MEDIAINFO_TRACE
 
 std::string mp_entry::Type() const
 {
@@ -2579,6 +2593,9 @@ void File_Exif::IPTC_NAA()
 //---------------------------------------------------------------------------
 void File_Exif::Get_X2(int16u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (LittleEndian)
         Get_L2(Info, Name);
     else
@@ -2588,6 +2605,9 @@ void File_Exif::Get_X2(int16u& Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Exif::Get_X4(int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (LittleEndian)
         Get_L4(Info, Name);
     else

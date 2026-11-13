@@ -59,6 +59,7 @@ static const char* AribStdB24B37_Caption_conversion_type(int8u Caption_conversio
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* AribStdB24B37_Caption_DataIdentifier(int8u DataIdentifier)
 {
     switch (DataIdentifier)
@@ -87,6 +88,7 @@ static const char* AribStdB24B37_DRCS_conversion_type(int8u DRCS_conversion_type
         default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* AribStdB24B37_data_group_id(int8u data_group_id)
@@ -107,6 +109,7 @@ static const char* AribStdB24B37_data_group_id(int8u data_group_id)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* AribStdB24B37_TMD(int8u TMD)
 {
     switch (TMD)
@@ -202,6 +205,7 @@ static const char* AribStdB24B37_data_unit_parameter(int8u data_unit_parameter)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 // Table 7-18 Default macro code strings

@@ -847,11 +847,13 @@ static int8u DtsX_ObjectCount(const int8u* Buffer, size_t Size, int8u& Supplemen
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char*  DTS_FrameType[]=
 {
     "Termination",
     "Normal",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int32u DTS_SamplingRate[]=
@@ -944,6 +946,7 @@ static const char*  DTS_ChannelLayout[16]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* DTS_ExtensionAudioDescriptor[]=
 {
     "Channel Extension",
@@ -955,6 +958,7 @@ static const char* DTS_ExtensionAudioDescriptor[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 std::string DTS_HD_SpeakerActivityMask (int16u SpeakerActivityMask, bool AddCs=false, bool AddLrsRrs=false)
@@ -1130,6 +1134,7 @@ std::string DTS_HD_SpeakerActivityMask_ChannelLayout (int16u SpeakerActivityMask
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* DTS_HD_TypeDescriptor[]=
 {
     "Music",
@@ -1149,6 +1154,7 @@ static const char* DTS_HD_TypeDescriptor[]=
     "Complete Audio Presentation",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static int32u DTS_HD_MaximumSampleRate[]=

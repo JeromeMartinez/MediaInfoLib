@@ -334,6 +334,9 @@ void File_Mga::SerialAudioDefinitionModelMetadataPayload(int64u Length)
 //---------------------------------------------------------------------------
 void File_Mga::Get_BER(int64u &Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int8u Length;
     Get_B1(Length,                                              Name);
     if (Length<0x80)

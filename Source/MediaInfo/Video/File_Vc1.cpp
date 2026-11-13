@@ -120,6 +120,7 @@ static int16u Vc1_FrameRate_dr(int8u Code)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Vc1_Type[]=
 {
     "I",
@@ -137,6 +138,7 @@ static const char* Vc1_PictureFormat[]=
     "Two interlaced fields",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int8u Vc1_FieldTypeTable[][2]=

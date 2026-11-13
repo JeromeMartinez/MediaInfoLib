@@ -136,6 +136,7 @@ static const char* Hevc_chroma_format_idc_ColorSpace(int8u chroma_format_idc)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Hevc_pic_type[]=
 {
     "I",
@@ -184,6 +185,7 @@ static const char* Hevc_slice_type(int32u slice_type)
         default: return "";
     }
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern const char* Mpegv_colour_primaries(int8u colour_primaries);
@@ -4592,6 +4594,10 @@ void File_Hevc::VPS_SPS_PPS_FromMatroska()
 //---------------------------------------------------------------------------
 void File_Hevc::EndOfxPS(const char* FlagName, const char* DataName)
 {
+    #if !MEDIAINFO_TRACE
+        (void)FlagName;
+        (void)DataName;
+    #endif //MEDIAINFO_TRACE
     TESTELSE_SB_SKIP(                                           FlagName);
         Skip_BS(Data_BS_Remain(),                               DataName);
         RiskCalculationN++; //xxx_extension_flag is set, we can not check the end of the content, so a bit risky

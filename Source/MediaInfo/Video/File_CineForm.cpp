@@ -33,6 +33,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Tags[]=
 {
     "Padding",
@@ -172,6 +173,7 @@ static Ztring Tag_String(int16u Value)
         return Ztring::ToZtring(Value);
     return Ztring().From_UTF8(Tags[Value]);
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* color_spaces[] =

@@ -574,7 +574,9 @@ Ztring MediaInfo_Internal::Inform()
     bool XML_0_7_78_MA=false;
     bool XML_0_7_78_MI=false;
     bool JSON=false;
+    #if defined(MEDIAINFO_XML_YES) || defined(MEDIAINFO_JSON_YES)
     bool Conformance_JSON=false;
+    #endif //defined(MEDIAINFO_XML_YES) || defined(MEDIAINFO_JSON_YES)
     bool CSV=false;
     #if defined(MEDIAINFO_HTML_YES)
     if (MediaInfoLib::Config.Inform_Get()==__T("HTML"))

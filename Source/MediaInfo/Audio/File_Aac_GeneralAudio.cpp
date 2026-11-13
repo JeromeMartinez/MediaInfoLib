@@ -2855,6 +2855,7 @@ namespace MediaInfoLib
 {
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Aac_id_syn_ele[8]=
 {
     "SCE - single_channel_element",
@@ -2875,6 +2876,7 @@ static const char* Aac_window_sequence[4]=
     "EIGHT_SHORT_SEQUENCE",
     "LONG_STOP_SEQUENCE"
 };
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Elements - Decoder configuration
@@ -4053,6 +4055,9 @@ bool File_Aac::is_noise(size_t group, size_t sfb)
 //---------------------------------------------------------------------------
 void File_Aac::hcod_sf(const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Begin1(Name);
     int16u Pos=0;
 
@@ -4229,6 +4234,9 @@ void File_Aac::ld_sbr_header()
 //---------------------------------------------------------------------------
 void File_Aac::hcod(int8u sect_cb, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int8s Values[4];
 
     Element_Begin1(Name);

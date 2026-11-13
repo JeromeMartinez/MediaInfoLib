@@ -270,10 +270,12 @@ void File_Teletext::Read_Buffer_Continue()
                         Parser->Accept(); //Force to be accepted because there is no other synchronization layer (MustSynchronize set to false)
                     }
                     Element_Code=data_unit_id;
-                    int8u Temp[2];
-                    Temp[0]=0x55;
-                    Temp[1]=0x55;
-                    Demux(Temp, 2, ContentType_MainStream);
+                    #if MEDIAINFO_DEMUX
+                        int8u Temp[2];
+                        Temp[0]=0x55;
+                        Temp[1]=0x55;
+                        Demux(Temp, 2, ContentType_MainStream);
+                    #endif //MEDIAINFO_DEMUX
                     Demux(Data, 43, ContentType_MainStream);
                     Parser->FrameInfo=FrameInfo;
                     Open_Buffer_Continue(Parser, Data, 43);

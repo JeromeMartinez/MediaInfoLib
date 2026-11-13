@@ -1158,8 +1158,10 @@ void File_StarDiva::Read_Buffer_Continue()
             BS_End_LE();
             Element_Info2(HasSeqAgenda_Count, " seq+agendas");
             Element_Info2(HasSpeaker_Count, " speakers");
-            for (const auto& Count : Flags_Count)
-                Element_Info2(Count.second, (Ztring(__T(" Value ")+Ztring::ToZtring(Count.first))).To_UTF8().c_str());
+            #if MEDIAINFO_TRACE
+                for (const auto& Count : Flags_Count)
+                    Element_Info2(Count.second, (Ztring(__T(" Value ")+Ztring::ToZtring(Count.first))).To_UTF8().c_str());
+            #endif //MEDIAINFO_TRACE
         Element_End0();
 
         // Zeroes in some specific cases
@@ -1314,13 +1316,15 @@ void File_StarDiva::Read_Buffer_Continue()
                 Fill(Stream_Menu, 0, "Errors", "StarDiva metadata");
                 return;
             }
-            const char* Name;
-            switch (CheckOfMultiplesOfTimes2x_Value)
-            {
-                case 1 : Name="Unknown - 4 bits per line"; break;
-                case 2 : Name="Unknown - 1 byte per line"; break;
-                default: Name="Unknown - 2 bytes per line"; break;
-            }
+            #if MEDIAINFO_TRACE
+                const char* Name;
+                switch (CheckOfMultiplesOfTimes2x_Value)
+                {
+                    case 1 : Name="Unknown - 4 bits per line"; break;
+                    case 2 : Name="Unknown - 1 byte per line"; break;
+                    default: Name="Unknown - 2 bytes per line"; break;
+                }
+            #endif //MEDIAINFO_TRACE
             Element_Begin1(Name);
                 if (CheckOfMultiplesOfTimes2x_Value==1)
                     BS_Begin_LE();

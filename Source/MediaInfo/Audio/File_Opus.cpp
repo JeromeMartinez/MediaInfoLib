@@ -77,6 +77,7 @@ static const char*  Opus_ChannelLayout[Opus_ChannelLayout_Max]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const string Opus_Config(int8u config)
 {
     struct ConfigDescription {
@@ -120,6 +121,7 @@ static const char* Opus_c[4] =
     "2 frames in the packet, with different compressed sizes",
     "an arbitrary number of frames in the packet"
 };
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor
@@ -295,6 +297,9 @@ void File_Opus::Stream()
 //---------------------------------------------------------------------------
 void File_Opus::Get_X2(int16u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (FromMP4 || FromIamf)
         Get_B2(Info, Name);
     else
@@ -304,6 +309,9 @@ void File_Opus::Get_X2(int16u& Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Opus::Get_X4(int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (FromMP4 || FromIamf)
         Get_B4(Info, Name);
     else
@@ -313,6 +321,9 @@ void File_Opus::Get_X4(int32u& Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Opus::Skip_X2(const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (FromMP4 || FromIamf)
         Skip_B2(Name);
     else

@@ -108,7 +108,7 @@ void File_Pac::Streams_Finish()
         const auto Is1001 = FrameRate_Diff == 1001;
     #else //MEDIAINFO_ADVANCED
         const uint32_t FrameMax = FF_Max <= 23 ? 23 : FF_Max <= 24 ? 24 : FF_Max <= 30 ? 30 : FF_Max;
-        const auto FrameRate_FromFrameMax = (const float32)FrameMax + 1;
+        const auto FrameRate_FromFrameMax = (float32)FrameMax + 1;
         const auto FrameRate = FrameRate_FromFrameMax;
         const auto FrameRateIsGuessed = true;
         const auto DropFrame = false;
@@ -212,6 +212,9 @@ void File_Pac::FileHeader_Parse()
 void File_Pac::Header_Parse()
 {
     auto PacTimeCode = [&](const char* Name) {
+        #if !MEDIAINFO_TRACE
+            (void)Name;
+        #endif //MEDIAINFO_TRACE
         Element_Begin1(Name);
         int16u HHMM, SSFF;
         Get_L2 (HHMM,                                           "HHMM");

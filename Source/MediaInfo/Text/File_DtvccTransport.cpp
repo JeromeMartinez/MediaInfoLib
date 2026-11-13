@@ -46,6 +46,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* DtvccTransport_cc_type (int8u cc_type)
 {
     switch (cc_type)
@@ -57,6 +58,7 @@ static const char* DtvccTransport_cc_type (int8u cc_type)
         default : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

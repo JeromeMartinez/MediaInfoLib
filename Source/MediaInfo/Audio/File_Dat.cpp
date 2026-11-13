@@ -57,6 +57,7 @@ static const char* Dat_pack_id[] =
 const auto Dat_pack_id_size = sizeof(Dat_pack_id) / sizeof(*Dat_pack_id);
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Dat_fmtid[4] =
 {
     "for audio use",
@@ -64,6 +65,7 @@ static const char* Dat_fmtid[4] =
     nullptr,
     nullptr,
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Dat_emphasis[4] =
@@ -111,6 +113,7 @@ static const int8u Dat_quantization[4] =
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Dat_copy[4] =
 {
     "Yes",
@@ -127,6 +130,7 @@ static const char* Dat_sid[4] =
     "Time-of-day Pro DIO",
     nullptr,
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const float Dat_xrate[8] =
@@ -512,8 +516,8 @@ void File_Dat::Data_Parse()
             }
         }
 
-        int8u MoreData[0x100];
         #if MEDIAINFO_EVENTS
+            int8u MoreData[0x100];
             EVENT_BEGIN(DvDif, Change, 0)
                 Event.StreamOffset = File_Size + Buffer_Offset;
                 Event.FrameNumber = Frame_Count_NotParsedIncluded - 1;
@@ -736,6 +740,10 @@ void File_Dat::dtdatepack(string& Date)
 
 void File_Dat::Get_BCD(int8u& Value, const char* Name0, const char* Name1)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name0;
+        (void)Name1;
+    #endif //MEDIAINFO_TRACE
     int8u Value0;
     Get_S1 (4, Value0,                                          Name0);
     Get_S1 (4, Value,                                           Name1);

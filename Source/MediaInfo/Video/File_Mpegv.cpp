@@ -343,6 +343,7 @@ static const char* Mpegv_video_format[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpegv_picture_structure[]=
 {
     "",
@@ -350,6 +351,7 @@ static const char* Mpegv_picture_structure[]=
     "B", //Bottom Field
     "F", //Frame
 };
+#endif //MEDIAINFO_TRACE
 
 static const char* Mpegv_picture_coding_type[]=
 {
@@ -363,6 +365,7 @@ static const char* Mpegv_picture_coding_type[]=
     "",
 };
 
+#if MEDIAINFO_TRACE
 static const char* Mpegv_extension_start_code_identifier[]=
 {
     "",
@@ -382,6 +385,7 @@ static const char* Mpegv_extension_start_code_identifier[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 #if MEDIAINFO_MACROBLOCKS

@@ -62,6 +62,7 @@ namespace Elements
     const int64u    Config_VbrDetection_Occurences=4;
 #endif // MEDIAINFO_ADVANCED
 
+#if MEDIAINFO_TRACE
 static const char* Scte128_tag (int8u tag)
 {
     switch (tag)
@@ -74,6 +75,7 @@ static const char* Scte128_tag (int8u tag)
         default  : return tag<0xE0?"Reserved":"User private";
     }
 }
+#endif //MEDIAINFO_TRACE
 //***************************************************************************
 // Depends of configuration
 //***************************************************************************
@@ -1993,7 +1995,9 @@ void File_MpegTs::Header_Parse_Events_Duration_Helper(int64u& program_clock_refe
                 float64 Duration_InstantaneousBitRate_Max=(float64)(program_clock_reference-Complete_Stream->Streams[pid]->TimeStamp_End+(Config_VbrDetection_Delta?0:810));
                 float64 Bytes_InstantaneousBitRate=(float64)(File_Offset+Buffer_Offset-Complete_Stream->Streams[pid]->TimeStamp_End_Offset);
                 float64 TimeStamp_InstantaneousBitRate_Current_Min=Bytes_InstantaneousBitRate*8/Duration_InstantaneousBitRate_Max*27000000*(1-Config_VbrDetection_Delta);
-                float64 TimeStamp_InstantaneousBitRate_Current_Raw=Bytes_InstantaneousBitRate*8/Duration_InstantaneousBitRate_Min*27000000;
+                #if MEDIAINFO_ADVANCED
+                    float64 TimeStamp_InstantaneousBitRate_Current_Raw=Bytes_InstantaneousBitRate*8/Duration_InstantaneousBitRate_Min*27000000;
+                #endif // MEDIAINFO_ADVANCED
                 float64 TimeStamp_InstantaneousBitRate_Current_Max=Bytes_InstantaneousBitRate*8/Duration_InstantaneousBitRate_Min*27000000*(1+Config_VbrDetection_Delta);
                 if (Complete_Stream->Streams[pid]->TimeStamp_InstantaneousBitRate_Current_Min)
                 {

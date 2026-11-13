@@ -5160,6 +5160,9 @@ void File__Analyze::Merge_HDR(size_t StreamPos_To, const Ztring* Container, cons
                     Fill_Conformance("Crosscheck DolbyVisionConfiguration dv_profile", ("Dolby Vision configuration dv_profile 5 does not permit HEVC VUI matrix_coeffs " + ToAdd_matrix_coefficients.To_UTF8()).c_str(), {}, Conformance_Error, Stream_Video, StreamPos_To);
             }
         }
+    #else //MEDIAINFO_CONFORMANCE
+        (void)ToAdd_colour_range;
+        (void)ToAdd_matrix_coefficients;
     #endif //MEDIAINFO_CONFORMANCE
 }
 

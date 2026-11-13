@@ -62,6 +62,7 @@ namespace Elements
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Clpi_Offsets[]=
 {
     "ClipInfo",
@@ -129,6 +130,7 @@ static const char* Bdmv_Type(int32u Type_Indicator, size_t Start_Adress_Pos)
         default             : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Clpi_Format(int8u StreamType)
@@ -199,6 +201,7 @@ static stream_t Clpi_Type(int8u StreamType)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Clpi_Video_Format[]=
 {
     "",
@@ -218,6 +221,7 @@ static const char* Clpi_Video_Format[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Clpi_Video_Interlacement[]=
@@ -388,6 +392,7 @@ static const int32u Clpi_Audio_SamplingRate[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Indx_object_type[]=
 {
     "",
@@ -433,6 +438,7 @@ static const char* Mpls_PlayListMarks_Mark_type(int8u type)
         default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Helpers

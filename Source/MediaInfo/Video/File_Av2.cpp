@@ -160,6 +160,7 @@ static const char* Av2_seq_level_idx(int8u seq_level_idx)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Av2_scan_type_idc(int8u scan_type_idc)
 {
     switch (scan_type_idc)
@@ -203,6 +204,7 @@ static const char* Av2_metadata_type(int8u metadata_type)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Math utils
@@ -1713,6 +1715,9 @@ void File_Av2::obu_end()
 //---------------------------------------------------------------------------
 void File_Av2::Get_leb128(int64u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info = 0;
     for (int8u i = 0; i < 8; i++)
     {
@@ -1749,7 +1754,11 @@ if (!(TOVALIDATE)) \
 void File_Av2::Get_uvlc(int32u& Info, const char* Name)
 {
     int64u Info64 = 0;
-    auto remain_begin = BS->Remain();
+    #if MEDIAINFO_TRACE
+        auto remain_begin = BS->Remain();
+    #else //MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int64u leadingZeros = 0;
     while (true) {
         INTEGRITY(BS->Remain() >= 1, "Size is wrong", BS->Offset_Get())
@@ -1785,7 +1794,11 @@ void File_Av2::Skip_uvlc(const char* Name)
 void File_Av2::Get_su(int8u n, int64s& Info, const char* Name)
 {
     Info = 0;
-    auto remain_begin = BS->Remain();
+    #if MEDIAINFO_TRACE
+        auto remain_begin = BS->Remain();
+    #else //MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     INTEGRITY(BS->Remain() >= n, "Size is wrong", BS->Offset_Get())
     Info = BS->Get4(n);
     auto signMask = 1ULL << (n - 1);
@@ -1810,7 +1823,11 @@ void File_Av2::Skip_su(int8u n, const char* Name)
 void File_Av2::Get_ns(int8u n, int64u& Info, const char* Name)
 {
     Info = 0;
-    auto remain_begin = BS->Remain();
+    #if MEDIAINFO_TRACE
+        auto remain_begin = BS->Remain();
+    #else //MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     auto w = FloorLog2(n) + 1U;
     auto m = (1U << w) - n;
     INTEGRITY(BS->Remain() >= w - 1, "Size is wrong", BS->Offset_Get())
@@ -1841,7 +1858,11 @@ void File_Av2::Skip_ns(int8u n, const char* Name)
 void File_Av2::Get_rg(int8u n, int64u& Info, const char* Name)
 {
     Info = 0;
-    auto remain_begin = BS->Remain();
+    #if MEDIAINFO_TRACE
+        auto remain_begin = BS->Remain();
+    #else //MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     for (int8u q = 0; q < 32; ++q) {
         INTEGRITY(BS->Remain() >= 1, "Size is wrong", BS->Offset_Get())
         auto rg_bit = BS->GetB();

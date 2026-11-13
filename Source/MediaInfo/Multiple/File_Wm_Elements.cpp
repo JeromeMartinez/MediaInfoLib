@@ -60,6 +60,7 @@ namespace MediaInfoLib
 
 extern std::string Id3v2_PictureType(int8u Type);
 
+#if MEDIAINFO_TRACE
 static const char* Wm_CodecList_Kind(int32u Kind)
 {
     switch (Kind)
@@ -81,6 +82,7 @@ static const char* Wm_BannerImageData_Type(int32u Type)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 #define UUID(NAME, PART1, PART2, PART3, PART4, PART5) \
     const int64u NAME   =((int64u(0x##PART1))&0xFF)<<56 | ((int64u(0x##PART1)>>8)&0xFF)<<48 | ((int64u(0x##PART1)>>16)&0xFF)<<40 | ((int64u(0x##PART1)>>24)&0xFF)<<32 | ((int64u(0x##PART2))&0xFF)<<24 | ((int64u(0x##PART2)>>8)&0xFF)<<16 | ((int64u(0x##PART3))&0xFF)<<8 | ((int64u(0x##PART3)>>8)&0xFF); \
@@ -139,6 +141,7 @@ namespace Elements
     UUID(Mutex_Bitrate,                                         D6E22A01, 35DA, 11D1, 9034, 00A0C90349BE);
 }
 
+#if MEDIAINFO_TRACE
 static const char* Wm_StreamType(const int128u& Kind)
 {
     switch (Kind.hi)
@@ -163,6 +166,7 @@ static const char* Wm_ExclusionType(const int128u& ExclusionType)
         default :                                               return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Format

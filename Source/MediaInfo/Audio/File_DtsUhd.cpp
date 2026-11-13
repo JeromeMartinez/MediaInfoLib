@@ -92,6 +92,9 @@ static int CountBits(int32u Mask)
 */
 void File_DtsUhd::Get_VR(const uint8_t Table[], int32u& Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Begin1(Name?Name:"?");
     static const uint8_t BitsUsed[8] = {1, 1, 1, 1, 2, 2, 3, 3};
     static const uint8_t IndexTable[8] = { 0, 0, 0, 0, 1, 1, 2, 3 };

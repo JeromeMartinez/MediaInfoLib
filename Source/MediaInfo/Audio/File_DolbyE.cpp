@@ -1961,12 +1961,14 @@ void File_DolbyE::metadata_segment()
     {
         for (;;)
         {
+            #if MEDIAINFO_TRACE
             const size_t evolution_data_segment_id_Name_Size=2;
             const char* const evolution_data_segment_id_Name[evolution_data_segment_id_Name_Size]=
             {
                 "End",
                 "intelligent_loudness_evolution_data_segment",
             };
+            #endif //MEDIAINFO_TRACE
 
             Element_Begin1("evolution_data_segment");
             int16u evolution_data_segment_length;
@@ -3067,6 +3069,9 @@ void File_DolbyE::mgi_payload()
 //---------------------------------------------------------------------------
 void File_DolbyE::Get_V4(int8u Bits, int8u MaxLoops, int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info=0;
     #if MEDIAINFO_TRACE
         if (Trace_Activated)
@@ -3102,6 +3107,9 @@ void File_DolbyE::Get_V4(int8u Bits, int8u MaxLoops, int32u& Info, const char* N
 //---------------------------------------------------------------------------
 void File_DolbyE::Get_V4(int8u Bits, int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info=0;
     #if MEDIAINFO_TRACE
         if (Trace_Activated)
@@ -3147,6 +3155,9 @@ void File_DolbyE::Get_V4(int8u Bits, int32u& Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_DolbyE::Skip_V4(int8u  Bits, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     #if MEDIAINFO_TRACE
         if (Trace_Activated)
         {

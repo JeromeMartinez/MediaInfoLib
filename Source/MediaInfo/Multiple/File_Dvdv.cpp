@@ -46,11 +46,13 @@ namespace MediaInfoLib
 {
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char*  IFO_VTS_Category[]=
 {
     "Normal",
     "Karaoke",
 };
+#endif //MEDIAINFO_TRACE
 
 static const char*  IFO_Format_V[]=
 {
@@ -76,6 +78,7 @@ static const char*  IFO_CodecV[]=
     "",
 };
 
+#if MEDIAINFO_TRACE
 static const char*  IFO_Standard[]=
 {
     "NTSC",
@@ -83,6 +86,7 @@ static const char*  IFO_Standard[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 static const float32  IFO_AspectRatio[]=
 {
@@ -147,6 +151,7 @@ static const char*  IFO_CodecA[]=
     "SDDS",
 };
 
+#if MEDIAINFO_TRACE
 static const char*  IFO_ModeA[]=
 {
     "",
@@ -154,6 +159,7 @@ static const char*  IFO_ModeA[]=
     "Surround",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 static const char*  IFO_ResolutionA[]=
 {
@@ -237,6 +243,7 @@ static const char*  IFO_Language_MoreT[]=
 static const size_t IFO_PlaybackTime_FrameRate[]=
 {0, 25, 0, 30};
 
+#if MEDIAINFO_TRACE
 static const char*  IFO_MenuType[]=
 {
     "",
@@ -256,6 +263,7 @@ static const char*  IFO_MenuType[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern const char*  AC3_ChannelPositions[];
@@ -1286,6 +1294,9 @@ static unsigned BCD_to_Decimal(unsigned Value)
 
 void File_Dvdv::Get_Duration(TimeCode &Duration, const Ztring &Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int32u FrameRate, FF;
     int8u HH, MM, SS;
     Element_Begin1(Name);

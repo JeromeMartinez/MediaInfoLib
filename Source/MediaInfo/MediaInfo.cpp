@@ -88,6 +88,7 @@ size_t MediaInfo::Open(const String &File_Name_)
 #if defined(MEDIAINFO_FILE_YES)
     return Internal->Open(File_Name_);
 #else //defined(MEDIAINFO_FILE_YES)
+    (void)File_Name_;
     return 0; //Not available
 #endif //defined(MEDIAINFO_FILE_YES)
 }

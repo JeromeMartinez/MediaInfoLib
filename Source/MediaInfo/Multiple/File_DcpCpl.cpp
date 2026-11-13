@@ -67,6 +67,7 @@ File_DcpCpl::File_DcpCpl()
 
 //---------------------------------------------------------------------------
 
+#if defined(MEDIAINFO_REFERENCES_YES)
 static bool IsSmpteSt2067_2(const char* Ns)
 {
     return Ns &&
@@ -74,6 +75,7 @@ static bool IsSmpteSt2067_2(const char* Ns)
             !strcmp(Ns, "http://www.smpte-ra.org/schemas/2067-2/XXXX")); //Some muxers use XXXX instead of year
 
 }
+#endif //defined(MEDIAINFO_REFERENCES_YES)
 
 //---------------------------------------------------------------------------
 
@@ -459,6 +461,8 @@ bool File_DcpCpl::FileHeader_Begin()
                 ReferenceFiles->UpdateMetaDataFromSourceEncoding(EssenceDescriptor->first, "Format_Profile", Jpeg2000_Rsiz((*SubDescriptor)->Jpeg2000_Rsiz));
     #endif //MEDIAINFO_ADVANCED
 
+    #else //MEDIAINFO_REFERENCES_YES
+    (void)IsImf;
     #endif //MEDIAINFO_REFERENCES_YES
 
     //All should be OK...

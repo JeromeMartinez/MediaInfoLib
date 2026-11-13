@@ -858,6 +858,9 @@ void File_Iab::AudioDataPCM()
 //---------------------------------------------------------------------------
 void File_Iab::Get_Plex(int8u Bits, int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     for (;;)
     {
         Peek_BS(Bits, Info);
@@ -874,6 +877,9 @@ void File_Iab::Get_Plex(int8u Bits, int32u& Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Iab::Get_Plex8(int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     //Element size
     int8u Info8;
     Peek_B1(Info8);

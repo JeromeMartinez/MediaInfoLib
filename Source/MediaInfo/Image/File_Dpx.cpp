@@ -33,6 +33,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* DPX_Orientation[]=
 {
     "Left to right, Top to bottom",
@@ -75,6 +76,7 @@ static const char* DPX_Descriptors100[]=
     "CB, Y, CR (4:4:4)",
     "CB, Y, CR, A (4:4:4:4)"
 };
+#endif //MEDIAINFO_TRACE
 
 const char* DPX_Descriptors150[]=
 {
@@ -87,6 +89,7 @@ const char* DPX_Descriptors150[]=
     "User-defined 8-component element"
 };
 
+#if MEDIAINFO_TRACE
 static const char* DPX_Descriptors(int8u i)
 {
     if(i<10)
@@ -105,6 +108,7 @@ static const char* DPX_Descriptors(int8u i)
         return "Reserved for future single components";
     return "Reserved for future formats";
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* DPX_Descriptors_ColorSpace(int8u i)
@@ -179,6 +183,7 @@ static const char* DPX_ColorimetricSpecification(int8u ColorimetricSpecification
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* DPX_ValidBitDephs(int8u i)
 {
     switch(i)
@@ -197,6 +202,7 @@ static const char* DPX_ValidBitDephs(int8u i)
                     return "invalid";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* DPX_ComponentDataPackingMethod[]=
@@ -225,6 +231,7 @@ static const char* DPX_ComponentDataEncodingMethod[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* DPX_VideoSignalStandard0[]=
 {
     "Undefined",
@@ -284,6 +291,7 @@ static const char* DPX_VideoSignalStandard(int8u i)
         return DPX_VideoSignalStandard200[i-200];
     return "Reserved for future high-definition progressive";
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Const
@@ -959,6 +967,9 @@ void File_Dpx::ImageData()
 //---------------------------------------------------------------------------
 void File_Dpx::Get_X2(int16u &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (LittleEndian)
         Get_L2 (Info,                                           Name);
     else
@@ -968,6 +979,9 @@ void File_Dpx::Get_X2(int16u &Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Dpx::Get_X4(int32u &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (LittleEndian)
         Get_L4 (Info,                                           Name);
     else
@@ -977,6 +991,9 @@ void File_Dpx::Get_X4(int32u &Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Dpx::Get_XF4(float32 &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (LittleEndian)
         Get_LF4 (Info,                                           Name);
     else

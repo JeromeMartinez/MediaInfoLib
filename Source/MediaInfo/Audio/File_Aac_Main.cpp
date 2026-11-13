@@ -50,11 +50,13 @@ extern const int32u Aac_sampling_frequency[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Aac_Adts_ID[]=
 {
     "MPEG-4",
     "MPEG-2",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Aac_Format(int8u ID)
@@ -941,6 +943,9 @@ void File_Aac::AudioSpecificConfig_OutOfBand (int64s sampling_frequency_, int8u 
 //---------------------------------------------------------------------------
 void File_Aac::GetAudioObjectType(int8u &ObjectType, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Begin1(Name);
     Get_S1(5, ObjectType,                                       "audioObjectType");
     if (ObjectType==31)

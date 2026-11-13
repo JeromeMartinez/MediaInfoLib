@@ -1950,6 +1950,8 @@ size_t File__Analyze::Read_Buffer_Seek (size_t Method, int64u Value, int64u ID)
             if (ReturnValue!=(size_t)-1) // If IBI file is supported
                 return ReturnValue;
         }
+    #else //MEDIAINFO_IBI
+        (void)ID;
     #endif //MEDIAINFO_IBI
 
     //Parsing
@@ -3331,6 +3333,8 @@ void File__Analyze::Loop_CheckValue(int64u& Value, int64u RemainingSize, int64u 
                 FullName += ' ';
 
             Fill_Conformance((FullName + Name).c_str(), "Value " + std::to_string(Value) + " is bigger than what the element can contain " + std::to_string(MaxSize));
+        #else //MEDIAINFO_CONFORMANCE
+            (void)Name;
         #endif //MEDIAINFO_CONFORMANCE
         Value = MaxSize;
     }
@@ -4891,6 +4895,8 @@ void File__Analyze::Decoded (const int8u* Buffer, size_t Buffer_Size)
             Event.Content=Buffer;
             Event.Flags=0;
         EVENT_END()
+    #else //MEDIAINFO_EVENTS
+        (void)Buffer;
     #endif //MEDIAINFO_EVENTS
 }
 

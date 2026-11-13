@@ -1069,12 +1069,14 @@ static const char* out_ch_config_Values[] =
 static constexpr size_t out_ch_config_Size=sizeof(out_ch_config_Values)/sizeof(const char*);
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static float32 gain_f1_Values(int8u code)
 {
     if (code>=7)
         return -INFINITY;
     return 1.5*(-((int)code)+2);
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static float32 gain_xx_Values(int8u code)
@@ -3597,6 +3599,9 @@ void File_Ac4::ac4_substream(size_t substream_index)
             GroupInfo.ch_mode++; // ch_mode=4, 5.1
     }
     Skip_BS(audio_size*8,                                       audio_data_name);
+    #if !MEDIAINFO_TRACE
+        (void)audio_data_name;
+    #endif //MEDIAINFO_TRACE
     metadata(AudioSubstream, substream_index);
     GroupInfo.ch_mode=ch_mode_Save;
 
@@ -3613,6 +3618,9 @@ void File_Ac4::ac4_substream(size_t substream_index)
                 Align=true;
         }
         Skip_BS(Bits, Align?"byte_align":"?");
+        #if !MEDIAINFO_TRACE
+            (void)Align;
+        #endif //MEDIAINFO_TRACE
     }
     BS_End();
 
@@ -3633,6 +3641,9 @@ void File_Ac4::ac4_substream(size_t substream_index)
 //---------------------------------------------------------------------------
 void File_Ac4::ac4_presentation_substream(size_t substream_index, size_t Substream_Index)
 {
+    #if !MEDIAINFO_TRACE
+        (void)substream_index;
+    #endif //MEDIAINFO_TRACE
     presentation& P=Presentations[Substream_Index];
     loudness_info& L=P.LoudnessInfo;
 
@@ -4758,7 +4769,9 @@ void File_Ac4::further_loudness_info(loudness_info& L, bool sus_ver, bool b_pres
     {
         TEST_SB_SKIP(                                           "b_prgmbndy");
             Element_Begin1("prgmbndy_bits");
-            int32u prgmbndy=1;
+            #if MEDIAINFO_TRACE
+                int32u prgmbndy=1;
+            #endif //MEDIAINFO_TRACE
             bool prgmbndy_bit=false;
             while(!prgmbndy_bit)
             {
@@ -5145,6 +5158,9 @@ void File_Ac4::ac4_substream_group_dsi(presentation& P)
 //---------------------------------------------------------------------------
 void File_Ac4::Get_V4(int8u Bits, int32u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info=0;
     #if MEDIAINFO_TRACE
         if (Trace_Activated)
@@ -5180,6 +5196,9 @@ void File_Ac4::Get_V4(int8u Bits, int32u& Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Ac4::Skip_V4(int8u  Bits, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     #if MEDIAINFO_TRACE
         if (Trace_Activated)
         {
@@ -5213,6 +5232,9 @@ void File_Ac4::Skip_V4(int8u  Bits, const char* Name)
 //---------------------------------------------------------------------------
 void File_Ac4::Get_V4(int8u Bits1, int8u Bits2, int8u Flag_Value, int32u &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info = 0;
     int8u Count=Bits1;
 
@@ -5236,6 +5258,9 @@ void File_Ac4::Get_V4(int8u Bits1, int8u Bits2, int8u Flag_Value, int32u &Info, 
 //---------------------------------------------------------------------------
 void File_Ac4::Skip_V4(int8u Bits1, int8u Bits2, int8u Flag_Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int32u Info = 0;
     int8u Count=Bits1;
 
@@ -5259,6 +5284,9 @@ void File_Ac4::Skip_V4(int8u Bits1, int8u Bits2, int8u Flag_Value, const char* N
 //---------------------------------------------------------------------------
 void File_Ac4::Get_V4(int8u Bits1, int8u Bits2, int8u Bits3, int8u Bits4, int32u  &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info = 0;
 
     int8u Temp;
@@ -5294,6 +5322,9 @@ void File_Ac4::Get_V4(int8u Bits1, int8u Bits2, int8u Bits3, int8u Bits4, int32u
 //---------------------------------------------------------------------------
 void File_Ac4::Get_V4(const variable_size* Bits, int8u &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int8u TotalSize=Bits[0].AddedSize;
     Bits++;
     int8u BitSize=0;
@@ -5323,6 +5354,9 @@ void File_Ac4::Get_V4(const variable_size* Bits, int8u &Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Ac4::Get_VB(int8u  &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info = 0;
 
     #if MEDIAINFO_TRACE
@@ -5348,6 +5382,9 @@ void File_Ac4::Get_VB(int8u  &Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Ac4::Skip_VB(const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     #if MEDIAINFO_TRACE
         if (Trace_Activated)
         {
@@ -5434,6 +5471,9 @@ int8u File_Ac4::Superset(int8u Ch_Mode1, int8u Ch_Mode2)
 //---------------------------------------------------------------------------
 int16u File_Ac4::Huffman_Decode(const ac4_huffman& Table, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     bool bit;
     int16s index = 0;
 
@@ -5450,6 +5490,9 @@ int16u File_Ac4::Huffman_Decode(const ac4_huffman& Table, const char* Name)
 
 void File_Ac4::Get_Gain(int8u Bits, gain Type, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     dmx::cdmx::gain Gain;
     Gain.Type=Type;
     if (Bits)

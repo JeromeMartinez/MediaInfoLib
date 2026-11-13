@@ -112,6 +112,7 @@ namespace MediaInfoLib
 {
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char*  Dv_sct[]=
 {
     "Header",
@@ -136,6 +137,7 @@ static const char*  Dv_Disp[]=
     "",
     "16/9 or 4/3 depends of ssyb AP3", //Which spec?
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int32u  Dv_Audio_SamplingRate[]=
@@ -151,11 +153,13 @@ static const int32u  Dv_Audio_SamplingRate[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char*  Dv_StereoMode[]=
 {
     "Multi-Stero",
     "Lumped",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int32u  Dv_Audio_BitDepth[]=
@@ -180,6 +184,7 @@ static const int8u  Dv_ChannelsPerBlock[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char*  Dv_Pair[]=
 {
     "One pair of channels",
@@ -221,6 +226,7 @@ static const char*  Dv_Emphasis[]=
     "Reserved",
     "Reserved",
 };
+#endif //MEDIAINFO_TRACE
 
 
 //---------------------------------------------------------------------------

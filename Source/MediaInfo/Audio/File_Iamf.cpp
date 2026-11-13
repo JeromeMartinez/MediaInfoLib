@@ -130,6 +130,7 @@ static const char* Iamf_obu_type(int8u obu_type)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Iamf_audio_element_type(int8u audio_element_type)
 {
     switch (audio_element_type)
@@ -140,6 +141,7 @@ static const char* Iamf_audio_element_type(int8u audio_element_type)
     default             : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static string Iamf_profile(int8u profile)
@@ -157,6 +159,7 @@ static string Iamf_profile(int8u profile)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static string Iamf_loudspeaker_layout(int8u loudspeaker_layout)
 {
     switch (loudspeaker_layout)
@@ -284,6 +287,7 @@ static string Iamf_parameter_definition_type(int64u parameter_definition_type)
     default: return std::to_string(parameter_definition_type);
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor
@@ -1479,6 +1483,9 @@ void File_Iamf::metadata_iamf_tags()
 //---------------------------------------------------------------------------
 void File_Iamf::Get_leb128(int64u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info = 0;
     for (int8u i = 0; i < 8; i++)
     {

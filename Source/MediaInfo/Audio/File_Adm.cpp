@@ -2059,10 +2059,12 @@ struct item_style_info {
     const char** formatDefinition_List;
     const int8u formatDefinition_Size;
 };
+#if MEDIAINFO_CONFORMANCE
 static item_style_info Style_Infos[] = {
     {formatDefinition_List, Format_Max},
     {typeDefinition_List, Type_Max},
 };
+#endif //MEDIAINFO_CONFORMANCE
 
 struct item_info {
     const attribute_item* Attribute_Infos;
@@ -3161,6 +3163,7 @@ static bool CheckErrors_ID(file_adm_private* /*File_Adm_Private*/, const string&
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
 static void CheckErrors_ID_Additions(file_adm_private* File_Adm_Private, item item_Type, size_t i) {
     const bool IsAtmos = File_Adm_Private->IsAtmos;
     auto& Item = File_Adm_Private->Items[item_Type].Items[i];
@@ -3282,6 +3285,7 @@ static void CheckErrors_formatLabelDefinition(file_adm_private* File_Adm_Private
 #if defined(_MSC_VER)
 #pragma warning( pop )
 #endif
+#endif //MEDIAINFO_CONFORMANCE
 
 //---------------------------------------------------------------------------
 static void CheckErrors_Attributes(file_adm_private* File_Adm_Private, item Item_Type, const vector<size_t>& Attributes_Counts) {
@@ -3393,6 +3397,7 @@ static void CheckErrors_Elements(file_adm_private* File_Adm_Private, item Item_T
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
 static void CheckErrors_Element_Target(file_adm_private* File_Adm_Private, item item_Type, size_t i, size_t Element_Pos, size_t Target_Type) {
     const bool IsAtmos = File_Adm_Private->IsAtmos;
     auto& Item = File_Adm_Private->Items[item_Type].Items[i];
@@ -3477,6 +3482,7 @@ static void CheckErrors_Element_Target(file_adm_private* File_Adm_Private, item 
         }
     }
 };
+#endif //MEDIAINFO_CONFORMANCE
 
 //---------------------------------------------------------------------------
 void CheckError_Language(file_adm_private* File_Adm_Private, item Item_Type, size_t j) {
@@ -5992,6 +5998,7 @@ int file_adm_private::frameHeader()
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
 static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type, size_t i, const char* Name, vector<string>* Errors_Field, vector<string>* Errors_Value, bool WarningError, size_t* Error_Count_Per_Type, bool IsAdvSSE, bool IsDolbyE)
 {
     const bool IsAtmos = File_Adm_Private->IsAtmos;
@@ -6094,6 +6101,7 @@ static void FillErrors(file_adm_private* File_Adm_Private, const item item_Type,
     }
     }
 }
+#endif //MEDIAINFO_CONFORMANCE
 
 //***************************************************************************
 // Constructor/Destructor

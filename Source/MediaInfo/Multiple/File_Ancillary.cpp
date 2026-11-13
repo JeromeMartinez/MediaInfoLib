@@ -56,6 +56,7 @@ namespace MediaInfoLib
 // Infos
 //***************************************************************************
 
+#if MEDIAINFO_TRACE
 static const char* Ancillary_DataID(int8u DataID, int8u SecondaryDataID)
 {
     // TODO: check http://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.1364-2-201003-I!!PDF-E.pdf
@@ -213,6 +214,7 @@ static const char* Ancillary_DataID(int8u DataID, int8u SecondaryDataID)
                     return "(Internationally registered)";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

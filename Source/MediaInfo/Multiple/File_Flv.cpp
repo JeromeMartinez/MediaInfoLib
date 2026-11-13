@@ -242,6 +242,7 @@ static const char* Flv_CodecID_Hint_Video[16]=
     "",
 };
 
+#if MEDIAINFO_TRACE
 static const char* Flv_H263_PictureSize[]=
 {
     "custom, 1 byte",
@@ -253,6 +254,7 @@ static const char* Flv_H263_PictureSize[]=
     "160x120",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 static const int16u Flv_H263_WidthHeight[8][2]=
 {
@@ -266,6 +268,7 @@ static const int16u Flv_H263_WidthHeight[8][2]=
     {0, 0},
 };
 
+#if MEDIAINFO_TRACE
 static const char* Flv_H263_PictureType[]=
 {
     "IntraFrame",
@@ -328,6 +331,7 @@ static const char* Flv_VP6_Version2[]=
     "",
     "VP6.1/6.2",
 };
+#endif //MEDIAINFO_TRACE
 
 enum flv_FrameType {
     Reserved0,
@@ -337,6 +341,7 @@ enum flv_FrameType {
     GeneratedKeyFrame,
     Command,
 };
+#if MEDIAINFO_TRACE
 static const char* Flv_FrameType[]=
 {
     "",
@@ -348,6 +353,7 @@ static const char* Flv_FrameType[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 enum flv_PacketType {
     SequenceStart,
@@ -358,6 +364,7 @@ enum flv_PacketType {
     MPEG2TSSequenceStart,
     Multitrack,
 };
+#if MEDIAINFO_TRACE
 static const char* Flv_PacketType[] =
 {
     "SequenceStart",
@@ -377,12 +384,14 @@ static const char* Flv_PacketType[] =
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 enum flv_MultiTrackType {
     OneTrack,
     ManyTracks,
     ManyTracksManyCodecs,
 };
+#if MEDIAINFO_TRACE
 static const char* Flv_MultitrackType[] =
 {
     "OneTrack",
@@ -462,6 +471,7 @@ static const char* Flv_AACPacketType(int8u Value)
         default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

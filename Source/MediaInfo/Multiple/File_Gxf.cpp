@@ -65,6 +65,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Gxf_Tag_Name(int8u Tag)
 {
     switch (Tag)
@@ -124,6 +125,7 @@ static const char* Gxf_MediaTypes(int8u Type)
         default : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static stream_t Gxf_MediaTypes_StreamKind(int8u Type)
@@ -176,6 +178,7 @@ double Gxf_FrameRate(int32u Content)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static int32u Gxf_LinesPerFrame_Height(int32u Content)
 {
     switch (Content)
@@ -198,6 +201,7 @@ static const char* Gxf_FieldsPerFrame(int32u Tag)
         default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

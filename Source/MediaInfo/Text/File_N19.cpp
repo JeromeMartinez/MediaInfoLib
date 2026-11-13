@@ -39,6 +39,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* N19_CodePageNumber(int32u CPN)
 {
     switch (CPN)
@@ -65,6 +66,7 @@ static const char* N19_CharacterCodeTable(int16u CCT)
         default       : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static string N19_CharacterCodeTable_CharSet(int16u CCT)
@@ -123,6 +125,7 @@ static float64 N19_DiskFormatCode_FrameRate_FromRounded(int8u DFC)
     else
         return DFC;
 }
+#if MEDIAINFO_TRACE
 static float64 N19_DiskFormatCode_FrameRate(int64u DFC64)
 {
     return N19_DiskFormatCode_FrameRate_FromRounded(N19_DiskFormatCode_FrameRate_Rounded(DFC64));
@@ -139,6 +142,7 @@ static const char* N19_DisplayStandardCode(int8u DSC)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* N19_LanguageCode(int16u LC)
@@ -642,11 +646,9 @@ void File_N19::Data_Parse()
     Get_B1    (EBN,                                             "EBN - Extension Block Number");
     Skip_B1   (                                                 "CS - Cumulative Status");
     Get_B4    (TCI,                                             "TCI - Time Code In");
-    auto TCI_TC=N19_HHMMSSFF_TC(TCI, FrameRate);
-    Param_Info1(TCI_TC.ToString());
+    Param_Info1(N19_HHMMSSFF_TC(TCI, FrameRate).ToString());
     Get_B4    (TCO,                                             "TCO - Time Code Out");
-    auto TCO_TC=N19_HHMMSSFF_TC(TCO, FrameRate);
-    Param_Info1(TCO_TC.ToString());
+    Param_Info1(N19_HHMMSSFF_TC(TCO, FrameRate).ToString());
     Get_B1    (VP,                                              "VP - Vertical Position");
     if (VP 
 #if MEDIAINFO_DEMUX

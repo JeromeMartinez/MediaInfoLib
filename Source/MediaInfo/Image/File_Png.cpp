@@ -68,6 +68,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Png_Colour_type(int8u Colour_type)
 {
     switch (Colour_type)
@@ -80,6 +81,7 @@ static const char* Png_Colour_type(int8u Colour_type)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 static string Png_Colour_type_Settings(int8u Colour_type, int8u Bit_depth)
 {
     switch (Colour_type)
@@ -92,6 +94,7 @@ static string Png_Colour_type_Settings(int8u Colour_type, int8u Bit_depth)
         default: return "";
     }
 }
+#if MEDIAINFO_TRACE
 static const char* Png_sRGB_Rendering_intent(int8u Colour_type)
 {
     switch (Colour_type)
@@ -103,6 +106,7 @@ static const char* Png_sRGB_Rendering_intent(int8u Colour_type)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 const char* Mpegv_colour_primaries(int8u colour_primaries);

@@ -134,6 +134,7 @@ static stream_t Smpte_St0337_data_type_StreamKind[sizeof(Smpte_St0337_data_type)
     Stream_Audio,
 };
 
+#if MEDIAINFO_TRACE
 static const char* Smpte_St0337_Adm_multiple_chunk_flag[4]=
 {
     "Full",
@@ -146,6 +147,7 @@ static const char* Smpte_St0337_Adm_format_type[2]=
     "UTF-8",
     "UTF-8 gzip",
 };
+#endif //MEDIAINFO_TRACE
 
 #if MEDIAINFO_CONFORMANCE
 //---------------------------------------------------------------------------
@@ -1602,6 +1604,9 @@ void File_SmpteSt0337::Data_Parse()
 
     #if MEDIAINFO_CONFORMANCE
         Conformance_Burst({Burst_Begin, Burst_Size, length_code, extended_data_type, Pf, data_stream_number, data_type_dependent, data_mode, data_type_Pc, Pc_Reserved, Pe_Reserved});
+    #else //MEDIAINFO_CONFORMANCE
+        (void)extended_data_type;
+        (void)data_type_Pc;
     #endif //MEDIAINFO_CONFORMANCE
 
     if (data_type_New!=data_type)

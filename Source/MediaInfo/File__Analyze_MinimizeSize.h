@@ -336,18 +336,18 @@ protected :
     void Element_Begin ();
     #define Element_Begin0() Element_Begin()
     #define Element_Begin1(_NAME) Element_Begin()
-    #define Element_Trace_Begin0()
-    #define Element_Trace_Begin1(_NAME)
+    #define Element_Trace_Begin0() noop()
+    #define Element_Trace_Begin1(_NAME) noop()
 
     //Elements - Name
-    #define Element_Name(_A)
+    #define Element_Name(_A) noop()
 
     //Elements - Info
-    #define Element_Info1(_A)
-    #define Element_Info2(_A,_B)
-    #define Element_Info3(_A,_B,_C)
-    #define Element_Info1C(_CONDITION,_A)
-    #define Element_Info_From_Milliseconds(_A)
+    #define Element_Info1(_A) noop()
+    #define Element_Info2(_A,_B) noop()
+    #define Element_Info3(_A,_B,_C) noop()
+    #define Element_Info1C(_CONDITION,_A) noop()
+    #define Element_Info_From_Milliseconds(_A) noop()
     #define Element_Parser(_A) {}
     #define Element_Error(_A) {}
     #define Param_Error(_A) {}
@@ -356,8 +356,8 @@ protected :
     inline void Element_End () {Element_End_Common_Flush();}
     #define Element_End0() Element_End()
     #define Element_End1(_NAME) Element_End()
-    #define Element_Trace_End0()
-    #define Element_Trace_End1(_NAME)
+    #define Element_Trace_End0() noop()
+    #define Element_Trace_End1(_NAME) noop()
 
     //Elements - Preparation of element from external app
     void Element_Prepare (int64u Size);
@@ -991,9 +991,9 @@ public :
     void Get_FlagsM_ (int64u ValueToPut, int8u &Info); //Multiple
     #define Get_Flags(_FLAGS, _ORDER, _INFO, _NAME) Get_Flags_(_FLAGS, _ORDER, _INFO)
     #define Get_FlagsM(_VALUE, _INFO, _NAME) Get_FlagsM_(_VALUE, _INFO)
-    #define Skip_Flags(_FLAGS, _ORDER, _NAME)
-    #define Skip_FlagsM(_VALUE, _NAME)
-    #define Info_Flags(_FLAGS, _ORDER, _INFO, _NAME)
+    #define Skip_Flags(_FLAGS, _ORDER, _NAME) noop()
+    #define Skip_FlagsM(_VALUE, _NAME) noop()
+    #define Info_Flags(_FLAGS, _ORDER, _INFO, _NAME) noop()
 
     //***************************************************************************
     // BitStream

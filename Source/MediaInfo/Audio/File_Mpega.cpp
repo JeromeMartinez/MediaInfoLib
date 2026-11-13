@@ -208,6 +208,7 @@ static const char* Lame_BitRate_Mode[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Lame_Method[]=
 {
     "",
@@ -227,6 +228,7 @@ static const char* Lame_Method[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int8u Mpega_Coefficient[4][4] = //Samples per Frame / 8

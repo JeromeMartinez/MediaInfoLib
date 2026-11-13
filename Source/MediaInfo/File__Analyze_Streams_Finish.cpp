@@ -2638,6 +2638,8 @@ void File__Analyze::TestContinuousFileNames(size_t CountOfFiles, Ztring FileExte
             Demux_Rate=24;
         if (!SkipComputeDelay && Frame_Count_NotParsedIncluded!=(int64u)-1)
             Fill(Stream_Video, 0, Video_Delay, float64_int64s(Frame_Count_NotParsedIncluded*1000/Demux_Rate));
+    #else //MEDIAINFO_DEMUX
+        (void)SkipComputeDelay;
     #endif //MEDIAINFO_DEMUX
 
     #if MEDIAINFO_ADVANCED

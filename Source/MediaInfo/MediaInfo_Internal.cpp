@@ -883,6 +883,7 @@ Ztring HighestFormat(stream_t StreamKind, size_t Parameter, const ZtringList& In
     return Info[Parameter];
 }
 
+#if MEDIAINFO_ADVANCED
 static stream_t Text2StreamT(const Ztring& ParameterName, size_t ToRemove)
 {
     Ztring StreamKind_Text=ParameterName.substr(0, ParameterName.size()-ToRemove);
@@ -903,6 +904,7 @@ static stream_t Text2StreamT(const Ztring& ParameterName, size_t ToRemove)
         StreamKind2=Stream_Menu;
     return StreamKind2;
 }
+#endif //MEDIAINFO_ADVANCED
 
 //***************************************************************************
 // std::cin threaded interface

@@ -185,6 +185,7 @@ static const char* Avs3V_chroma_format[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Avs3V_extension_start_code_identifier[]=
 {
   /* 0000 */  "",
@@ -204,6 +205,7 @@ static const char* Avs3V_extension_start_code_identifier[]=
   /* 1110 */  "adaptive_intra_refresh_parameters",
   /* 1111 */  "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Avs3V_video_format[]=
@@ -240,6 +242,7 @@ static const float32 Avs3V_aspect_ratio[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Avs3V_picture_coding_type[]=
 {
     "",
@@ -247,6 +250,7 @@ static const char* Avs3V_picture_coding_type[]=
     "B",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 const char* Mpegv_colour_primaries(int8u colour_primaries);

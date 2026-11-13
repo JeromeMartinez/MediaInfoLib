@@ -644,6 +644,7 @@ int CRC16_Init(int16u *Table, int16u Polynomial)
     return 0;
 }
 
+#if MEDIAINFO_TRACE
 static void CRC8_Init(int8u *Table, int8u Polynomial)
 {
     for (size_t Pos = 0; Pos < 256; ++Pos)
@@ -659,6 +660,7 @@ static void CRC8_Init(int8u *Table, int8u Polynomial)
         }
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern const float64 AC3_dynrng[]=
@@ -892,6 +894,7 @@ std::string AC3_TrueHD_Channels_ChannelLayout(int16u ChannelsMap, bool Bit11=fal
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* AC3_TrueHD_ExtendedSubstreamInfo(int8u extended_substream_info)
 {
     switch (extended_substream_info) {
@@ -930,6 +933,7 @@ static const char* AC3_TrueHD_SubstreamInfo8ch(int8u presentation_8ch)
     default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* AC3_TrueHD_ExtendedSubstreamInfoNum(int8u extended_substream_info)
@@ -4657,7 +4661,9 @@ void File_Ac3::programme_information()
 void File_Ac3::object_audio_metadata_payload()
 {
     Element_Begin1("object_audio_metadata_payload");
+    #if MEDIAINFO_TRACE
     auto RemainingBitsBegin = Data_BS_Remain();
+    #endif // MEDIAINFO_TRACE
     int8u oa_md_version_bits;
     Get_S1 (2, oa_md_version_bits,                              "oa_md_version_bits");
     if (oa_md_version_bits == 0x3)
@@ -4676,7 +4682,9 @@ void File_Ac3::object_audio_metadata_payload()
         Get_S1 (7, object_count_bits_ext,                       "object_count_bits_ext");
         num_dynamic_objects += object_count_bits_ext;
     }
+    #if MEDIAINFO_TRACE
     int8u object_count{ num_dynamic_objects };
+    #endif // MEDIAINFO_TRACE
 
     program_assignment();
 
@@ -5428,8 +5436,8 @@ void File_Ac3::HD()
         auto substreams_begin_ptr = Element_Offset;
         for (int8u i = 0; i < HD_SubStreams_Count; ++i) {
             Element_Begin1("substream_segment");
-            auto substream_segment_begin = Element_Offset;
             #if MEDIAINFO_TRACE
+            auto substream_segment_begin = Element_Offset;
             BS_Begin();
             //bool last_block_in_segment;
             //do {
@@ -6169,6 +6177,9 @@ size_t File_Ac3::HD_Size_Get()
 //---------------------------------------------------------------------------
 void File_Ac3::Get_V4(int8u  Bits, int32u  &Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info = 0;
 
 #if MEDIAINFO_TRACE
@@ -6202,6 +6213,9 @@ void File_Ac3::Get_V4(int8u  Bits, int32u  &Info, const char* Name)
 //---------------------------------------------------------------------------
 void File_Ac3::Skip_V4(int8u  Bits, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
 #if MEDIAINFO_TRACE
     if (Trace_Activated)
     {

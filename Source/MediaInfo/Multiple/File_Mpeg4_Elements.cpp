@@ -370,6 +370,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg4_Meta_Kind(int32u Kind)
 {
     //QuickTime 2014-02-11, Table 3-5, Well-known data types
@@ -431,6 +432,7 @@ static const char* Mpeg4_sample_has_redundancy[]=
     "there is no redundant coding in this sample",
     "reserved",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static Ztring Mpeg4_Vendor(int32u Vendor)
@@ -748,6 +750,7 @@ extern string Aac_ChannelLayout_GetString(int8u ChannelLayout, bool IsMpegh3da=f
 extern string Aac_OutputChannelPosition_GetString(int8u OutputChannelPosition);
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg4_jp2h_METH(int8u METH)
 {
     switch (METH)
@@ -757,6 +760,7 @@ static const char* Mpeg4_jp2h_METH(int8u METH)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Mpeg4_jp2h_EnumCS(int32u EnumCS)
@@ -1254,6 +1258,7 @@ namespace Elements
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg4_Description(int32u Description)
 {
     switch (Description)
@@ -1267,6 +1272,7 @@ static const char* Mpeg4_Description(int32u Description)
         default                                                     : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Format
@@ -3675,6 +3681,7 @@ void File_Mpeg4::mfra_tfra()
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg4_mini_chroma_subsampling[4]=
 {
     "4:0:0",
@@ -3682,11 +3689,15 @@ static const char* Mpeg4_mini_chroma_subsampling[4]=
     "4:2:2",
     "4:4:4",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 template<typename F>
 void File_Mpeg4::mini_Chunk(const char* Name, int64u Size, F Parse)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (!Size)
         return;
 
@@ -6598,6 +6609,8 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_sbgp()
     #if MEDIAINFO_CONFORMANCE
         Streams[moov_trak_tkhd_TrackID].sbgp_IsPresent=true;
         auto& sbgp=Stream.sbgp;
+    #else
+        (void)Stream;
     #endif
     Loop_CheckValue(Count, 8, "entry_count");
     for (int32u Pos=0; Pos<Count; Pos++)
@@ -6910,6 +6923,7 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_mebx_keys_xxxx_keyd() {
 //---------------------------------------------------------------------------
 void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_mebx_keys_xxxx_dtyp() {
 
+    #if MEDIAINFO_TRACE
     auto getTypeName = [](int32u code) -> const char* {
         switch (code) {
         case 0:  return "reserved";
@@ -6941,6 +6955,7 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_mebx_keys_xxxx_dtyp() {
         default: return "";
         }
     };
+    #endif //MEDIAINFO_TRACE
 
     //Parsing
     int32u datatype_namespace, datatype_array_1;
@@ -8971,16 +8986,20 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_acxd()
     {
         Skip_XX(Element_Size-3,                                 "Decoder config");
         Get_B2 (Layout,                                         "channel_layout"); Param_Info1(Ztring::ToZtring(Layout, 16));
-        if (const char* Name=Mpeg4_AuroCx_LayoutName(Layout))
-            Param_Info1(Name);
+        #if MEDIAINFO_TRACE
+            if (const char* Name=Mpeg4_AuroCx_LayoutName(Layout))
+                Param_Info1(Name);
+        #endif //MEDIAINFO_TRACE
         Skip_B1(                                                "reserved");
     }
     else if (Element_Size>=38)
     {
         Skip_XX(36,                                             "Decoder config");
         Get_B2 (Layout,                                         "channel_layout"); Param_Info1(Ztring::ToZtring(Layout, 16));
-        if (const char* Name=Mpeg4_AuroCx_LayoutName(Layout))
-            Param_Info1(Name);
+        #if MEDIAINFO_TRACE
+            if (const char* Name=Mpeg4_AuroCx_LayoutName(Layout))
+                Param_Info1(Name);
+        #endif //MEDIAINFO_TRACE
         Skip_XX(Element_Size-Element_Offset,                    "reserved");
     }
     else
@@ -10355,12 +10374,13 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_sv3d_proj_mshp_mesh()
     constexpr static const char* const Vertices_String_Digits = " {:#.6g} "; // the digit here must be same as the one below (last digit of the formula)
     vector<size_t> Vertices_String_OffsetPerItem;
     Vertices_String_OffsetPerItem.resize(vertex_count);
-    #else //MEDIAINFO_ADVANCED
-    constexpr auto Vertex_Data = false;
     #endif //MEDIAINFO_ADVANCED
     for (int32u i = 0; i < vertex_count; ++i) {
         Element_Begin1("index_delta");
         auto index_delta = [&](size_t i, const char* Name) {
+            #if !MEDIAINFO_TRACE
+            (void)Name;
+            #endif //MEDIAINFO_TRACE
             #if MEDIAINFO_ADVANCED
             int32u index_delta_zigzag;
             Get_S4 (ccsb, index_delta_zigzag,                   Name);
@@ -10378,6 +10398,7 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_sv3d_proj_mshp_mesh()
             Vertices_String += static_cast<char>('u' + i);
             Vertices_String += fmt::format(Vertices_String_Digits, coordinate);
             #else //MEDIAINFO_ADVANCED
+            (void)i;
             Skip_S4(ccsb,                                       Name);
             #endif //MEDIAINFO_ADVANCED
         };
@@ -10429,11 +10450,16 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxx_sv3d_proj_mshp_mesh()
         }
         Element_Begin1("indexes");
         BS_Begin();
+        #if MEDIAINFO_ADVANCED
         string Vertices_Indices_String;
         string Vertices_List_String;
         int32u Index{};
+        #endif //MEDIAINFO_ADVANCED
         for (int32u i = 0; i < index_count; ++i) {
             auto index_delta = [&](const char* Name) {
+                #if !MEDIAINFO_TRACE
+                (void)Name;
+                #endif //MEDIAINFO_TRACE
                 #if MEDIAINFO_ADVANCED
                 int32u index_delta_zigzag;
                 Get_S4 (vcsb, index_delta_zigzag,               Name);

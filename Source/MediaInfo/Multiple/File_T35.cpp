@@ -620,6 +620,9 @@ void File_T35::itu_t_t35_B5_003B_00000800()
 
     auto Get_V4{ [this](int8u Bits, int32u& Info, const char* Name)
             {
+            #if !MEDIAINFO_TRACE
+                (void)Name;
+            #endif //MEDIAINFO_TRACE
                 Info = 0;
 
             #if MEDIAINFO_TRACE

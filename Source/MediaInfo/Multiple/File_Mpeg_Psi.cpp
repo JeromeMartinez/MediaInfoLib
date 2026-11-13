@@ -57,6 +57,7 @@ namespace Elements
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg_Psi_ATSC_table_type(int16u ID)
 {
     switch (ID)
@@ -91,6 +92,7 @@ static const char* Mpeg_Psi_ATSC_table_type(int16u ID)
             return "Reserved";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 const char* Mpeg_Psi_stream_type_Format(int8u stream_type, int32u format_identifier)
@@ -602,6 +604,7 @@ static string Mpeg_Psi_atsc_modulation_mode(int8u modulation_mode)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg_Psi_table_id_extension(int8u table_id)
 {
     switch (table_id)
@@ -657,6 +660,7 @@ static const char* Mpeg_Psi_table_id_extension(int8u table_id)
         default : return "table_id_extension";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 // CRC_32_Table
@@ -683,6 +687,7 @@ static const char* Mpeg_Psi_running_status[]=
 extern const char* Mpeg_Descriptors_original_network_id(int16u original_network_id);
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg_Psi_splice_command_type(int8u splice_command_type)
 {
     switch (splice_command_type)
@@ -695,6 +700,7 @@ static const char* Mpeg_Psi_splice_command_type(int8u splice_command_type)
         default   : return "Reserved";
     }
 };
+#endif //MEDIAINFO_TRACE
 
 
 
@@ -2314,6 +2320,9 @@ void File_Mpeg_Psi::Descriptors()
 //---------------------------------------------------------------------------
 void File_Mpeg_Psi::ATSC_multiple_string_structure(Ztring &Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     //Parsing
     Ztring string;
     int8u number_strings, number_segments;
@@ -2377,6 +2386,9 @@ void File_Mpeg_Psi::ATSC_multiple_string_structure(Ztring &Value, const char* Na
 //---------------------------------------------------------------------------
 void File_Mpeg_Psi::SCTE_multilingual_text_string(int8u Size, Ztring &Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     //Parsing
     Element_Begin1(Name);
     int64u End=Element_Offset+Size;

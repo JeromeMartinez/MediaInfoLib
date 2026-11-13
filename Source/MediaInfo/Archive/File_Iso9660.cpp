@@ -415,6 +415,9 @@ void File_Iso9660::File()
 //---------------------------------------------------------------------------
 void File_Iso9660::Directory_Record(int32u Size, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     //Parsing
     Element_Begin1(Name?Name:"Directory Record");
     auto End=Element_Offset+Size;
@@ -648,6 +651,9 @@ bool File_Iso9660::Manage_File(file_infos& MI_FileInfos)
 
 void File_Iso9660::Get_DateTime(Ztring* Value, const char* Info)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Info;
+    #endif //MEDIAINFO_TRACE
     //Parsing
     Element_Begin1(Info);
     Ztring YY, MM, DD, hh, mm, ss, ds;

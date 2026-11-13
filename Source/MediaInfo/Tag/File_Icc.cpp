@@ -622,6 +622,9 @@ void File_Icc::Skip_text(int32u Size)
 //---------------------------------------------------------------------------
 void File_Icc::Skip_XYZ(int32u Size, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     if (Size!=12)
         return;
     #if MEDIAINFO_TRACE
@@ -638,6 +641,9 @@ void File_Icc::Skip_XYZ(int32u Size, const char* Name)
 //---------------------------------------------------------------------------
 void File_Icc::Skip_s15Fixed16Number(const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info_B4(Value, Name); Param_Info1(Ztring().From_Number(((float64)Value) / 0x10000, 6));
 }
 

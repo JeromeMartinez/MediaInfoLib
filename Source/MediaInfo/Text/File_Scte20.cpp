@@ -41,6 +41,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Scte20_field_number (int8u field_number)
 {
     switch (field_number)
@@ -52,6 +53,7 @@ static const char* Scte20_field_number (int8u field_number)
         default : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

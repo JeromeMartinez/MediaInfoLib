@@ -671,6 +671,9 @@ Ztring Export_Graph::Transform(MediaInfo_Internal &MI, Export_Graph::graph Graph
     ToReturn+=NewLine(Level)+__T("label=<<b>")+FileName+__T("</b>>");
 
     Ztring Temp;
+    #if !defined(MEDIAINFO_AC4_YES) && !defined(MEDIAINFO_DOLBYE_YES) && !defined(MEDIAINFO_ADM_YES) && !defined(MEDIAINFO_MPEGH3DA_YES)
+        (void)Graph;
+    #endif
     for (size_t StreamPos=0; StreamPos<(size_t)MI.Count_Get(Stream_Audio); StreamPos++)
     {
         #if defined(MEDIAINFO_AC4_YES)

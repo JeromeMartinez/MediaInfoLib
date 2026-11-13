@@ -402,6 +402,7 @@ namespace MediaInfoLib
 const size_t Avc_Errors_MaxCount=32;
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Avc_primary_pic_type[]=
 {
     "I",
@@ -413,6 +414,7 @@ static const char* Avc_primary_pic_type[]=
     "I, SI, P, SP",
     "I, SI, P, SP, B",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Avc_slice_type[]=
@@ -431,6 +433,7 @@ static const char* Avc_slice_type[]=
 
 //---------------------------------------------------------------------------
 const int8u Avc_pic_struct_Size=9;
+#if MEDIAINFO_TRACE
 static const char* Avc_pic_struct[]=
 {
     "frame",
@@ -443,6 +446,7 @@ static const char* Avc_pic_struct[]=
     "frame doubling",
     "frame tripling",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int8u Avc_NumClockTS[]=
@@ -459,6 +463,7 @@ static const int8u Avc_NumClockTS[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Avc_ct_type[]=
 {
     "Progressive",
@@ -466,6 +471,7 @@ static const char* Avc_ct_type[]=
     "Unknown",
     "Reserved",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const int8u Avc_SubWidthC[]=
@@ -633,6 +639,7 @@ namespace AVC_Intra_Headers
 
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 // Some DV Metadata info: http://www.freepatentsonline.com/20050076039.pdf
 static const char* MDPM(int8u ID)
 {
@@ -653,6 +660,7 @@ static const char* MDPM(int8u ID)
         default  : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* MDPM_MakeName(int16u Value)

@@ -74,6 +74,7 @@ static const char* Av1_seq_profile(int8u seq_profile)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Av1_metadata_type(int8u metadata_type)
 {
     switch (metadata_type)
@@ -95,6 +96,7 @@ static const char* Av1_frame_type[4] =
     "Intra Only",
     "Switch",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Av1_chroma_sample_position[3] =
@@ -1073,6 +1075,9 @@ std::string File_Av1::GOP_Detect (std::string PictureTypes)
 
 void File_Av1::Get_leb128(int64u& Info, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Info=0;
     for (int8u i=0; i<8; i++)
     {

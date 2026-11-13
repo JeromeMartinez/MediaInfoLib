@@ -1513,6 +1513,9 @@ void File_Usac::Read_Buffer_Init()
 //---------------------------------------------------------------------------
 void File_Usac::hcod_sf(const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Begin1(Name);
     int16u Pos=0;
     int32u index=0;
@@ -1611,6 +1614,9 @@ int32u File_Usac::arith_decode(int16u& low, int16u& high, int16u& value, const i
 //---------------------------------------------------------------------------
 int16u File_Usac::sbr_huff_dec(const int8s(*Table)[2], const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int8u bit;
     int8s index=0;
 
@@ -1628,6 +1634,9 @@ int16u File_Usac::sbr_huff_dec(const int8s(*Table)[2], const char* Name)
 //---------------------------------------------------------------------------
 int16s File_Usac::huff_dec_1D(const int16s (*Table)[2], const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Begin1(Name);
 
     int8u bit;
@@ -1716,6 +1725,9 @@ bool File_Usac::BS_Bookmark(File_Usac::bs_bookmark& B)
             LastByte=1;
         }
         Skip_BS(BitsRemaining,                                  LastByte?"Unknown":"Padding");
+        #if !MEDIAINFO_TRACE
+            (void)LastByte;
+        #endif //MEDIAINFO_TRACE
     }
     else if (C.IFrameParsed && Data_BS_Remain()<B.BitsNotIncluded)
         Trusted_IsNot("Too big");
@@ -2156,6 +2168,9 @@ void File_Usac::UsacConfig(size_t BitsNotIncluded)
                 LastByte=1;
             }
             Skip_BS(BitsRemaining,                              LastByte?"Unknown":"Padding");
+            #if !MEDIAINFO_TRACE
+                (void)LastByte;
+            #endif //MEDIAINFO_TRACE
         }
         else if (C.IFrameParsed && Data_BS_Remain()<BitsNotIncluded)
             Trusted_IsNot("Too big");
@@ -2333,6 +2348,9 @@ void File_Usac::Fill_Loudness(const char* Prefix, bool NoConCh)
             Fill_SetOptions(Stream_Audio, 0, "ConformanceCheck", "N NT"); // Hidden in text output (deprecated)
             Fill_SetOptions(Stream_Audio, 0, "ConformanceCheck/Short", "N NT"); // Hidden in text output
         }
+    #else
+        (void)NoConCh;
+        (void)DefaultIdPresent;
     #endif
 }
 
@@ -3317,6 +3335,7 @@ void File_Usac::channelLayout()
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const size_t UsacConfigExtension_usacConfigExtType_Size=8;
 static const char* UsacConfigExtension_usacConfigExtType[UsacConfigExtension_usacConfigExtType_Size]=
 {
@@ -3329,6 +3348,7 @@ static const char* UsacConfigExtension_usacConfigExtType[UsacConfigExtension_usa
     NULL,
     "STREAM_ID",
 };
+#endif //MEDIAINFO_TRACE
 void File_Usac::UsacConfigExtension()
 {
     Element_Begin1("UsacConfigExtension");
@@ -3723,6 +3743,9 @@ void File_Usac::UsacFrame(size_t BitsNotIncluded)
                 LastByte=1;
             }
             Skip_BS(BitsRemaining,                              LastByte?"Unknown":"Padding");
+            #if !MEDIAINFO_TRACE
+                (void)LastByte;
+            #endif //MEDIAINFO_TRACE
         }
         else if (C.IFrameParsed && Data_BS_Remain()<BitsNotIncluded)
             Trusted_IsNot("Too big");
@@ -6052,6 +6075,9 @@ void File_Usac::AudioPreRoll()
 //---------------------------------------------------------------------------
 void File_Usac::escapedValue(int32u &Value, int8u nBits1, int8u nBits2, int8u nBits3, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Begin1(Name);
     Get_S4(nBits1, Value,                                       "nBits1");
     if (Value==((1u<<nBits1)-1))

@@ -60,6 +60,7 @@ Ztring MediaInfo_Config_PerPackage::Option (const String &Option, const String &
         #if MEDIAINFO_EVENTS
             return Event_CallBackFunction_Set(Value);
         #else //MEDIAINFO_EVENTS
+            (void)Value;
             return __T("Event manager is disabled due to compilation options");
         #endif //MEDIAINFO_EVENTS
     }

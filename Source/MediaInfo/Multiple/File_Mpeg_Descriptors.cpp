@@ -795,6 +795,7 @@ const char* Mpeg_Descriptors_component_type_OB_ext_0F(int8u component_type)
     }
 }
 
+#if MEDIAINFO_TRACE
 static string Mpeg_Descriptors_component_type_OB(int8u stream_content_ext, int8u component_type)
 {
     switch (stream_content_ext)
@@ -804,6 +805,7 @@ static string Mpeg_Descriptors_component_type_OB(int8u stream_content_ext, int8u
             return "reserved for future use";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 const char* Mpeg_Descriptors_codepage_1(int8u codepage)
 {
@@ -829,6 +831,7 @@ const char* Mpeg_Descriptors_codepage_1(int8u codepage)
     }
 }
 
+#if MEDIAINFO_TRACE
 static string Mpeg_Descriptors_component_type(int8u stream_content, int8u stream_content_ext, int8u component_type)
 {
      // case of (component_type stream_content == 0x0B && stream_content_ext == 0x0E) is handled in NGA_component()
@@ -852,6 +855,7 @@ static string Mpeg_Descriptors_component_type(int8u stream_content, int8u stream
                 return "reserved for future use";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 const char* Mpeg_Descriptors_registration_format_identifier_Format(int32u format_identifier)
 {
@@ -1025,6 +1029,7 @@ static const char* Mpeg_Descriptors_descriptor_tag_extension_Array[] = {
     "DTS-UHD_descriptor ",
 };
 static const auto Mpeg_Descriptors_descriptor_tag_extension_Array_Size = sizeof(Mpeg_Descriptors_descriptor_tag_extension_Array) / sizeof(*Mpeg_Descriptors_descriptor_tag_extension_Array);
+#if MEDIAINFO_TRACE
 static string Mpeg_Descriptors_descriptor_tag_extension(int8u descriptor_tag_extension)
 {
     const auto Name = descriptor_tag_extension < Mpeg_Descriptors_descriptor_tag_extension_Array_Size ? Mpeg_Descriptors_descriptor_tag_extension_Array[descriptor_tag_extension] : nullptr;
@@ -1033,6 +1038,7 @@ static string Mpeg_Descriptors_descriptor_tag_extension(int8u descriptor_tag_ext
     }
     return to_string(descriptor_tag_extension);
 }
+#endif //MEDIAINFO_TRACE
 
 stream_t Mpeg_Descriptors_stream_Kind(int8u descriptor_tag, int32u format_identifier)
 {
@@ -1182,6 +1188,7 @@ static const char* Mpeg_Descriptors_AC3_Channels[]=
     "",
 };
 
+#if MEDIAINFO_TRACE
 static const char* Mpeg_Descriptors_AC3_Priority[]=
 {
     "",
@@ -1255,6 +1262,7 @@ static const char* Mpeg_Descriptors_transmission_mode[]=
     "4k mode",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 const char* Mpeg_Descriptors_original_network_id(int16u original_network_id)
@@ -1664,12 +1672,14 @@ const int16u DVB_Text_00[96]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* NGA_component_preferred_reproduction[] =
 {
     "stereo",
     "two-dimensional",
     "three-dimensional",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern const size_t DolbyVision_Compatibility_Size;
@@ -4350,6 +4360,9 @@ void File_Mpeg_Descriptors::CUEI_02()
 //---------------------------------------------------------------------------
 void File_Mpeg_Descriptors::ATSC_multiple_string_structure(Ztring &Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     //Parsing
     Ztring string;
     int8u number_strings, number_segments;

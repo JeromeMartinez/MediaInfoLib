@@ -216,6 +216,15 @@ static const char* Mxf_Param_Info_IfAny(int32u, int64u)
 #endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
+static string Mxf_Param_Info_OrUUID(const int128u& Value, const int128u& UUID)
+{
+    if (const char* Name=Mxf_Param_Info((int32u)Value.hi, Value.lo))
+        return Name;
+    return Ztring().From_UUID(UUID).To_UTF8();
+}
+
+//---------------------------------------------------------------------------
 static const char* Mxf_Category(int8u Category)
 {
     switch(Category)
@@ -248,6 +257,7 @@ static const char* Mxf_Registry(int16u CategoryRegistry) // SMPTE ST 336
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Mxf_MPEG2_CodedContentType(int8u CodedContentType)
@@ -262,6 +272,7 @@ static const char* Mxf_MPEG2_CodedContentType(int8u CodedContentType)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mxf_AVC_SequenceParameterSetFlag_Constancy(bool Constancy)
 {
     if (Constancy)
@@ -269,6 +280,7 @@ static const char* Mxf_AVC_SequenceParameterSetFlag_Constancy(bool Constancy)
     else
         return "Constant";
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Mxf_OperationalPattern(const int128u OperationalPattern)
@@ -1010,6 +1022,7 @@ static const char* Mxf_EssenceCompression_Version(const int128u& EssenceCompress
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mxf_Sequence_DataDefinition(const int128u DataDefinition)
 {
     int8u Code4=(int8u)((DataDefinition.lo&0x000000FF00000000LL)>>32);
@@ -1051,6 +1064,7 @@ static const char* Mxf_FrameLayout(int8u FrameLayout)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Mxf_FrameLayout_ScanType(int8u FrameLayout)
@@ -1722,11 +1736,13 @@ static const char* Mxf_AS11_AudioLoudnessStandard[Mxf_AS11_AudioLoudnessStandard
 
 //---------------------------------------------------------------------------
 const size_t Mxf_AS11_AudioDescriptionType_Count=2;
+#if MEDIAINFO_TRACE
 static const char* Mxf_AS11_AudioDescriptionType[Mxf_AS11_AudioDescriptionType_Count]=
 {
     "Control data / Narration",
     "AD Mix",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 const size_t Mxf_AS11_OpenCaptionsType_Count=2;
@@ -1761,6 +1777,7 @@ static string Mxf_CameraUnitAcquisitionMetadata_GammaforCDL(int8u Value)
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 // EBU Tech 3349
 static string Mxf_CameraUnitAcquisitionMetadata_NeutralDensityFilterWheelSetting(int16u Value)
 {
@@ -1770,6 +1787,7 @@ static string Mxf_CameraUnitAcquisitionMetadata_NeutralDensityFilterWheelSetting
         default   : return Ztring::ToZtring(Value).To_UTF8();
     }
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 // EBU Tech 3349
@@ -8626,6 +8644,8 @@ const File_Mxf::properties& File_Mxf::SetProperties_Get(const int128u& InstanceU
         const auto Properties=SetProperties_Duplicates.find(make_pair(InstanceUID, Key));
         if (Properties!=SetProperties_Duplicates.end())
             return Properties->second;
+    #else //MEDIAINFO_CONFORMANCE
+        (void)Key;
     #endif //MEDIAINFO_CONFORMANCE
     return SetProperties_Get(InstanceUID);
 }
@@ -10206,6 +10226,7 @@ bool File_Mxf::CompliantWith_St20672_IsTested (bool WithSt2067204)
     #if MEDIAINFO_CONFORMANCE
         return St20672_IsRequested || St20675_IsRequested || (WithSt2067204 && St2067204_IsRequested) || CompliantWith_St20672_IsCandidate();
     #else //MEDIAINFO_CONFORMANCE
+        (void)WithSt2067204;
         return false;
     #endif //MEDIAINFO_CONFORMANCE
 }
@@ -11422,6 +11443,8 @@ void File_Mxf::Position_Update(int64u FutureFileOffset, bool UnsynchParsers)
             Frame_Count_NotParsedIncluded=(int64u)-1;
         }
 
+    #else //if MEDIAINFO_DEMUX || MEDIAINFO_SEEK
+        (void)FutureFileOffset;
     #endif //if MEDIAINFO_DEMUX || MEDIAINFO_SEEK
 
     if (!Tracks.empty() && Tracks.begin()->second.EditRate) //TODO: use the corresponding track instead of the first one
@@ -12656,8 +12679,10 @@ void File_Mxf::Data_Parse()
             Code_Compare4 = (int32u)Essences::FrameWrappedMPEGPictureElement | 0x010000;
         }
 
-        auto Name = Mxf_Param_Info((int32u)Code.hi, Code.lo & 0xFFFFFFFFFF00FF00);
-        Element_Name(Name ? Name : "Unknown stream");
+        #if MEDIAINFO_TRACE
+            auto Name = Mxf_Param_Info((int32u)Code.hi, Code.lo & 0xFFFFFFFFFF00FF00);
+            Element_Name(Name ? Name : "Unknown stream");
+        #endif //MEDIAINFO_TRACE
 
         //Config
         if (!Essences_FirstEssence_Parsed)
@@ -13541,8 +13566,7 @@ void File_Mxf::Data_Parse()
     case 0x##_CODE :    { \
                         std::map<int16u, int128u>::iterator Primer_Value=Primer_Values.find(0x##_CODE); \
                         if (Primer_Value!=Primer_Values.end()) { \
-                            auto Temp = Mxf_Param_Info((int32u)Primer_Value->second.hi, Primer_Value->second.lo); \
-                            Element_Name(Temp ? Temp : Ztring().From_UUID(Code).To_UTF8().c_str()); \
+                            Element_Name(Mxf_Param_Info_OrUUID(Primer_Value->second, Code).c_str()); \
                         } \
                         else { \
                             Element_Name(Ztring().From_CC2(0x##_CODE).To_UTF8().c_str()); \
@@ -13555,8 +13579,7 @@ void File_Mxf::Data_Parse()
 else if ((Primer_Value->second.hi>>24)==0x060E2B3401LL \
       && Primer_Value->second.lo==Elements::_ELEMENT) \
 { \
-    auto Temp = Mxf_Param_Info((int32u)Primer_Value->second.hi, Primer_Value->second.lo); \
-    Element_Name(Temp ? Temp : Ztring().From_UUID(Code).To_UTF8().c_str()); \
+    Element_Name(Mxf_Param_Info_OrUUID(Primer_Value->second, Code).c_str()); \
     int64u Element_Size_Save=Element_Size; \
     Element_Size=Element_Offset+Length2; \
     _ELEMENT(); \
@@ -14404,7 +14427,7 @@ void File_Mxf::PrimerPack()
         int16u LocalTag;
         int128u UID;
         Get_B2 (LocalTag,                                       "LocalTag"); Element_Info1(Ztring().From_CC2(LocalTag));
-        Get_UL (UID,                                            "UID", NULL); { auto Temp = Mxf_Param_Info((int32u)UID.hi, UID.lo); Element_Info1(Temp ? Temp : Ztring().From_UUID(UID).To_UTF8().c_str()); };
+        Get_UL (UID,                                            "UID", NULL); Element_Info1(Mxf_Param_Info_OrUUID(UID, UID).c_str());
         Element_End0();
 
         FILLING_BEGIN();
@@ -21633,14 +21656,18 @@ void File_Mxf::Info_Rational()
 //---------------------------------------------------------------------------
 void File_Mxf::Get_UL(int128u &Value, const char* Name, const char* (*Param) (int128u))
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+        (void)Param;
+    #endif //MEDIAINFO_TRACE
     //Parsing
     Element_Begin1(Name);
     int128u V;
     int64u Temp;
     Peek_B8(Temp);
     V.hi = Temp;
-    bool IsSmpte = (V.hi >> 32) == 0x060E2B34;
     #if MEDIAINFO_TRACE
+    bool IsSmpte = (V.hi >> 32) == 0x060E2B34;
     if (Trace_Activated && IsSmpte) {
     Skip_B1(                                                    "Identifier"); Param_Info1("Object Identifier");
     Skip_B1(                                                    "Length");
@@ -21934,6 +21961,9 @@ void File_Mxf::Skip_UL(const char* Name)
 //---------------------------------------------------------------------------
 void File_Mxf::Get_UMID(int256u &Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     Element_Name(Name);
 
     //Parsing
@@ -22032,6 +22062,9 @@ void File_Mxf::Info_Timestamp()
 //---------------------------------------------------------------------------
 void File_Mxf::Get_BER(int64u &Value, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int8u Length;
     Get_B1(Length,                                              Name);
     if (Length<0x80)

@@ -87,6 +87,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg4_Descriptors_Predefined(int8u ID)
 {
     switch (ID)
@@ -199,6 +200,7 @@ static const char* Mpeg4_Descriptors_SceneProfileLevelIndication(int8u ID)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 #endif //MEDIAINFO_MPEG4_YES
 
 //---------------------------------------------------------------------------
@@ -383,6 +385,7 @@ string Mpeg4_Descriptors_AudioProfileLevelIndicationString(const profilelevel_st
 extern const char* Mpeg4v_Profile_Level(int32u Profile_Level);
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Mpeg4_Descriptors_GraphicsProfileLevelIndication(int8u ID)
 {
     switch (ID)
@@ -397,6 +400,7 @@ static const char* Mpeg4_Descriptors_GraphicsProfileLevelIndication(int8u ID)
         default   : return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

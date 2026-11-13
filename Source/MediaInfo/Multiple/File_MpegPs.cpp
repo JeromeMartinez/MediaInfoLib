@@ -117,6 +117,7 @@ namespace MediaInfoLib
 //***************************************************************************
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* MpegPs_System_Fixed[]=
 {
     "CBR",
@@ -175,6 +176,7 @@ static const char* MpegPs_stream_id_extension(int8u stream_id_extension)
             else                                return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern const char* Mpeg_Psi_stream_type_Format(int8u stream_type, int32u format_identifier);

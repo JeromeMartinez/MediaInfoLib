@@ -74,6 +74,7 @@ namespace MediaInfoLib
 {
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Lxf_Format_Video[16]=
 {
     "JPEG",
@@ -102,6 +103,7 @@ static const char* Lxf_PictureType[4]=
     "P",
     "B",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern const float64 Mpegv_frame_rate[16]; //In Video/File_Mpegv.cpp

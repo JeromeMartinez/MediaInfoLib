@@ -1065,6 +1065,9 @@ namespace MediaInfoLib
 //---------------------------------------------------------------------------
 int16u File_Aac::sbr_huff_dec(const sbr_huffman& Table, const char* Name)
 {
+    #if !MEDIAINFO_TRACE
+        (void)Name;
+    #endif //MEDIAINFO_TRACE
     int8u bit;
     int16s index = 0;
 

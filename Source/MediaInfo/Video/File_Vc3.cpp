@@ -229,6 +229,7 @@ static int8u Vc3_SBD_FromCID (int32u CompressionID)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Vc3_FFC[4]=
 {
     "",
@@ -236,6 +237,7 @@ static const char* Vc3_FFC[4]=
     "Interlaced",
     "Interlaced",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Vc3_FFC_ScanOrder[4]=
@@ -247,11 +249,13 @@ static const char* Vc3_FFC_ScanOrder[4]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Vc3_FFE[2]=
 {
     "Interlaced",
     "Progressive",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Vc3_SST[2]=
@@ -343,6 +347,7 @@ static int16u Vc3_ALPF_PerFrame_FromCID (int32u CompressionID)
 }
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Vc3_CLV[4]=
 {
     "BT.709",
@@ -350,6 +355,7 @@ static const char* Vc3_CLV[4]=
     "BT.2020 constant",
     "",                         //Out of band
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* Vc3_CLF[2]=

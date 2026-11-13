@@ -69,6 +69,7 @@ static const int32u Wvpk_SamplingRate[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* Wvpk_id(int8u ID)
 {
     switch (ID)
@@ -104,6 +105,7 @@ static const char* Wvpk_id(int8u ID)
         default:    return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 extern std::string ExtensibleWave_ChannelMask_ChannelLayout(int32u ChannelMask); //In Multiple/File_Riff_Elements.cpp

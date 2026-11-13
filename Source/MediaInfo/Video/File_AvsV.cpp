@@ -97,6 +97,7 @@ static const char* AvsV_chroma_format[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* AvsV_extension_start_code_identifier[]=
 {
     "",
@@ -116,6 +117,7 @@ static const char* AvsV_extension_start_code_identifier[]=
     "",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //---------------------------------------------------------------------------
 static const char* AvsV_video_format[]=
@@ -152,6 +154,7 @@ static const float32 AvsV_aspect_ratio[]=
 };
 
 //---------------------------------------------------------------------------
+#if MEDIAINFO_TRACE
 static const char* AvsV_picture_coding_type[]=
 {
     "",
@@ -159,6 +162,7 @@ static const char* AvsV_picture_coding_type[]=
     "B",
     "",
 };
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor

@@ -40,6 +40,7 @@ namespace MediaInfoLib
 // Info
 //***************************************************************************
 
+#if MEDIAINFO_TRACE
 static const char* AAf_tagSTGTY (int8u tagSTGTY)
 {
     switch (tagSTGTY)
@@ -63,6 +64,7 @@ static const char* AAf_tagDECOLOR (int8u tagDECOLOR)
         default: return "";
     }
 }
+#endif //MEDIAINFO_TRACE
 
 //***************************************************************************
 // Constructor/Destructor
