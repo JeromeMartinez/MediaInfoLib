@@ -3271,7 +3271,9 @@ void File_Mk::Segment_Cluster_BlockGroup_Block()
                                         Laces.push_back(Element_Size - Element_Offset);
                                     }
                                     else
+                                    {
                                         Laces.push_back(Element_Size-Element_Offset-Element_Offset_Virtual); Param_Info1(Size); //last lace
+                                    }
                                 }
                                 break;
                         default : ; //Should never be here

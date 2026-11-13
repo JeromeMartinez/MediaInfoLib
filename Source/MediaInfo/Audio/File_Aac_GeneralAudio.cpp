@@ -3935,7 +3935,9 @@ void File_Aac::extension_payload(size_t End, int8u id_aac)
                     {
                         Element_Begin1("fill_byte");
                         while (Data_BS_Remain()>End)
+                        {
                             Skip_S1(8,                          "fill_byte[i]"); Param_Info1("must be 10100101");
+                        }
                         Element_End0();
                     }
                     break;
