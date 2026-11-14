@@ -11,9 +11,10 @@ TESTS = \
     mixml.sh \
     ebucore.sh \
     unicode.sh \
-    filename.sh
+    filename.sh \
+    longpath.sh
 
-check_PROGRAMS = mil_analyze mil_filename
+check_PROGRAMS = mil_analyze mil_filename mil_longpath
 mil_analyze_SOURCES = \
     Source/analyze.cpp
 
@@ -29,3 +30,10 @@ mil_filename_CPPFLAGS = -I../../../../Source -I../../../../../ZenLib/Source
 mil_filename_CXXFLAGS = $(AM_CXXFLAGS) -Wall -Wextra
 
 mil_filename_LDFLAGS = ../libmediainfo.la
+
+mil_longpath_SOURCES = \
+    Source/longpath.cpp
+
+mil_longpath_CXXFLAGS = $(AM_CXXFLAGS) -Wall -Wextra
+
+mil_longpath_LDFLAGS = ../libmediainfo.la
