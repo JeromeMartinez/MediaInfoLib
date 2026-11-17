@@ -1,3 +1,9 @@
+/*  Copyright (c) MediaArea.net SARL. All Rights Reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license that can
+ *  be found in the License.html file in the root of the source tree.
+ */
+
 package net.mediaarea.mediainfo.example
 
 import android.os.Bundle
@@ -26,8 +32,6 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,10 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import net.mediaarea.mediainfo.MediaInfo
 import net.mediaarea.mediainfo.example.ui.theme.MediaInfoLibExampleTheme
 
 
@@ -52,14 +52,24 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MediaViewModel = viewModel()
             MediaInfoLibExampleTheme {
-                MediaInfoLibExampleApp(viewModel.uiState)
+                MediaInfoLibExampleApp(
+                    state = viewModel.uiState,
+                    urlState = viewModel.urlState,
+                    onUrlChange = viewModel::setUrl,
+                    onProcessUrl = viewModel::processUrl
+                )
             }
         }
     }
 }
 
 @Composable
-private fun MediaInfoLibExampleApp(state: MediaInfoState) {
+private fun MediaInfoLibExampleApp(
+    state: MediaInfoState,
+    urlState: UrlState,
+    onUrlChange: (String) -> Unit,
+    onProcessUrl: () -> Unit
+) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
 
     NavigationSuiteScaffold(
@@ -110,6 +120,9 @@ private fun MediaInfoLibExampleApp(state: MediaInfoState) {
                     modifier = Modifier
                         .padding(innerPadding)
                         .verticalScroll(rememberScrollState()),
+                    state = urlState,
+                    onUrlChange = onUrlChange,
+                    onProcessUrl = onProcessUrl
                 )
             }
         }
@@ -178,58 +191,48 @@ private fun NativeScreen(modifier: Modifier = Modifier, state: MediaInfoState) {
 }
 
 @Composable
-private fun NetworkScreen(modifier: Modifier = Modifier) {
-    var url by remember { mutableStateOf("https://raw.githubusercontent.com/MediaArea/MediaInfoLib/refs/heads/master/Source/Resource/Image/MediaInfo.ico") }
-    var result by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-
-    // Create a coroutine scope tied to this composable's lifecycle
-    val scope = rememberCoroutineScope()
-
+private fun NetworkScreen(
+    modifier: Modifier = Modifier,
+    state: UrlState,
+    onUrlChange: (String) -> Unit,
+    onProcessUrl: () -> Unit
+) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         OutlinedTextField(
-            value = url,
-            onValueChange = { url = it },
+            value = state.url,
+            onValueChange = onUrlChange,
             label = { Text("Enter URL") },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading
+            enabled = !state.isLoading
         )
         Button(
-            onClick = {
-                if (url.isNotBlank()) {
-                    isLoading = true
-                    result = ""
-
-                    // Launch background worker thread
-                    scope.launch {
-                        val returned = withContext(Dispatchers.IO) {
-                            val mi = MediaInfo()
-                            mi.Option("Language", "  Config_Text_ColumnSize;20")
-                            mi.Open(url)
-                            mi.Inform()
-                        }
-                        result = returned
-                        isLoading = false
-                    }
-                }
-            },
+            // The work is done by the ViewModel
+            onClick = onProcessUrl,
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading && url.isNotBlank()
+            enabled = !state.isLoading && state.url.isNotBlank()
         ) {
-            Text(if (isLoading) "Processing..." else "Process URL")
+            Text(if (state.isLoading) "Processing..." else "Process URL")
         }
-        if (isLoading) {
+        if (state.isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
         }
-        if (result.isNotEmpty()) {
+        if (state.error.isNotEmpty()) {
+            Text(
+                text = state.error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (state.result.isNotEmpty()) {
             InfoCard(
                 title = "MediaInfoLib Inform Text Output",
-                value = result,
+                value = state.result,
                 fontFamily = FontFamily.Monospace
             )
         }
@@ -282,6 +285,11 @@ private fun MediaInfoMultiSizePreview() {
         codecs = ""
     )
     MediaInfoLibExampleTheme {
-        MediaInfoLibExampleApp(mockState)
+        MediaInfoLibExampleApp(
+            state = mockState,
+            urlState = UrlState(),
+            onUrlChange = {},
+            onProcessUrl = {}
+        )
     }
 }

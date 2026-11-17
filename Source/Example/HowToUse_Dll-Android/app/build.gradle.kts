@@ -8,6 +8,7 @@ android {
     compileSdk {
         version = release(37)
     }
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "net.mediaarea.mediainfo.example"
@@ -16,13 +17,12 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
         @Suppress("UnstableApiUsage")
         externalNativeBuild {
             cmake {
                 arguments(
-                    "-DANDROID_STL=c++_shared"
+                    // Any STL can be used, since the library exports only C functions
+                    "-DANDROID_STL=c++_static"
                 )
             }
         }
@@ -65,11 +65,5 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    testImplementation(libs.junit)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

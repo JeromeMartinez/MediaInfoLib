@@ -1,0 +1,9 @@
+[versions]
+agp = "9.2.1"
+curl = "8.18.0"
+
+[libraries]
+curl = { group = "io.github.vvb2060.ndk", name = "curl", version.ref = "curl" }
+
+[plugins]
+android-library = { id = "com.android.library", version.ref = "agp" }

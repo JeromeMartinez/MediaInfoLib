@@ -1,3 +1,9 @@
+/*  Copyright (c) MediaArea.net SARL. All Rights Reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license that can
+ *  be found in the License.html file in the root of the source tree.
+ */
+
 #include <jni.h>
 #include <string>
 #include <MediaInfoDLL/MediaInfoDLL_Static.h> // Header supplied automatically by Prefab!
@@ -29,12 +35,20 @@ Java_net_mediaarea_mediainfo_example_Bridge_Info(JNIEnv *env, jobject thiz) {
 extern "C"
 JNIEXPORT jstring JNICALL
 Java_net_mediaarea_mediainfo_example_Bridge_Inform(JNIEnv *env, jobject thiz, jstring path) {
+    // Copy of the path, so that the JNI buffer is released at once
     const char *nativePath = env->GetStringUTFChars(path, nullptr);
+    if (!nativePath)
+        return nullptr; // OutOfMemoryError thrown
+    std::string Path(nativePath);
+    env->ReleaseStringUTFChars(path, nativePath);
+
     MediaInfoDLL::MediaInfo MI;
     MI.Option(__T("Language"), __T("  Config_Text_ColumnSize;20"));
-    MI.Open(nativePath);
     std::string MediaInfo_Output = __T("\n\nInform\n");
     MediaInfo_Output += __T("====================\n");
-    MediaInfo_Output += MI.Inform();
+    if (MI.Open(Path))
+        MediaInfo_Output += MI.Inform();
+    else
+        MediaInfo_Output += __T("Can not open ") + Path;
     return env->NewStringUTF(MediaInfo_Output.c_str());
 }

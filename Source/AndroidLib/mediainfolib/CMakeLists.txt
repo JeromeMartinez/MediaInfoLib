@@ -11,6 +11,10 @@ set(BUILD_ZENLIB ON CACHE BOOL "Build bundled ZenLib" FORCE)
 
 find_package(curl REQUIRED CONFIG)
 
+# Except in Debug builds, debug info limited to line tables: crash traces keep function names, file names and line numbers,
+# at less than half the size. It must come after the -g that the NDK toolchain and RelWithDebInfo add, since the last one wins
+add_compile_options($<$<NOT:$<CONFIG:Debug>>:-gline-tables-only>)
+
 add_subdirectory(../../../Project/CMake ${CMAKE_CURRENT_BINARY_DIR}/MediaInfoLib)
 
 target_link_options(mediainfo
