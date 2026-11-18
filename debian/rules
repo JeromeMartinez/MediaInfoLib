@@ -20,6 +20,10 @@ override_dh_auto_build:
 	cp Source/Doc/*.html ./
 	dh_auto_build -DProject/GNU/Library
 
+override_dh_auto_test:
+	# no network access during package builds: no download of the XML schemas, no XML test (xmllint)
+	dh_auto_test -DProject/GNU/Library -- NO_DOWNLOAD=1
+
 override_dh_auto_install:
 	dh_auto_install -DProject/GNU/Library
 	for py in $(shell pyversions -vr); do												\

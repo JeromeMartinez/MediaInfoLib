@@ -292,6 +292,14 @@ pushd Project/GNU/Library
 make %{?_smp_mflags}
 popd
 
+%check
+# test scripts made not executable by the chmod 644 of %prep
+chmod 755 Project/GNU/Library/test/*.sh
+pushd Project/GNU/Library
+# no network access during package builds: no download of the XML schemas, no XML test (xmllint)
+make check NO_DOWNLOAD=1
+popd
+
 %install
 pushd Project/GNU/Library/
     make install DESTDIR=%{buildroot}

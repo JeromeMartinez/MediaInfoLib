@@ -22,6 +22,12 @@ build() {
   make
 }
 
+check() {
+  cd $srcdir/MediaInfoLib/Project/GNU/Library
+  # no network access during package builds: no download of the XML schemas, no XML test (xmllint)
+  make check NO_DOWNLOAD=1
+}
+
 package_libmediainfo() {
   cd $srcdir/MediaInfoLib/Project/GNU/Library
   make DESTDIR=$pkgdir install
