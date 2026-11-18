@@ -5,7 +5,7 @@ PATH_SCRIPT=$(dirname "$0")
 
 RCODE=0
 
-if [ -z $S3_KEY ] || [ -z $S3_PASS ] || ! enabled s3 ; then
+if [ -z $S3_KEY ] || [ -z $S3_PASS ] || [ -n "$NO_DOWNLOAD" ] || ! enabled s3 ; then
     exit 77 # Skip test
 fi
 

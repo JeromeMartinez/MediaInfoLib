@@ -8,6 +8,8 @@ if ! enabled xml ; then
     exit 77 # Skip test
 fi
 
+files_are_present "$PATH_FILES"
+
 unset args
 while IFS= read -r i; do
     mkdir -p "$TEMP_PATH/$(dirname "$i")"

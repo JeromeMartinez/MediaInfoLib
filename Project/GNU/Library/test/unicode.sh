@@ -8,7 +8,7 @@ if ! enabled unicode ; then
     exit 77 # Skip test
 fi
 
-FILE="$PATH_SCRIPT/../../../../Release/Example.ogg"
+FILE="$PATH_SCRIPT/Samples/Example.ogg"
 FILE_NAME="$(basename $FILE)"
 OUTPUT_XML_NAME="$TEMP_PATH/$FILE_NAME.xml"
 analyze -f XML "$FILE" "$OUTPUT_XML_NAME"

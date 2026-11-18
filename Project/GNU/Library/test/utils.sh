@@ -59,28 +59,60 @@ file_contains()
     grep -q "$2" "$1" || fail "$1 has no line matching $2"
 }
 
+# with NO_DOWNLOAD set (e.g. package build), no XML test as for the schemas (no xmllint needed), the outputs of the
+# samples are checked by the comparison of their hashes
 xml_is_correct()
 {
+    if [ -n "$NO_DOWNLOAD" ]
+    then
+        return 0
+    fi
     local output
     output=$(xmllint --noout "$1" 2>&1) || fail "$1 is not well-formed XML" "$output"
 }
 
+# with NO_DOWNLOAD set, no JSON test as for XML (no jsonlint needed)
 json_is_correct()
 {
+    if [ -n "$NO_DOWNLOAD" ]
+    then
+        return 0
+    fi
     local output
     output=$(jsonlint -q "$1" 2>&1) || fail "$1 is not correct JSON" "$output"
 }
 
+# end of the test (skipped) if the files of the regression tests are not present (make clone_regression_files)
+files_are_present()
+{
+    if [ ! -f "$1/files.txt" ]
+    then
+        printf '%s
+' "SKIP: $(basename "$0" .sh), files of the regression tests not present (make clone_regression_files)" >&$FD
+        exit 77
+    fi
+}
+
 # schema ${2} downloaded from ${3} at its first use, not kept if its download failed
+# with NO_DOWNLOAD set (e.g. package build without network access), validation against the schema skipped if not present
 xml_is_valid()
 {
     if [ ! -f "$UTILS_PATH/$2" ]
     then
+        if [ -n "$NO_DOWNLOAD" ]
+        then
+            if [ ! -f "$TEMP_PATH/$2.skipped" ]
+            then
+                : > "$TEMP_PATH/$2.skipped"
+                printf '%s\n' "$(basename "$0" .sh): NO_DOWNLOAD set, validation against $2 skipped" >&$FD
+            fi
+            return 0
+        fi
         local download
-        if ! download=$(wget "$3" -O "$UTILS_PATH/$2" 2>&1)
+        if ! download=$(wget -T 30 -t 2 "$3" -O "$UTILS_PATH/$2" 2>&1)
         then
             rm -f "$UTILS_PATH/$2"
-            fail "download of $3 failed" "$download"
+            fail "download of $3 failed (NO_DOWNLOAD=1 for skipping the validation against the schemas)" "$download"
         fi
     fi
     local output

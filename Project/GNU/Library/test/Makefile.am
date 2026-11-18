@@ -11,6 +11,7 @@ TESTS = \
     mixml.sh \
     ebucore.sh \
     unicode.sh \
+    samples.sh \
     filename.sh
 
 check_PROGRAMS = mil_analyze mil_filename

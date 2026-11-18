@@ -177,7 +177,7 @@ Push-Location "${release_directory}"
         Copy-Item -Force "..\..\Source\Example\HowToUse_Dll-rs" "Developers\Source\Example" -Recurse
         Copy-Item -Force "..\..\Source\Example\HowToUse_Dll*.*" "Developers\Source\Example"
         New-Item -Force -ItemType Directory "Developers"
-        Copy-Item -Force "..\Example.ogg" "Developers"
+        Copy-Item -Force "..\..\Project\GNU\Library\test\Samples\Example.ogg" "Developers"
         ### Copying: Information files ###
         Copy-Item -Force "..\..\History_DLL.txt" "Developers\History.txt"
         Copy-Item -Force "..\..\License.html" "Developers"
