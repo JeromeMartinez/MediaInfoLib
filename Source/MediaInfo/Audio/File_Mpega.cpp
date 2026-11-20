@@ -702,6 +702,17 @@ bool File_Mpega::Synchronize()
     //Synchronizing
     auto Buffer_Offset_BeforeZero = Buffer_Offset;
     LastSync_Offset_AreNotZero = true; // In case there is a return during check
+    auto LoneFrame_IsTrusted=[&]() //A single frame up to the end of the file is trusted only at the start of the file (after the tags and zero bytes)
+    {
+        if (IsSub || Status[IsAccepted])
+            return true;
+        if (File_Offset>File_BeginTagSize)
+            return false;
+        for (size_t Pos=(size_t)(File_BeginTagSize-File_Offset); Pos<Buffer_Offset; Pos++)
+            if (Buffer[Pos])
+                return false;
+        return true;
+    };
     while (Buffer_Offset+4<=Buffer_Size)
     {
         while (Buffer_Offset+4<=Buffer_Size)
@@ -770,7 +781,14 @@ bool File_Mpega::Synchronize()
                     if (Tag_Found0)
                         return true;
                     if (File_Offset+Buffer_Offset+Size0==File_Size-File_EndTagSize)
+                    {
+                        if (!LoneFrame_IsTrusted())
+                        {
+                            Buffer_Offset++;
+                            continue;
+                        }
                         break;
+                    }
 
                     //Testing
                     if ((CC2(Buffer+Buffer_Offset+Size0)&0xFFE0)!=0xFFE0 || (CC1(Buffer+Buffer_Offset+Size0+2)&0xF0)==0xF0 || (CC1(Buffer+Buffer_Offset+Size0+2)&0x0C)==0x0C)
@@ -890,6 +908,8 @@ bool File_Mpega::Synchronize()
                         }
                     }
                 }
+                else if (!LoneFrame_IsTrusted())
+                    Buffer_Offset++;
                 else
                     break; //while()
             }
