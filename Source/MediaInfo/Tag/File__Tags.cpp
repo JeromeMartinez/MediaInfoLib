@@ -34,6 +34,9 @@
     #include "MediaInfo/Tag/File_Lyrics3v2.h"
 #endif //MEDIAINFO_LYRICS3V2_YES
     #include "MediaInfo/File_Unknown.h"
+#include "MediaInfo/MediaInfo_Config_MediaInfo.h"
+#include <algorithm>
+#include <cstring>
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
@@ -239,6 +242,126 @@ bool File__Tags_Helper::Synchronize_TagsAndPadding(bool &Tag_Found)
 bool File__Tags_Helper::SingleFrame_IsEnough()
 {
     return Base->Status[File__Analyze::IsAccepted] || Base->IsSub || NotZero_Offset==Base->File_Offset+Base->Buffer_Offset;
+}
+
+//---------------------------------------------------------------------------
+bool File__Tags_Helper::Synchronize_AfterFirstFrame(bool &Tag_Found, size_t &Synchro_Offset)
+{
+    if (!Synchronize(Tag_Found, Synchro_Offset))
+        return false;
+    if (!Tag_Found || SingleFrame_IsEnough())
+        return true;
+
+    //Tags between two frames: the frames after them continue the count of the frames before them
+    const int64u Stream_Begin=Base->File_Offset+Base->Buffer_Offset;
+    const int64u Stream_End=Base->File_Size-File_EndTagSize;
+    size_t Offset=Synchro_Offset;
+    int64u Needed=0; //Bytes needed in the buffer from the frame, when not there yet
+    while (Tag_Found && Stream_Begin+Offset+8<=Stream_End)
+    {
+        const int8u* Tag=Base->Buffer+Base->Buffer_Offset+Offset;
+        size_t Available=Base->Buffer_Size-(Base->Buffer_Offset+Offset);
+        size_t Header_Size=CC3(Tag)==0x494433?10:(CC8(Tag)==0x4150455441474558LL?32:8); //"ID3", "APETAGEX", the others are known from their first 8 bytes
+        if (Available<Header_Size)
+        {
+            if (Stream_Begin+Offset+Header_Size<=Stream_End)
+                Needed=Offset+Header_Size;
+            break;
+        }
+        int64u Tag_Size;
+        if (CC3(Tag)==0x494433) //"ID3"
+        {
+            if (Tag[3]==0xFF || Tag[4]==0xFF || ((Tag[6]|Tag[7]|Tag[8]|Tag[9])&0x80))
+                break; //Not a tag
+            int32u Size=BigEndian2int32u(Tag+6);
+            Tag_Size=(((Size>>0)&0x7F)
+                    | ((Size>>1)&0x3F80)
+                    | ((Size>>2)&0x1FC000)
+                    | ((Size>>3)&0x0FE00000))
+                    +10;
+            if (Tag[3]==4 && (Tag[5]&0x10)) //ID3v2.4 footer present, not in the tag size
+            {
+                if (Available<Tag_Size+10 && Stream_Begin+Offset+Tag_Size+10<=Stream_End)
+                {
+                    Needed=Offset+Tag_Size+10;
+                    break;
+                }
+                if (Available>=Tag_Size+10 && CC3(Tag+(size_t)Tag_Size)==0x334449) //"3DI"
+                    Tag_Size+=10;
+            }
+        }
+        else if (CC8(Tag)==0x4150455441474558LL) //"APETAGEX"
+        {
+            Tag_Size=LittleEndian2int32u(Tag+12); //Items and footer
+            if (Tag_Size<32)
+                break; //Not a tag
+            if (LittleEndian2int32u(Tag+20)&0x20000000) //Header
+                Tag_Size+=32;
+            else if (LittleEndian2int32u(Tag+8)!=1000 && Stream_Begin+Offset+Tag_Size+32<=Stream_End) //A header without the "is the header" flag has its footer at the end of the tag, APEv1 has no header
+            {
+                if (Available<Tag_Size+16)
+                {
+                    Needed=Offset+Tag_Size+16;
+                    break;
+                }
+                Tag_Size=(CC8(Tag+Tag_Size)==0x4150455441474558LL && LittleEndian2int32u(Tag+Tag_Size+12)==Tag_Size)?(Tag_Size+32):32;
+            }
+            else
+                Tag_Size=32; //Footer alone
+        }
+        else if (CC8(Tag)==0x4C59524943534245LL) //"LYRICSBE"
+        {
+            static const char* const Lyrics="LYRICS";
+            size_t End=11; //After "LYRICSBEGIN"
+            for (;;)
+            {
+                End=std::search(Tag+std::min(End, Available), Tag+Available, Lyrics, Lyrics+6)-Tag;
+                if (End+9>Available || !std::memcmp(Tag+End+6, "200", 3) || !std::memcmp(Tag+End+6, "END", 3))
+                    break;
+                End++;
+            }
+            if (End+9<=Available)
+                Tag_Size=End+9;
+            else if (Base->File_Offset+Base->Buffer_Size>=Stream_End)
+                Tag_Size=Stream_End-(Stream_Begin+Offset); //Up to the end of the stream data
+            else if (Available<999999+15) //Lyrics3v2 size has 6 digits
+            {
+                Needed=Offset+999999+15;
+                break;
+            }
+            else
+                break; //Not a tag
+        }
+        else
+            Tag_Size=CC4(Tag)==0x5441472B?227:128; //"TAG+" or "TAG"
+        if (Stream_Begin+Offset+Tag_Size>Stream_End || Tag_Size>=(size_t)-1-(Base->Buffer_Offset+Offset))
+            break; //Not a tag, larger than the stream data
+        Offset+=(size_t)Tag_Size;
+
+        //Zero bytes
+        while (Stream_Begin+Offset<Stream_End && Base->Buffer_Offset+Offset<Base->Buffer_Size && !Base->Buffer[Base->Buffer_Offset+Offset])
+            Offset++;
+        if (Stream_Begin+Offset+8>Stream_End)
+        {
+            Synchro_Offset=(size_t)(Stream_End-Stream_Begin); //No room for another frame
+            Tag_Found=false;
+            return true;
+        }
+        if (Base->Buffer_Offset+Offset+8>Base->Buffer_Size)
+        {
+            Needed=Offset+8;
+            break;
+        }
+        if (!Synchronize(Tag_Found, Offset))
+            return false;
+    }
+
+    //Not counted if the tags can not be skipped (Tag_Found stays true, the caller handles it as a single frame followed by a tag)
+    if (Needed && !Base->Config->IsFinishing && Needed<=Base->Buffer_MaximumSize)
+        return false; //Need more data
+    if (!Tag_Found)
+        Synchro_Offset=Offset;
+    return true;
 }
 
 //---------------------------------------------------------------------------

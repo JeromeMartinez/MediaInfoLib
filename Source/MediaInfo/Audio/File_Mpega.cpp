@@ -799,7 +799,8 @@ bool File_Mpega::Synchronize()
 
                     //Tags
                     bool Tag_Found0;
-                    if (!File__Tags_Helper::Synchronize(Tag_Found0, Size0))
+                    size_t Size0_BeforeTags=Size0;
+                    if (!File__Tags_Helper::Synchronize_AfterFirstFrame(Tag_Found0, Size0))
                         return false;
                     if (Tag_Found0 || File_Offset+Buffer_Offset+Size0==File_Size-File_EndTagSize)
                     {
@@ -831,7 +832,7 @@ bool File_Mpega::Synchronize()
                             if (Buffer[Pos])
                                 break; //Only NULL bytes are authorized before VBRI header
                         }
-                        if (VbriFound)
+                        if (VbriFound && Size0==Size0_BeforeTags) //Not when tags were skipped: a single frame followed by tags is not enough
                             break;
                         Buffer_Offset++;
                     }

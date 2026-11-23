@@ -702,7 +702,8 @@ bool File_Aac::Synchronize_ADTS()
 
                 //Tags
                 bool Tag_Found0;
-                if (!File__Tags_Helper::Synchronize(Tag_Found0, aac_frame_length))
+                size_t aac_frame_length_BeforeTags=aac_frame_length;
+                if (!File__Tags_Helper::Synchronize_AfterFirstFrame(Tag_Found0, aac_frame_length))
                     return false;
                 if (Tag_Found0 || File_Offset+Buffer_Offset+aac_frame_length==File_Size-File_EndTagSize)
                 {
@@ -715,7 +716,8 @@ bool File_Aac::Synchronize_ADTS()
                 }
 
                 //Testing
-                if (aac_frame_length<=7 || (CC2(Buffer+Buffer_Offset+aac_frame_length)&0xFFF6)!=0xFFF0)
+                if (aac_frame_length_BeforeTags<=7 || (CC2(Buffer+Buffer_Offset+aac_frame_length)&0xFFF6)!=0xFFF0
+                 || (aac_frame_length!=aac_frame_length_BeforeTags && ((CC4(Buffer+Buffer_Offset)^CC4(Buffer+Buffer_Offset+aac_frame_length))&0xFFFFFFF0))) //After tags, the fixed header is the same
                     Buffer_Offset++;
                 else
                 {
@@ -866,7 +868,7 @@ bool File_Aac::Synchronize_LATM()
 
                 //Tags
                 bool Tag_Found0;
-                if (!File__Tags_Helper::Synchronize(Tag_Found0, Size0))
+                if (!File__Tags_Helper::Synchronize_AfterFirstFrame(Tag_Found0, Size0))
                     return false;
                 if (Tag_Found0 || File_Offset+Buffer_Offset+Size0==File_Size-File_EndTagSize)
                 {

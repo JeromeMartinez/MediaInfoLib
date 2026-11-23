@@ -78,6 +78,7 @@ public :
     bool Synchronize(bool &Tag_Found, size_t Synchro_Offset=0);
     bool Synchronize_TagsAndPadding(bool &Tag_Found); //Tags and zero bytes before the stream data, tags after zero bytes are tested as tags at the start
     bool SingleFrame_IsEnough(); //Before the stream is accepted, a single frame followed by the end of the file or by a tag, after other data, is likely a coincidence
+    bool Synchronize_AfterFirstFrame(bool &Tag_Found, size_t &Synchro_Offset); //Synchronize() after the first frame tested; if a single frame is not enough, the tags and zero bytes there are skipped so the next frame continues the count (Tag_Found false, Synchro_Offset after them, or at the end of the stream data if nothing else is there), Tag_Found stays true if they can not be skipped
     bool Synched_Test();
 
     //Buffer - Global
