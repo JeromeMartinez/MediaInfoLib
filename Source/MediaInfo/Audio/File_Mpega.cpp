@@ -809,9 +809,7 @@ bool File_Mpega::Synchronize()
                             Buffer_Offset++; //False start
                             continue;
                         }
-                        if (Tag_Found0)
-                            return true;
-                        break; //while(), padding up to the end tags
+                        break; //while(), followed by a tag or by padding up to the end tags
                     }
 
                     //Testing
@@ -871,10 +869,8 @@ bool File_Mpega::Synchronize()
                                 bool Tag_Found1;
                                 if (!File__Tags_Helper::Synchronize(Tag_Found1, Size0+Size1))
                                     return false;
-                                if (Tag_Found1)
-                                    return true;
-                                if (File_Offset+Buffer_Offset+Size0+Size1==File_Size-File_EndTagSize)
-                                    break;
+                                if (Tag_Found1 || File_Offset+Buffer_Offset+Size0+Size1==File_Size-File_EndTagSize)
+                                    break; //while(), followed by a tag or by the end tags
 
                                 //Testing
                                 if ((CC2(Buffer+Buffer_Offset+Size0+Size1)&0xFFE0)!=0xFFE0 || (CC1(Buffer+Buffer_Offset+Size0+Size1+2)&0xF0)==0xF0 || (CC1(Buffer+Buffer_Offset+Size0+Size1+2)&0x0C)==0x0C)
@@ -914,10 +910,8 @@ bool File_Mpega::Synchronize()
                                             bool Tag_Found2;
                                             if (!File__Tags_Helper::Synchronize(Tag_Found2, Size0+Size1+Size2))
                                                 return false;
-                                            if (Tag_Found2)
-                                                return true;
-                                            if (File_Offset+Buffer_Offset+Size0+Size1+Size2==File_Size-File_EndTagSize)
-                                                break;
+                                            if (Tag_Found2 || File_Offset+Buffer_Offset+Size0+Size1+Size2==File_Size-File_EndTagSize)
+                                                break; //while(), followed by a tag or by the end tags
 
                                             //Testing
                                             if ((CC2(Buffer+Buffer_Offset+Size0+Size1+Size2)&0xFFE0)!=0xFFE0 || (CC1(Buffer+Buffer_Offset+Size0+Size1+Size2+2)&0xF0)==0xF0 || (CC1(Buffer+Buffer_Offset+Size0+Size1+Size2+2)&0x0C)==0x0C
