@@ -2458,11 +2458,14 @@ bool File__Analyze::FileHeader_Begin_0x000001()
 //Returns the offset of "<" (Buffer_Size if there are only spaces up to now), or (size_t)-1 after Reject() if there is something else
 size_t File__Analyze::FileHeader_Begin_XML_Start()
 {
-    size_t Offset=0;
-    if (Buffer_Size>=3 && CC3(Buffer)==0xEFBBBF)
-        Offset=3;
-    else if (Buffer_Size>=2 && (CC2(Buffer)==0xFFFE || CC2(Buffer)==0xFEFF))
-        Offset=2;
+    size_t Offset=Buffer_Offset_Temp; //Bytes already tested by the previous calls while waiting for more data, else each call tests again all the spaces from the start of the file
+    if (!Offset)
+    {
+        if (Buffer_Size>=3 && CC3(Buffer)==0xEFBBBF)
+            Offset=3;
+        else if (Buffer_Size>=2 && (CC2(Buffer)==0xFFFE || CC2(Buffer)==0xFEFF))
+            Offset=2;
+    }
     while (Offset<Buffer_Size && (Buffer[Offset]=='\r' || Buffer[Offset]=='\n' || Buffer[Offset]=='\t' || Buffer[Offset]==' '))
         Offset++;
     if (Offset<Buffer_Size && Buffer[Offset]!='<')
@@ -2470,6 +2473,7 @@ size_t File__Analyze::FileHeader_Begin_XML_Start()
         Reject();
         return (size_t)-1;
     }
+    Buffer_Offset_Temp=Offset;
     return Offset;
 }
 
