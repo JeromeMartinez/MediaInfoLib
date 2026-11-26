@@ -112,6 +112,8 @@ File_Aac::File_Aac()
 
     //Temp - General Audio
     num_window_groups=0;
+    for (size_t g=0; g<8; g++)
+        num_sec[g]=0;
     sbr=NULL;
     ps=NULL;
     raw_data_block_Pos=0;
