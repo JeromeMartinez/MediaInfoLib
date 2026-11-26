@@ -112,6 +112,7 @@ File_Mpc::File_Mpc()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Temp
     FrameCount=0;

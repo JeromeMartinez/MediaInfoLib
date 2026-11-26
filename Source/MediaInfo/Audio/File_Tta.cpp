@@ -43,6 +43,7 @@ File_Tta::File_Tta()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 }
 
 //***************************************************************************

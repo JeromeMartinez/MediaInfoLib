@@ -54,6 +54,7 @@ File_Aac::File_Aac()
 
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Configuration
     #if MEDIAINFO_TRACE

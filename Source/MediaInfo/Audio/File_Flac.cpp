@@ -66,6 +66,7 @@ File_Flac::File_Flac()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //In
     NoFileHeader=false;

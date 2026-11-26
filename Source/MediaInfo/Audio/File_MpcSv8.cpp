@@ -67,6 +67,7 @@ File_MpcSv8::File_MpcSv8()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 }
 
 //***************************************************************************

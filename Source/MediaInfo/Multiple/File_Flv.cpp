@@ -473,6 +473,7 @@ File_Flv::File_Flv()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Configuration
     ParserName="FLV";

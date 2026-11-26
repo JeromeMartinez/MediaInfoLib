@@ -22,6 +22,9 @@
 namespace MediaInfoLib
 {
 
+//Size of the ID3v2 tag ("ID3", or "ea3" in OpenMG) with this 10-byte header, without its footer, 0 if this is not an ID3v2 header
+size_t Id3v2_SizeFromHeader(const int8u* Header);
+
 //***************************************************************************
 // Class File__UnCompressedSize_Helper
 //***************************************************************************

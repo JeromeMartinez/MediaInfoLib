@@ -76,6 +76,7 @@ File_Tak::File_Tak()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Temp
     AudioFrames_Offset=(int64u)-1;

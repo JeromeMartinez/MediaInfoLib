@@ -43,6 +43,7 @@ File_La::File_La()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 }
 
 //***************************************************************************

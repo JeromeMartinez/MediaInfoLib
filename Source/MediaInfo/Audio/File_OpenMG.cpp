@@ -126,6 +126,7 @@ File_OpenMG::File_OpenMG()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Config
     #if MEDIAINFO_TRACE

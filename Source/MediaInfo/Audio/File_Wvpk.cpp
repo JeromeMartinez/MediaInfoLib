@@ -120,6 +120,7 @@ File_Wvpk::File_Wvpk()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Configuration
     MustSynchronize=true;

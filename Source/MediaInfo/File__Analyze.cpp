@@ -21,6 +21,7 @@
 #include "MediaInfo/MediaInfo_Config_MediaInfo.h"
 #include "MediaInfo/MediaInfo_Config.h"
 #include "MediaInfo/MediaInfo_Internal.h" //Only for XML escape. TODO: move XML escape function somewhere more generic
+#include "MediaInfo/Tag/File__Tags.h"
 #if MEDIAINFO_IBIUSAGE && MEDIAINFO_SEEK
     #include "MediaInfo/Multiple/File_Ibi.h"
 #endif //MEDIAINFO_IBIUSAGE && MEDIAINFO_SEEK
@@ -682,6 +683,7 @@ File__Analyze::File__Analyze ()
     MustSynchronize=false;
     CA_system_ID_MustSkipSlices=false;
     FillAllMergedStreams=false;
+    Tags_AtStart_AreParsed=false;
 
     //Buffer
     #if MEDIAINFO_SEEK
@@ -701,6 +703,7 @@ File__Analyze::File__Analyze ()
     Buffer_TotalBytes_FirstSynched=0;
     Buffer_TotalBytes_LastSynched=0;
     Buffer_TotalBytes=0;
+    FirstSynched_TagEnd=0;
     if (MediaInfoLib::Config.FormatDetection_MaximumOffset_Get())
         Buffer_TotalBytes_FirstSynched_Max=MediaInfoLib::Config.FormatDetection_MaximumOffset_Get();
     else
@@ -2767,6 +2770,29 @@ bool File__Analyze::Synchro_Manage()
             Open_Buffer_Unsynch();
             GoToFromEnd(0);
             return false;
+        }
+        //The ID3v2 tags at the start of the file (e.g. with attached pictures) are not stream data: a top-level parser which does not parse them does not search its first synchronization in them
+        if (!IsSub && !Tags_AtStart_AreParsed && File_Offset_FirstSynched==(int64u)-1)
+        {
+            while (File_Offset+Buffer_Offset<=FirstSynched_TagEnd)
+            {
+                if (FirstSynched_TagEnd-File_Offset>Buffer_Size)
+                {
+                    Buffer_Offset=Buffer_Size;
+                    return false; //Wait for more data
+                }
+                Buffer_Offset=(size_t)(FirstSynched_TagEnd-File_Offset);
+                if (Buffer_Offset+10>Buffer_Size)
+                {
+                    if (File_Offset+Buffer_Size<File_Size)
+                        return false; //Wait for more data
+                    break;
+                }
+                size_t Tag_Size=FirstSynched_TagEnd && CC3(Buffer+Buffer_Offset)==0x334449?10:Id3v2_SizeFromHeader(Buffer+Buffer_Offset); //"3DI": ID3v2.4 footer
+                if (!Tag_Size || FirstSynched_TagEnd+Tag_Size>=File_Size) //Not skipped if no data of the file is after it (e.g. a declared size larger than the file)
+                    break;
+                FirstSynched_TagEnd+=Tag_Size;
+            }
         }
         int64u Synchro_Start=Buffer_TotalBytes+Buffer_Offset;
         bool Synchro_Result=Synchronize();

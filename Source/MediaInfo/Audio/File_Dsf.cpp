@@ -87,6 +87,7 @@ File_Dsf::File_Dsf()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 
     //Configuration
     ParserName="Dsf";

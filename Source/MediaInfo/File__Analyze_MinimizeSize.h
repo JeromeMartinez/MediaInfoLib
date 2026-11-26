@@ -1531,6 +1531,7 @@ protected :
     size_t Buffer_MinimumSize;
     size_t Buffer_MaximumSize;
     int64u Buffer_TotalBytes_FirstSynched_Max;
+    int64u FirstSynched_TagEnd; //End of the ID3v2 tags at the start of the file, the first synchronization of a top-level parser which does not parse them is not searched before it
     int64u Buffer_TotalBytes_Fill_Max;
     friend class File__Tags_Helper;
     friend class File_Usac;
@@ -1657,6 +1658,7 @@ public :
     bool MustSynchronize;
     bool CA_system_ID_MustSkipSlices;
     bool FillAllMergedStreams;
+    bool Tags_AtStart_AreParsed; //The parser parses the tags at the start of the file itself (File__Tags_Helper)
 
     //Demux
     enum contenttype

@@ -47,6 +47,20 @@ static bool Id3v2_Header_IsValid(const int8u* Header)
         && Header[4]!=0xFF;
 }
 
+//---------------------------------------------------------------------------
+size_t Id3v2_SizeFromHeader(const int8u* Header)
+{
+    int32u ID=CC3(Header);
+    if ((ID!=0x494433 && ID!=0x656133) || !Id3v2_Header_IsValid(Header)) //"ID3" and "ea3" (found in OpenMG)
+        return 0;
+    int32u Size=BigEndian2int32u(Header+6);
+    return (((Size>>0)&0x7F)
+          | ((Size>>1)&0x3F80)
+          | ((Size>>2)&0x1FC000)
+          | ((Size>>3)&0x0FE00000))
+          +10;
+}
+
 //***************************************************************************
 // Constructor/Destructor
 //***************************************************************************
@@ -271,12 +285,7 @@ bool File__Tags_Helper::Synched_Test()
             {
                 if (Base->Buffer_Offset+10>Base->Buffer_Size)
                     return false;
-                int32u Size=BigEndian2int32u(Base->Buffer+Base->Buffer_Offset+6);
-                Parser_Buffer_Size=(((Size>>0)&0x7F)
-                                  | ((Size>>1)&0x3F80)
-                                  | ((Size>>2)&0x1FC000)
-                                  | ((Size>>3)&0x0FE00000))
-                                  +10;
+                Parser_Buffer_Size=Id3v2_SizeFromHeader(Base->Buffer+Base->Buffer_Offset);
                 if (ID==0x494433 && Base->Buffer[Base->Buffer_Offset+3]==4 && (Base->Buffer[Base->Buffer_Offset+5]&0x10)) //ID3v2.4 footer present, not in the tag size
                 {
                     if (Base->Buffer_Offset+Parser_Buffer_Size+10>Base->Buffer_Size && Base->File_Offset+Base->Buffer_Offset+Parser_Buffer_Size+10<=Base->File_Size)

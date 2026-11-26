@@ -43,6 +43,7 @@ File_Rkau::File_Rkau()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 }
 
 //***************************************************************************

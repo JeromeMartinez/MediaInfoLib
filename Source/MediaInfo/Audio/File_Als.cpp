@@ -47,6 +47,7 @@ File_Als::File_Als()
 {
     //File__Tags_Helper
     Base=this;
+    Tags_AtStart_AreParsed=true;
 }
 
 //***************************************************************************
