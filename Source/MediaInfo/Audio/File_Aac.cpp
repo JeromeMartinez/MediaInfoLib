@@ -853,7 +853,19 @@ bool File_Aac::Synchronize_LATM()
     {
          while (Buffer_Offset+3<=Buffer_Size && (Buffer[Buffer_Offset  ]!=0x56
                                               || (Buffer[Buffer_Offset+1]&0xE0)!=0xE0))
+         {
+            //Tags, tested by the ADTS synchronization tried after this one if the mode is not known
+            if (Mode==Mode_LATM)
+            {
+                bool Tag_Found_Synchro;
+                size_t Buffer_Offset_BeforeTags=Buffer_Offset;
+                if (!File__Tags_Helper::Synchronize(Tag_Found_Synchro))
+                    return false;
+                if (Buffer_Offset!=Buffer_Offset_BeforeTags)
+                    continue; //Tags were parsed, the byte after them is not tested yet
+            }
             Buffer_Offset++;
+         }
 
         if (Buffer_Offset+3<=Buffer_Size)//Testing if size is coherant
         {
