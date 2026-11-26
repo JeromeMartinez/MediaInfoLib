@@ -1472,7 +1472,7 @@ void File_Ac3::Streams_Fill()
                 Fill(Stream_Audio, 0, Audio_BitRate, "Unknown");
             int32u BitRate=AC3_BitRate[frmsizecod/2]*1000;
             int32u TimeStamp_BitRate=0;
-            if (TimeStamp_Count==Frame_Count || TimeStamp_Count>Frame_Count/2) // In case of corrupted stream, check that there is a minimal count of timestamps 
+            if (TimeStamp_Count && (TimeStamp_Count==Frame_Count || TimeStamp_Count>Frame_Count/2)) // In case of corrupted stream, check that there is a minimal count of timestamps
                 TimeStamp_BitRate+=float32_int32s(AC3_SamplingRate[fscod]/Divider/12.0f); // 12 = 1536 samples per frame / 128 bits per timestamp frame
             Fill(Stream_Audio, 0, Audio_BitRate, BitRate/Divider);
             if (TimeStamp_BitRate)
@@ -5980,6 +5980,12 @@ void File_Ac3::dec3()
     BS_End();
     if (Element_Offset<Element_Size)
         Skip_XX(Element_Size-Element_Offset,                    "reserved");
+
+    //No bit rate code in the box, its data rate is used if it is an AC-3 bit rate
+    frmsizecod=(int8u)-1;
+    for (int8u Pos=0; Pos<19; Pos++)
+        if (AC3_BitRate[Pos]==dec3_data_rate)
+            frmsizecod=Pos*2;
 
     MustParse_dec3=false;
     dxc3_Parsed=true;
