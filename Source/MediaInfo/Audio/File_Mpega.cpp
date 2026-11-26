@@ -350,6 +350,11 @@ File_Mpega::File_Mpega()
     Encoder_Padding = 0;
     BitRate=0;
     MpegPsPattern_Count=0;
+    for (size_t Level=0; Level<3; Level++)
+    {
+        Padding_Begin[Level]=0;
+        Padding_End[Level]=0;
+    }
     VBR_Frames_IsCbr=false;
 }
 
@@ -785,8 +790,7 @@ bool File_Mpega::Synchronize()
                 if (File_Offset+Buffer_Offset+Size0!=File_Size-File_EndTagSize)
                 {
                     //Padding
-                    while (Buffer_Offset+Size0<Buffer_Size && Buffer[Buffer_Offset+Size0]==0x00)
-                        Size0++;
+                    Size0=Synchronize_Padding(0, Size0, Buffer_Size-Buffer_Offset);
 
                     if (Buffer_Offset+Size0+4>Buffer_Size)
                     {
@@ -857,8 +861,7 @@ bool File_Mpega::Synchronize()
                             if (File_Offset+Buffer_Offset+Size0+Size1!=File_Size-File_EndTagSize)
                             {
                                 //Padding
-                                while (Buffer_Offset+Size0+Size1<Buffer_Size && Buffer[Buffer_Offset+Size0+Size1]==0x00)
-                                    Size0++;
+                                Size0=Synchronize_Padding(1, Size0+Size1, Buffer_Size-Buffer_Offset)-Size1;
 
                                 if (Buffer_Offset+Size0+Size1+4>Buffer_Size)
                                 {
@@ -899,9 +902,8 @@ bool File_Mpega::Synchronize()
                                             break;
                                         if (File_Offset+Buffer_Offset+Size0+Size1+Size2!=File_Size-File_EndTagSize)
                                         {
-                                            //Padding
-                                            while (Buffer_Offset+Size0+Size1+Size2+4<=Buffer_Size && Buffer[Buffer_Offset+Size0+Size1+Size2]==0x00)
-                                                Size0++;
+                                            //Padding, with room for a frame header after it
+                                            Size0=Synchronize_Padding(2, Size0+Size1+Size2, Buffer_Size-Buffer_Offset-3)-Size1-Size2;
 
                                             if (Buffer_Offset+Size0+Size1+Size2+4>Buffer_Size)
                                             {
@@ -968,6 +970,50 @@ bool File_Mpega::Synchronize()
     LastSync_TagsSize = TagsSize;
     NotZero_Offset = (int64u)-1;
     return true;
+}
+
+//---------------------------------------------------------------------------
+size_t File_Mpega::Synchronize_Padding(size_t Level, size_t Begin, size_t End)
+{
+    //The zero bytes of a run already counted, in a previous call or for another candidate, are not tested again
+    if (Begin>=End)
+        return Begin;
+    int64u Candidate=Buffer_AddedBytes-Buffer_Size+Buffer_Offset;
+    for (size_t i=0; i<3; i++)
+        if (Candidate+Begin>=Padding_Begin[i] && Candidate+Begin<Padding_End[i])
+        {
+            Level=i; //A run kept by another count
+            break;
+        }
+    int64u& Run_Begin=Padding_Begin[Level];
+    int64u& Run_End=Padding_End[Level];
+    size_t Pos=Begin;
+    if (Candidate+Pos<Run_Begin || Candidate+Pos>=Run_End)
+    {
+        size_t Scan_End=End;
+        if (Candidate+Pos<Run_Begin && Run_Begin-Candidate<End)
+            Scan_End=(size_t)(Run_Begin-Candidate); //Joining the run if it is reached
+        while (Pos<Scan_End && !Buffer[Buffer_Offset+Pos])
+            Pos++;
+        if (Pos<Scan_End || Scan_End==End)
+        {
+            //The run is replaced if it can not be reached by the next candidates or if it is shorter
+            if (Pos>Begin && (Run_End<=Candidate || Pos-Begin>Run_End-Run_Begin))
+            {
+                Run_Begin=Candidate+Begin;
+                Run_End=Candidate+Pos;
+            }
+            return Pos;
+        }
+        Run_Begin=Candidate+Begin;
+    }
+
+    Pos=(size_t)std::min(Run_End-Candidate, (int64u)End);
+    while (Pos<End && !Buffer[Buffer_Offset+Pos])
+        Pos++;
+    if (Run_End<Candidate+Pos)
+        Run_End=Candidate+Pos;
+    return Pos;
 }
 
 //---------------------------------------------------------------------------

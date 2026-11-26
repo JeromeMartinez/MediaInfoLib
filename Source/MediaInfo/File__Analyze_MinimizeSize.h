@@ -1528,6 +1528,7 @@ protected :
     size_t Buffer_Temp_Size_Max;
     size_t Buffer_Offset; //Temporary usage in this parser
     size_t Buffer_Offset_Temp; //Temporary usage in this parser
+    int64u Buffer_AddedBytes; //Count of the bytes added to the buffer, Buffer[i] is the byte number Buffer_AddedBytes-Buffer_Size+i whatever File_Offset is, a number is never given to 2 bytes (e.g. after a jump)
     size_t Buffer_MinimumSize;
     size_t Buffer_MaximumSize;
     int64u Buffer_TotalBytes_FirstSynched_Max;

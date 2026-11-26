@@ -40,6 +40,7 @@ private :
 
     //Buffer - Synchro
     bool Synchronize();
+    size_t Synchronize_Padding(size_t Level, size_t Begin, size_t End);
     bool Synched_Test();
 
     //Buffer - Demux
@@ -103,6 +104,8 @@ private :
     bool   VBR_Frames_IsCbr;
     bool   Xing_Info_Found; 
     size_t MpegPsPattern_Count;
+    int64u Padding_Begin[3]; //Per zero padding scan after the 1st, 2nd and 3rd frames, byte numbers (see Buffer_AddedBytes) of a run of zero bytes already counted
+    int64u Padding_End[3];
 
     //Helpers
     bool Element_Name_IsOK();

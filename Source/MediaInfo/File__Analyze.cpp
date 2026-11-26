@@ -697,6 +697,7 @@ File__Analyze::File__Analyze ()
     Buffer_Temp_Size_Max=0;
     Buffer_Offset=0;
     Buffer_Offset_Temp=0;
+    Buffer_AddedBytes=0;
     Buffer_MinimumSize=0;
     Buffer_MaximumSize=16*1024*1024;
     SubStream_IsEnding=false;
@@ -1230,6 +1231,7 @@ void File__Analyze::Open_Buffer_Continue (const int8u* ToAdd, size_t ToAdd_Size)
         Buffer=ToAdd;
         Buffer_Size=ToAdd_Size;
     }
+    Buffer_AddedBytes+=ToAdd_Size;
 
     //Preparing
     Trusted=(Buffer_Size>2*8*1024?Buffer_Size/8/1024:2)*Trusted_Multiplier; //Never less than 2 acceptable errors
