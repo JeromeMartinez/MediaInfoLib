@@ -1292,6 +1292,28 @@ File_Ac3::~File_Ac3()
 //---------------------------------------------------------------------------
 void File_Ac3::Streams_Fill()
 {
+    //Without frame, the stream is described by the E-AC-3 specific box
+    if (!Core_IsPresent)
+        for (size_t Pos=0; Pos<dec3_substreams.size(); Pos++)
+        {
+            const dec3_substream& Substream=dec3_substreams[Pos];
+            fscod=Substream.fscod;
+            if (bsid_Max<Substream.bsid || bsid_Max==(int8u)-1)
+                bsid_Max=Substream.bsid;
+            bsmod_Max[Pos][0]=Substream.bsmod;
+            acmod_Max[Pos][0]=Substream.acmod;
+            lfeon_Max[Pos][0]=Substream.lfeon;
+            if (Substream.num_dep_sub)
+            {
+                //chan_loc bits 0 to 7 are the chanmap locations 5 (Lc/Rc) to 12 (Vhc), bit 8 is LFE2
+                chanmape_Max[Pos][1]=true;
+                chanmap_Max[Pos][1]=(Substream.chan_loc&0x100)?0x0002:0;
+                for (int8u Pos2=0; Pos2<8; Pos2++)
+                    if (Substream.chan_loc&(1<<Pos2))
+                        chanmap_Max[Pos][1]|=1<<(10-Pos2);
+            }
+        }
+
     //Programs (independent substreams), each one in its own audio stream
     Programs.clear();
     const bool IsEac3=bsid_Max<=0x10 && (bsid_Max>0x09 || (!Core_IsPresent && chanmape_Max[0][1])); //Without frame, also an AC-3 core with dependent substreams in the E-AC-3 specific box
@@ -1891,6 +1913,11 @@ void File_Ac3::Streams_Finish()
             }
         }
     }
+
+    #if MEDIAINFO_CONFORMANCE
+        if (Core_IsPresent && !dec3_substreams.empty())
+            dec3_Crosscheck();
+    #endif //MEDIAINFO_CONFORMANCE
 
     //Per program
     const size_t Programs_StreamCount=Programs.empty()?1:Programs.size(); //AC-3 or no program description: only one stream
@@ -4302,6 +4329,11 @@ void File_Ac3::Core_Frame()
         if (!frmsizplus1_Max[substreamid_Independant_Current][substream_Pos])
         {
             frmsizplus1_Max[substreamid_Independant_Current][substream_Pos]=((bsid<=0x09)?(frmsizecod/2<19?AC3_BitRate[frmsizecod/2]*4:0):((frmsiz+1)*2));
+            if (!substream_Pos)
+            {
+                bsid_Program[substreamid_Independant_Current]=bsid;
+                fscod_Program[substreamid_Independant_Current]=fscod;
+            }
             acmod_Max[substreamid_Independant_Current][substream_Pos]=acmod;
             lfeon_Max[substreamid_Independant_Current][substream_Pos]=lfeon;
             bsmod_Max[substreamid_Independant_Current][substream_Pos]=bsmod;
@@ -5908,40 +5940,36 @@ void File_Ac3::dac3()
 void File_Ac3::dec3()
 {
     //Parsing
+    dec3_Offset=File_Offset+Buffer_Offset;
     BS_Begin();
     int8u num_ind_sub;
-    Skip_S2(13,                                                 "data_rate");
+    Get_S2 (13, dec3_data_rate,                                 "data_rate");
     Get_S1 ( 3, num_ind_sub,                                    "num_ind_sub");
     for (int8u Pos=0; Pos<=num_ind_sub; Pos++)
     {
         Element_Begin1("independent substream");
-        int8u num_dep_sub;
-        Get_S1 (2, fscod,                                       "fscod");
-        Get_S1 (5, bsid,                                        "bsid");
-        if (bsid_Max<bsid || bsid_Max==(int8u)-1)
-            bsid_Max=bsid;
+        dec3_substream Substream;
+        Get_S1 (2, Substream.fscod,                             "fscod");
+        Get_S1 (5, Substream.bsid,                              "bsid");
         Skip_SB(                                                "reserved");
         Skip_SB(                                                "asvc");
-        Get_S1 (3, bsmod_Max[Pos][0],                           "bsmod");
-        Get_S1 (3, acmod_Max[Pos][0],                           "acmod");
-        Get_SB (   lfeon_Max[Pos][0],                           "lfeon");
+        Get_S1 (3, Substream.bsmod,                             "bsmod");
+        Get_S1 (3, Substream.acmod,                             "acmod");
+        Get_SB (   Substream.lfeon,                             "lfeon");
         Skip_S1(3,                                              "reserved");
-        Get_S1 (4, num_dep_sub,                                 "num_dep_sub");
-        if (num_dep_sub>0)
-        {
-            int16u chan_loc;
-            Get_S2 (9, chan_loc,                                "chan_loc");
-            chanmape_Max[Pos][1]=true; //Dependent substreams, used if no frame is parsed
-            //chan_loc bits 0 to 7 are the chanmap locations 5 (Lc/Rc) to 12 (Vhc), bit 8 is LFE2
-            chanmap_Max[Pos][1]=(chan_loc&0x100)?0x0002:0;
-            for (int8u Pos2=0; Pos2<8; Pos2++)
-                if (chan_loc&(1<<Pos2))
-                    chanmap_Max[Pos][1]|=1<<(10-Pos2);
-        }
+        Get_S1 (4, Substream.num_dep_sub,                       "num_dep_sub");
+        if (Substream.num_dep_sub>0)
+            Get_S2 (9, Substream.chan_loc,                      "chan_loc");
         else
+        {
             Skip_SB(                                            "reserved");
+            Substream.chan_loc=0;
+        }
         Element_End0();
+        dec3_substreams.push_back(Substream); //Used if no frame is parsed, else the values of the frames are kept
     }
+    if (!Element_IsOK())
+        dec3_substreams.clear(); //Truncated box, its values are not read
     if (Data_BS_Remain())
     {
         Skip_S1( 7,                                             "reserved");
@@ -5960,6 +5988,85 @@ void File_Ac3::dec3()
         Accept();
     FILLING_END()
 }
+
+//---------------------------------------------------------------------------
+#if MEDIAINFO_CONFORMANCE
+void File_Ac3::dec3_Crosscheck()
+{
+    //Errors are about the box, its offset is provided
+    const auto File_Offset_Save=File_Offset;
+    File_Offset=dec3_Offset-(Buffer_Offset+Element_Offset);
+
+    //The values of the frames are the ones shown
+    size_t num_ind_sub=0;
+    for (int8u Pos=0; Pos<8; Pos++)
+        if (acmod_Max[Pos][0]!=(int8u)-1)
+            num_ind_sub=Pos;
+    if (num_ind_sub+1!=dec3_substreams.size())
+        Fill_Conformance("Crosscheck EC3SpecificBox num_ind_sub", "MP4 EC3SpecificBox num_ind_sub does not match the substreamid of the last independent substream (actual "+to_string(dec3_substreams.size()-1)+", expected "+to_string(num_ind_sub)+')', {}, Conformance_Error, Stream_Audio, 0);
+
+    //data_rate is the one of all the substreams, the maximum one if it is variable
+    int64u BitRate=0;
+    if (numblkscod!=(int8u)-1)
+    {
+        int8u numblks=numblkscod==3?6:numblkscod+1;
+        int32u SamplingRate=fscod!=3?AC3_SamplingRate[fscod]:AC3_SamplingRate2[fscod2];
+        int64u frmsiz_Total=0;
+        for (int8u Pos=0; Pos<8; Pos++)
+            for (int8u Pos2=0; Pos2<9; Pos2++)
+                frmsiz_Total+=frmsizplus1_Max[Pos][Pos2];
+        BitRate=frmsiz_Total*SamplingRate/32/numblks;
+    }
+    else if (frmsizecod/2<19)
+        BitRate=AC3_BitRate[frmsizecod/2]*1000/(bsid_Max==9?2:1);
+    if (dec3_data_rate<BitRate/1000)
+        Fill_Conformance("Crosscheck EC3SpecificBox data_rate", "MP4 EC3SpecificBox data_rate is lower than the bit rate of the frames (actual "+to_string(dec3_data_rate)+", expected >="+to_string(BitRate/1000)+')', {}, Conformance_Error, Stream_Audio, 0);
+
+    for (size_t Pos=0; Pos<dec3_substreams.size(); Pos++)
+    {
+        if (acmod_Max[Pos][0]==(int8u)-1)
+            continue; //Independent substream not in the frames
+        const dec3_substream& Substream=dec3_substreams[Pos];
+        const auto Program=find(Programs.begin(), Programs.end(), Pos);
+        const size_t StreamPos=Program==Programs.end()?0:(Program-Programs.begin());
+        const char* Format=bsid_Program[Pos]<=0x09?"AC-3":"E-AC-3";
+        auto Crosscheck=[&](const char* Name, int16u Actual, int16u Expected, const char* Frame_Name)
+        {
+            if (Actual!=Expected)
+                Fill_Conformance((string("Crosscheck EC3SpecificBox ")+Name).c_str(), string("MP4 EC3SpecificBox ")+Name+" does not match "+Format+' '+Frame_Name+" (actual "+to_string(Actual)+", expected "+to_string(Expected)+')', {}, Conformance_Error, Stream_Audio, StreamPos);
+        };
+        Crosscheck("fscod", Substream.fscod, fscod_Program[Pos], "fscod");
+        Crosscheck("bsid", Substream.bsid, bsid_Program[Pos], "bsid");
+        Crosscheck("bsmod", Substream.bsmod, bsmod_Max[Pos][0], "bsmod");
+        Crosscheck("acmod", Substream.acmod, acmod_Max[Pos][0], "acmod");
+        Crosscheck("lfeon", Substream.lfeon, lfeon_Max[Pos][0], "lfeon");
+
+        //Dependent substreams, chan_loc made from their chanmap (inverse of the mapping in Streams_Fill)
+        //num_dep_sub is compared to their count, as written in the Dolby samples (the specification text says the substreamid of the last one)
+        int8u num_dep_sub=0;
+        int16u chan_loc=0;
+        for (int8u Pos2=1; Pos2<9; Pos2++)
+            if (acmod_Max[Pos][Pos2]!=(int8u)-1)
+            {
+                num_dep_sub++;
+                if (chanmape_Max[Pos][Pos2])
+                {
+                    if (chanmap_Max[Pos][Pos2]&0x0002)
+                        chan_loc|=0x100;
+                    for (int8u Pos3=0; Pos3<8; Pos3++)
+                        if (chanmap_Max[Pos][Pos2]&(1<<(10-Pos3)))
+                            chan_loc|=1<<Pos3;
+                }
+            }
+        Crosscheck("num_dep_sub", Substream.num_dep_sub, num_dep_sub, "dependent substream count");
+        if (Substream.num_dep_sub && num_dep_sub)
+            Crosscheck("chan_loc", Substream.chan_loc, chan_loc, "dependent substream chanmap");
+    }
+
+    Merge_Conformance(true);
+    File_Offset=File_Offset_Save;
+}
+#endif //MEDIAINFO_CONFORMANCE
 
 //---------------------------------------------------------------------------
 void File_Ac3::dmlp()

@@ -93,6 +93,9 @@ private :
     void TimeStamp();
     void dac3();
     void dec3();
+    #if MEDIAINFO_CONFORMANCE
+        void dec3_Crosscheck();
+    #endif //MEDIAINFO_CONFORMANCE
     void dmlp();
     bool FrameSynchPoint_Test();
     bool CRC_Compute(size_t Size);
@@ -162,6 +165,19 @@ private :
         }
     };
     hd_best HD_Best;
+    struct dec3_substream //Independent substream described by the E-AC-3 specific box
+    {
+        int16u chan_loc;
+        int8u  fscod;
+        int8u  bsid;
+        int8u  bsmod;
+        int8u  acmod;
+        int8u  num_dep_sub;
+        bool   lfeon;
+    };
+    std::vector<dec3_substream> dec3_substreams;
+    int64u dec3_Offset{};
+    int16u dec3_data_rate{};
     int8u* addbsi_Buffer;
     size_t addbsi_Buffer_Size;
     int64u Formats[2]; // AC-3 or E-AC-3
@@ -188,6 +204,8 @@ private :
     int8u  frmsizecod;
     int8u  bsid{};
     int8u  bsid_Max;
+    int8u  bsid_Program[8]{}; //First frame of each program (independent substream)
+    int8u  fscod_Program[8]{};
     int8u  bsmod_Max[8][9];
     int8u  acmod_Max[8][9];
     int8u  cmixlev_Max[8][9];
