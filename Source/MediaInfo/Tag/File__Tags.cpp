@@ -280,6 +280,20 @@ bool File__Tags_Helper::Synched_Test()
     //In other data skipped by the synchronization of the parser, tag bytes whose end is after the end of the data, or would make the buffer too large, are not a tag
     bool InOtherData=NotZero_Offset!=(int64u)-1 && NotZero_Offset<Base->File_Offset+Base->Buffer_Offset;
     auto IsNotTag=[&](int64u Size) {return InOtherData && (Base->Config->IsFinishing || Size>Base->Buffer_MaximumSize || Base->File_Offset+Base->Buffer_Offset+Size>Base->File_Size);};
+    auto Id3v1_IsValid=[&](size_t Offset) //Ending the file, or title, artist and album without control characters before their NUL, year of digits, spaces or NUL bytes
+    {
+        if (Base->File_Offset+Base->Buffer_Offset+Offset+128==Base->File_Size)
+            return true;
+        const int8u* Tag=Base->Buffer+Base->Buffer_Offset+Offset;
+        for (size_t Field=3; Field<93; Field+=30)
+            for (size_t Pos=Field; Pos<Field+30 && Tag[Pos]; Pos++)
+                if (Tag[Pos]<0x20)
+                    return false;
+        for (size_t Pos=93; Pos<97; Pos++)
+            if ((Tag[Pos]<'0' || Tag[Pos]>'9') && Tag[Pos]!=' ' && Tag[Pos])
+                return false;
+        return true;
+    };
 
     for (;;)
     {
@@ -293,6 +307,19 @@ bool File__Tags_Helper::Synched_Test()
             int32u ID=CC3(Base->Buffer+Base->Buffer_Offset);
             int32u ID4=CC4(Base->Buffer+Base->Buffer_Offset);
             int64u ID8=CC8(Base->Buffer+Base->Buffer_Offset);
+            if (ID==0x544147 && InOtherData) //"TAG" in other data: an ID3v1 tag, after its "TAG+" extended part if any, is text with a year, not binary data
+            {
+                size_t Tag_Offset=ID4==0x5441472B?227:0;
+                size_t Test_Size=Tag_Offset+(Base->File_Size==(int64u)-1?128+1:97); //With an unknown size, up to the byte after the tag, to know whether the tag ends the data
+                if (Base->Buffer_Offset+Test_Size>Base->Buffer_Size)
+                {
+                    if (IsNotTag(Test_Size))
+                        break;
+                    return false;
+                }
+                if ((Tag_Offset && CC3(Base->Buffer+Base->Buffer_Offset+Tag_Offset)!=0x544147) || !Id3v1_IsValid(Tag_Offset))
+                    break;
+            }
                  if ((ID==0x494433 || ID==0x656133) && Id3v2_Header_IsValid(Base->Buffer+Base->Buffer_Offset)) //"ID3" and "ea3" (found in OpenMG)
             {
                 if (Base->Buffer_Offset+10>Base->Buffer_Size)
