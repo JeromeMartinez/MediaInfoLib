@@ -195,7 +195,7 @@ struct template_generic
     void SegmentTimeline_Attributes_Parse   (XMLElement* Item);
     void Representation_Attributes_Parse    (XMLElement* Item);
 
-    void Decode ();
+    void Decode (int64u& Names_Remaining_Total);
 private:
     template_generic &operator =(const template_generic &);
 };
@@ -344,7 +344,7 @@ void template_generic::Representation_Attributes_Parse (XMLElement* Item)
 }
 
 //---------------------------------------------------------------------------
-void template_generic::Decode()
+void template_generic::Decode(int64u& Names_Remaining_Total)
 {
     //initialization - URL decoding, template adaptation and add it
     if (!initialization.empty())
@@ -418,7 +418,7 @@ void template_generic::Decode()
             {
                 int64u SegmentTimeLines_duration=0;
                 int64u SegmentTimeLines_startNumber=startNumber;
-                int64u Names_Remaining=0x10000; //Limit against malformed repeat counts
+                int64u Names_Remaining=Names_Remaining_Total?Names_Remaining_Total:1; //At least the first segment, else the stream is not listed
                 for (size_t SegmentTimeLines_Pos=0; SegmentTimeLines_Pos<SegmentTimeLines.size() && Names_Remaining; SegmentTimeLines_Pos++)
                 {
                     const segmenttimeline& SegmentTimeLine=SegmentTimeLines[SegmentTimeLines_Pos];
@@ -467,6 +467,8 @@ void template_generic::Decode()
                         SegmentTimeLines_startNumber++;
                     }
                 }
+                if (Names_Remaining_Total)
+                    Names_Remaining_Total=Names_Remaining;
             }
         }
         else
@@ -523,6 +525,7 @@ bool File_DashMpd::FileHeader_Begin()
             #if defined(MEDIAINFO_REFERENCES_YES)
             //Parsing main elements
             Ztring BaseURL;
+            int64u Names_Remaining=0x10000; //Segment names from the segment timelines of the whole file, limit against malformed repeat counts
 
             for (XMLElement* Root_Item=Root->FirstChildElement(); Root_Item; Root_Item=Root_Item->NextSiblingElement())
             {
@@ -646,7 +649,7 @@ bool File_DashMpd::FileHeader_Begin()
                                         }
                                     }
 
-                                    Template_Generic_PerRepresentation.Decode();
+                                    Template_Generic_PerRepresentation.Decode(Names_Remaining);
                                     ReferenceFiles->AddSequence(Template_Generic_PerRepresentation.Sequence);
                                     Template_Generic_PerRepresentation.Sequence=NULL; //Ownership transfered
                                 }
