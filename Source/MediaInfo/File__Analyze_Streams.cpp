@@ -619,10 +619,10 @@ void File__Analyze::Attachment(const char* MuxingMode, const Ztring& Description
         Fill(Stream_Image, StreamPos_Last, Image_Title, Description);
         Fill(Stream_Image, StreamPos_Last, Image_MuxingMode, MuxingMode);
         Fill(Stream_Image, StreamPos_Last, Image_InternetMediaType, MimeType2);
-        Fill(Stream_Image, StreamPos_Last, Image_StreamSize, Data_Size);
         if (ImageCount) {
             Merge(MI, Stream_Image, 0, StreamPos_Last); // We ignore thumbnails in thumbnails/covers on purpose (not the goal of the cover)
         }
+        Fill(Stream_Image, StreamPos_Last, Image_StreamSize, Data_Size, 10, true); //The size of the attached data, not the one the parser of the picture found
     }
 }
 
