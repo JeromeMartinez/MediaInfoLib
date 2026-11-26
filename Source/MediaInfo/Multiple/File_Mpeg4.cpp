@@ -346,6 +346,9 @@ File_Mpeg4::File_Mpeg4()
 
     DataMustAlwaysBeComplete=false;
 
+    //In
+    Jp2_StreamKind=Stream_Image;
+
     //Temp
     mdat_MustParse=false;
     moov_mvhd_TimeScale=1;
@@ -415,13 +418,18 @@ void File_Mpeg4::Streams_Accept_jp2(bool IsJp2)
 {
     //Warning: this method can be called several times
 
-    if (IsSub || StreamKind_Last != Stream_General || !(IsJp2 || MajorBrand==0x6A703220 || MajorBrand==0x6a707820)) //"jp2 "
+    if ((IsSub && Jp2_StreamKind!=Stream_Image) || StreamKind_Last != Stream_General || !(IsJp2 || MajorBrand==0x6A703220 || MajorBrand==0x6a707820)) //"jp2 "
         return;
 
-    StreamSource=IsStream; //TODO: do the difference between raw stream and sequence of files with file count being frame count
-    TestContinuousFileNames();
+    if (IsSub) //e.g. a cover
+        Stream_Prepare(Stream_Image);
+    else
+    {
+        StreamSource=IsStream; //TODO: do the difference between raw stream and sequence of files with file count being frame count
+        TestContinuousFileNames();
 
-    Stream_Prepare((Config->File_Names.size()>1 || Config->File_IsReferenced_Get())?Stream_Video:Stream_Image);
+        Stream_Prepare((Config->File_Names.size()>1 || Config->File_IsReferenced_Get())?Stream_Video:Stream_Image);
+    }
     Fill(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format), "JPEG 2000");
     if (StreamKind_Last==Stream_Video)
         Fill(Stream_Video, StreamPos_Last, Video_FrameCount, Config->File_Names.size());

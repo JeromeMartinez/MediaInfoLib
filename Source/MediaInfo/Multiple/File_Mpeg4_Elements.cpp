@@ -2065,7 +2065,9 @@ void File_Mpeg4::jp2c()
     #if defined(MEDIAINFO_JPEG_YES)
         //Creating the parser
         File_Jpeg MI;
-        if (IsSub || Config->File_Names.size()>1) //If contained in another container or several files, this is a video stream
+        if (IsSub)
+            MI.StreamKind=Jp2_StreamKind;
+        else if (Config->File_Names.size()>1) //Several files, this is a video stream
             MI.StreamKind=Stream_Video;
         Open_Buffer_Init(&MI);
 
@@ -8409,6 +8411,7 @@ void File_Mpeg4::moov_trak_mdia_minf_stbl_stsd_xxxxVideo()
                 if (MediaInfoLib::Config.CodecID_Get(Stream_Video, InfoCodecID_Format_Mpeg4, Codec, InfoCodecID_Format)==__T("JPEG 2000"))
                 {
                     File_Mpeg4* Parser=new File_Mpeg4;
+                    Parser->Jp2_StreamKind=Stream_Video;
                     Streams[moov_trak_tkhd_TrackID].Parsers.push_back(Parser);
 
                     #if MEDIAINFO_DEMUX

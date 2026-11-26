@@ -68,6 +68,9 @@ protected :
     void Streams_Finish_CommercialNames ();
 
 public :
+    //In
+    stream_t Jp2_StreamKind; //Kind of the stream of JPEG 2000 content in another file
+
     File_Mpeg4();
     ~File_Mpeg4();
 
