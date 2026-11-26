@@ -938,6 +938,7 @@ void File__MultipleParsing::Read_Buffer_Init()
             Parser[Pos]->Init(Config, Stream, Stream_More);
         #endif //MEDIAINFO_TRACE
         Parser[Pos]->IsSub=IsSub;
+        Parser[Pos]->IsFormatCandidate=IsSub;
         #if MEDIAINFO_EVENTS
             //A candidate parser takes the place of this parser, so its events have the stream IDs of this parser, with
             //its own parser ID (as a top level parser, it gets them from the configuration as this parser does)

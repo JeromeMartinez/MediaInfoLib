@@ -160,7 +160,7 @@ void File_Apv::Streams_Finish()
 //---------------------------------------------------------------------------
 bool File_Apv::FileHeader_Begin()
 {
-    if (IsSub)
+    if (IsSub && !IsFormatCandidate)
         return true;
 
     //Must have enough buffer for having header

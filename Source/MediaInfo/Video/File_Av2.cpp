@@ -475,7 +475,7 @@ static int Av2_leb128(const int8u* Buffer, size_t Buffer_Size, size_t& Offset, i
 //---------------------------------------------------------------------------
 bool File_Av2::FileHeader_Begin()
 {
-    if (IsSub || !IsAnnexB)
+    if ((IsSub && !IsFormatCandidate) || !IsAnnexB)
         return true; //Elements given by the container
 
     //A stream starts with a temporal delimiter (a temporal unit starts with it), then come the OBU types permitted before a sequence header in their order,

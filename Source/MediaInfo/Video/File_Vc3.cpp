@@ -552,7 +552,7 @@ void File_Vc3::Streams_Finish()
 //---------------------------------------------------------------------------
 bool File_Vc3::FileHeader_Begin()
 {
-    //No magic number: header prefix and image size of the known versions tested as FFmpeg does (Header_Parse() tests the compression ID if not in a container)
+    //No magic number: header prefix and image size of the known versions tested as FFmpeg does (Header_Parse() tests the compression ID if the format is not given by a container)
     if (Buffer_Size<0x1C)
         return false; //Must wait for more data
     int32u HeaderSize=BigEndian2int32u(Buffer);
@@ -606,7 +606,7 @@ bool File_Vc3::Demux_UnpacketizeContainer_Test()
     size_t Size=Vc3_CompressedFrameSize(CID, SPL, ALPF*(SST?2:1));
     if (!Size)
     {
-        if (!IsSub)
+        if (!IsSub || IsFormatCandidate)
         {
             Reject();
             return false;
@@ -695,7 +695,7 @@ void File_Vc3::Header_Parse()
     size_t Size=Vc3_CompressedFrameSize(CID, SPL, ALPF*(SST?2:1));
     if (!Size)
     {
-        if (!IsSub)
+        if (!IsSub || IsFormatCandidate)
         {
             Reject();
             return;

@@ -125,6 +125,7 @@ public :
     int64u File_Offset_FirstSynched;
     int64u File_GoTo; //How many byte to skip?
     bool   IsSub;
+    bool   IsFormatCandidate=false; //Tested with other parsers by File__MultipleParsing on data given by another parser (cover, attachment...), the format is not given by the container
     bool   MustAdaptSubOffsets=false;
 
     //Divers

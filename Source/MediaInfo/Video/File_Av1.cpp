@@ -247,7 +247,7 @@ static int Av1_leb128(const int8u* Buffer, size_t Buffer_Size, size_t& Offset, i
 //---------------------------------------------------------------------------
 bool File_Av1::FileHeader_Begin()
 {
-    if (IsSub)
+    if (IsSub && !IsFormatCandidate)
         return true; //Elements given by the container
 
     //A stream starts with a temporal delimiter (or a sequence header if the temporal delimiters were removed): tested before parsing the

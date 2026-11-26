@@ -74,7 +74,7 @@ File_Rm::File_Rm()
 //---------------------------------------------------------------------------
 bool File_Rm::FileHeader_Begin()
 {
-    if (IsSub)
+    if (IsSub && !IsFormatCandidate)
         return true;
 
     if (4>Buffer_Size)

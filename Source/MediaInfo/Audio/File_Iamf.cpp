@@ -352,7 +352,7 @@ bool File_Iamf::FileHeader_Begin()
     if (Buffer_Size<6)
         return false; //Must wait for more data
 
-    if (!IsSub
+    if ((!IsSub || IsFormatCandidate)
         // Must start with ia_sequence_header
         // obu_type (5)           = 31
         // obu_redundant_copy (1) = 0 or 1
