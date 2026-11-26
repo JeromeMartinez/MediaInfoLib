@@ -51,6 +51,7 @@ void File_Ico::Streams_Fill()
     for (size_t Pos=0; Pos<Streams.size(); Pos++)
     {
         Stream_Prepare(Stream_Image);
+        Fill(Stream_Image, StreamPos_Last, Image_Format, Type==1?"ICO":"CUR");
         Fill(Stream_Image, StreamPos_Last, Image_Width, Streams[Pos].Width?Streams[Pos].Width:256);
         Fill(Stream_Image, StreamPos_Last, Image_Height, Streams[Pos].Height?Streams[Pos].Height:256);
         if (Type==1)
