@@ -2319,6 +2319,7 @@ if (!(TOVALIDATE)) \
 
 void File_Av2::Get_uvlc(int32u& Info, const char* Name)
 {
+    Info = 0;
     int64u Info64 = 0;
     auto remain_begin = BS->Remain();
     int64u leadingZeros = 0;
