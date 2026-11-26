@@ -62,6 +62,35 @@ size_t Id3v2_SizeFromHeader(const int8u* Header)
           +10;
 }
 
+//---------------------------------------------------------------------------
+//ID3v2 tag of Size bytes: an extended header of a valid size, else padding or a frame ID of A-Z or 0-9 (3 characters in ID3v2.2, else 4); not tested with the compression flag of ID3v2.2
+static bool Id3v2_FirstFrame_IsValid(const int8u* Tag, size_t Size)
+{
+    if (Tag[5]&0x40 && Tag[3]>2)
+    {
+        if (Tag[3]==3)
+        {
+            if (Size<10+4+6)
+                return false;
+            int32u ExtendedHeader_Size=BigEndian2int32u(Tag+10);
+            return (ExtendedHeader_Size==6 || ExtendedHeader_Size==10) && Size>=10+4+ExtendedHeader_Size;
+        }
+        if (Size<10+6 || ((Tag[10]|Tag[11]|Tag[12]|Tag[13])&0x80))
+            return false;
+        int32u ExtendedHeader_Size=(Tag[10]<<21)|(Tag[11]<<14)|(Tag[12]<<7)|Tag[13];
+        return ExtendedHeader_Size>=6 && Size>=10+ExtendedHeader_Size && Tag[14]==1;
+    }
+    if (Size<=10 || !Tag[10] || Tag[5]&0x40)
+        return true;
+    size_t ID_Size=Tag[3]==2?3:4;
+    if (ID_Size>Size-10)
+        ID_Size=Size-10;
+    for (size_t Pos=10; Pos<10+ID_Size; Pos++)
+        if ((Tag[Pos]<'A' || Tag[Pos]>'Z') && (Tag[Pos]<'0' || Tag[Pos]>'9'))
+            return false;
+    return true;
+}
+
 //***************************************************************************
 // Constructor/Destructor
 //***************************************************************************
@@ -329,6 +358,18 @@ bool File__Tags_Helper::Synched_Test()
                     return false;
                 }
                 Parser_Buffer_Size=Id3v2_SizeFromHeader(Base->Buffer+Base->Buffer_Offset);
+                if (InOtherData) //In other data, an ID3v2 header followed by neither a frame nor padding is not a tag
+                {
+                    size_t Test_Size=Parser_Buffer_Size<15?Parser_Buffer_Size:15;
+                    if (Base->Buffer_Offset+Test_Size>Base->Buffer_Size)
+                    {
+                        if (IsNotTag(Test_Size))
+                            break;
+                        return false;
+                    }
+                    if (!Id3v2_FirstFrame_IsValid(Base->Buffer+Base->Buffer_Offset, Parser_Buffer_Size))
+                        break;
+                }
                 if (ID==0x494433 && Base->Buffer[Base->Buffer_Offset+3]==4 && (Base->Buffer[Base->Buffer_Offset+5]&0x10)) //ID3v2.4 footer present, not in the tag size
                 {
                     if (Base->Buffer_Offset+Parser_Buffer_Size+10>Base->Buffer_Size && Base->File_Offset+Base->Buffer_Offset+Parser_Buffer_Size+10<=Base->File_Size && !IsNotTag(Parser_Buffer_Size+10))
