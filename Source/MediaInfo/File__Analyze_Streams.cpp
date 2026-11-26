@@ -597,7 +597,7 @@ void File__Analyze::Attachment(const char* MuxingMode, const Ztring& Description
     }
 
     File__MultipleParsing MI;
-    Open_Buffer_Init(&MI);
+    Open_Buffer_Init(&MI, Data_Size);
     Open_Buffer_Continue(&MI);
     Open_Buffer_Finalize(&MI);
     Element_Show(); //TODO: why is it needed?
