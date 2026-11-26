@@ -982,6 +982,8 @@ void File__MultipleParsing::Read_Buffer_Continue()
     for (size_t Pos=0; Pos<Parser.size(); Pos++)
     {
         //Parsing
+        if (Config->IsFinishing && !IsSub && Parser[Pos]->File_Size==(int64u)-1)
+            Parser[Pos]->File_Size=File_Size; //Stream of unknown size: its end is the file size when finishing, for the candidate parsers as for this parser
         Parser[Pos]->Open_Buffer_Continue(Buffer+Buffer_Offset, (size_t)Element_Size);
         if (File_Offset+Buffer_Size==File_Size && Parser[Pos]->File_GoTo>=File_Size)
         {
