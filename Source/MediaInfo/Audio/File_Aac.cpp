@@ -399,7 +399,7 @@ bool File_Aac::FileHeader_Begin()
     //Testing
     if (Buffer_Size<4)
         return false;
-    if (!IsSub && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446)) //Matroska or PDF, the synchronization may find ADTS frames in an attachment
+    if ((!IsSub || IsFormatCandidate) && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446)) //Matroska or PDF, the synchronization may find ADTS frames in an attachment
     {
         File__Tags_Helper::Reject("AAC");
         return false;

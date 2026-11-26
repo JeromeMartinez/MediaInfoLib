@@ -1700,7 +1700,7 @@ bool File_Dts_Common::FileHeader_Begin()
         return false; //Must wait for more data
 
     //False positives detection: Matroska and PDF files, the synchronization may find frames in an attachment
-    if (!IsSub && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446))
+    if ((!IsSub || IsFormatCandidate) && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446))
     {
         Finish("DTS");
         return false;

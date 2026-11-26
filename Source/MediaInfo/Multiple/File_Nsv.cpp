@@ -215,7 +215,7 @@ void File_Nsv::Streams_Finish()
 bool File_Nsv::FileHeader_Begin()
 {
     //False positives detection: Matroska and PDF files, the synchronization may find frames in an attachment
-    if (!IsSub)
+    if (!IsSub || IsFormatCandidate)
     {
         if (Buffer_Size<4)
             return false; //Must wait for more data

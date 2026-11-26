@@ -585,7 +585,7 @@ void File_Gxf::Streams_Finish_PerStream(size_t StreamID, stream &Temp)
 bool File_Gxf::FileHeader_Begin()
 {
     //False positives detection: Matroska and PDF files, the synchronization may find packets in an attachment
-    if (!IsSub)
+    if (!IsSub || IsFormatCandidate)
     {
         if (Buffer_Size<4)
             return false; //Must wait for more data

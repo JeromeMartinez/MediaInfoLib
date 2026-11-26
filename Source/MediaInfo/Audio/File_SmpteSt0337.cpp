@@ -528,7 +528,7 @@ size_t File_SmpteSt0337::Read_Buffer_Seek (size_t Method, int64u Value, int64u I
 bool File_SmpteSt0337::FileHeader_Begin()
 {
     //False positives detection: Matroska and PDF files, the synchronization may find bursts in an attachment
-    if (!IsSub)
+    if (!IsSub || IsFormatCandidate)
     {
         if (Buffer_Size<4)
             return false; //Must wait for more data

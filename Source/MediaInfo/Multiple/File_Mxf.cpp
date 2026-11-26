@@ -14464,7 +14464,7 @@ bool File_Mxf::FileHeader_Begin()
     }
 
     //False positives detection: Matroska and PDF files, the synchronization may find MXF packs in an attachment
-    if (!IsSub && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446))
+    if ((!IsSub || IsFormatCandidate) && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446))
     {
         Reject("Mxf");
         return false;

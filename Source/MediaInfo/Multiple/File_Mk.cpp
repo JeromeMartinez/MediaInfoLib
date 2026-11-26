@@ -1710,7 +1710,7 @@ size_t File_Mk::Read_Buffer_Seek(size_t Method, int64u Value, int64u ID)
 bool File_Mk::FileHeader_Begin()
 {
     //False positives detection: junk bytes are accepted before the EBML header, but not a PDF file (e.g. with a Matroska file as attachment)
-    if (!IsSub)
+    if (!IsSub || IsFormatCandidate)
     {
         if (Buffer_Size<4)
             return false; //Must wait for more data

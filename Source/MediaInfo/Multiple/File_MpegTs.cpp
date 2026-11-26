@@ -2600,7 +2600,7 @@ bool File_MpegTs::FileHeader_Begin()
      || CC4(Buffer+4)==0x736B6970  //skip
      || CC4(Buffer+4)==0x77696465  //wide
      || CC4(Buffer)==0x060E2B34  //MXF begin
-     || (!IsSub && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446) //Matroska or PDF
+     || ((!IsSub || IsFormatCandidate) && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446) //Matroska or PDF
       && !(Buffer_Size>4+192 && Buffer[4]==0x47 && Buffer[4+192]==0x47))) //But not BDAV with these bytes as first TP_extra_header
     {
         Reject("MPEG-TS");

@@ -196,7 +196,7 @@ bool File_Wvpk::FileHeader_Begin()
     }
 
     //False positives detection: detect Matroska and PDF files, the synchronization may find WavPack blocks in an attachment
-    if (!IsSub && Buffer_Size>=4 && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446))
+    if ((!IsSub || IsFormatCandidate) && Buffer_Size>=4 && (CC4(Buffer)==0x1A45DFA3 || CC4(Buffer)==0x25504446))
     {
         File__Tags_Helper::Reject("WavPack");
         return false;

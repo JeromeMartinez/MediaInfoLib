@@ -1900,7 +1900,7 @@ void File_Ac4::Read_Buffer_Unsynched()
 bool File_Ac4::FileHeader_Begin()
 {
     //False positives detection: Matroska and PDF files, the synchronization may find frames in an attachment
-    if (!IsSub)
+    if (!IsSub || IsFormatCandidate)
     {
         if (Buffer_Size<4)
             return false; //Must wait for more data
