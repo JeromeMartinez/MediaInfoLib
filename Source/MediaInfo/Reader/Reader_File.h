@@ -69,6 +69,7 @@ public :
     size_t          CountOfSeconds;
     std::vector<Ztring> FileNames_Others; //Files of the list after the first one
     std::vector<int64u> FileSizes_Others; //Sizes of these files, got once for all the parsers tested
+    std::vector<bool>   FileMissing_Others; //These files which could not be opened, not tried again by the next parsers tested
 
     //Thread
     #if MEDIAINFO_READTHREAD

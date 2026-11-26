@@ -259,6 +259,14 @@ size_t Reader_File::Format_Test_PerParser(MediaInfo_Internal* MI, const String &
     MI->Config.File_Names_Pos=1;
     if (MI->Config.File_Names.size()>1)
     {
+        //Sizes and files not opened got once for all the parsers tested with the same list
+        const vector<Ztring>& Names=MI->Config.File_Names;
+        if (FileNames_Others.size()+1!=Names.size() || !std::equal(FileNames_Others.begin(), FileNames_Others.end(), Names.begin()+1))
+        {
+            FileNames_Others.assign(Names.begin()+1, Names.end());
+            FileSizes_Others.clear();
+            FileMissing_Others.assign(FileNames_Others.size(), false);
+        }
         #if MEDIAINFO_ADVANCED
             if (MI->Config.File_IgnoreSequenceFileSize_Get())
             {
@@ -267,13 +275,8 @@ size_t Reader_File::Format_Test_PerParser(MediaInfo_Internal* MI, const String &
             else
         #endif //MEDIAINFO_ADVANCED
             {
-                //Sizes got once for all the parsers tested with the same list
-                const vector<Ztring>& Names=MI->Config.File_Names;
-                if (FileNames_Others.size()+1!=Names.size() || !std::equal(FileNames_Others.begin(), FileNames_Others.end(), Names.begin()+1))
-                {
-                    FileNames_Others.assign(Names.begin()+1, Names.end());
+                if (FileSizes_Others.empty())
                     FileSizes_Others=File::Sizes_Get(FileNames_Others); //Quicker than one by one
-                }
                 for (size_t Pos=0; Pos<FileSizes_Others.size(); Pos++)
                 {
                     MI->Config.File_Sizes.push_back(FileSizes_Others[Pos]);
@@ -553,16 +556,22 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                     #if MEDIAINFO_EVENTS
                         MI->Config.Event_SubFile_Start(MI->Config.File_Names[MI->Config.File_Names_Pos]);
                     #endif //MEDIAINFO_EVENTS
-                    F.Open(MI->Config.File_Names[MI->Config.File_Names_Pos]);
+                    bool IsMissingKnown=FileMissing_Others.size()+1==MI->Config.File_Names.size(); //Not if the list changed after the parsing started (e.g. image sequence)
+                    if (!IsMissingKnown || !FileMissing_Others[MI->Config.File_Names_Pos-1])
+                        F.Open(MI->Config.File_Names[MI->Config.File_Names_Pos]);
                     while (!F.Opened_Get())
                     {
+                        if (IsMissingKnown)
+                            FileMissing_Others[MI->Config.File_Names_Pos-1]=true;
                         #if MEDIAINFO_EVENTS
-                            MI->Config.Event_SubFile_Missing_Absolute(MI->Config.File_Names[MI->Config.File_Names_Pos]);
+                            if (MI->Config.Event_CallBackFunction_IsSet()) //Else the event is built for nothing, for each file and each parser tested
+                                MI->Config.Event_SubFile_Missing_Absolute(MI->Config.File_Names[MI->Config.File_Names_Pos]);
                         #endif //MEDIAINFO_EVENTS
                         if (MI->Config.File_Names_Pos+1<MI->Config.File_Names.size())
                         {
                             MI->Config.File_Names_Pos++;
-                            F.Open(MI->Config.File_Names[MI->Config.File_Names_Pos]);
+                            if (!IsMissingKnown || !FileMissing_Others[MI->Config.File_Names_Pos-1])
+                                F.Open(MI->Config.File_Names[MI->Config.File_Names_Pos]);
                         }
                         else //break the otherwise infinite loop
                         {
