@@ -167,7 +167,7 @@ void File_Wvpk::Streams_Finish()
         int64u Samples=(int64u)(block_index_LastFrame+block_samples_LastFrame-block_index_FirstFrame); //Don't forget the last frame with block_samples...
         int64u BitDepth=dsf?1:(Wvpk_Resolution[(resolution1?1:0)*2+(resolution0?1:0)]);
         int64u Duration=Samples*1000/SamplingRate;
-        int64u CompressedSize=File_Size-TagsSize;
+        int64u CompressedSize=File_Size-TagsSize-File_BeginPaddingSize;
         int64u UncompressedSize=Duration*(num_channels?num_channels:(mono?1:2))*BitDepth*(static_cast<int64u>(SamplingRate)<<(3*dsf))/8/1000;
         float32 CompressionRatio=((float32)UncompressedSize)/CompressedSize;
         Fill(Stream_Audio, 0, Audio_StreamSize, CompressedSize, 3, true);
@@ -217,9 +217,9 @@ bool File_Wvpk::Synchronize()
     if (FromMKV)
         return true;
 
-    //Tags
+    //Tags and padding
     bool Tag_Found;
-    if (!File__Tags_Helper::Synchronize(Tag_Found))
+    if (!File__Tags_Helper::Synchronize_TagsAndPadding(Tag_Found))
         return false;
     if (Tag_Found)
         return true;
@@ -231,7 +231,14 @@ bool File_Wvpk::Synchronize()
                                              || Buffer[Buffer_Offset+1]!=0x76
                                              || Buffer[Buffer_Offset+2]!=0x70
                                              || Buffer[Buffer_Offset+3]!=0x6B)) //"wvpk"
-            Buffer_Offset++;
+        {
+            //Tags
+            size_t Buffer_Offset_BeforeTags=Buffer_Offset;
+            if (!File__Tags_Helper::Synchronize(Tag_Found))
+                return false;
+            if (Buffer_Offset==Buffer_Offset_BeforeTags)
+                Buffer_Offset++; //Else tags were parsed, the byte after them is not tested yet
+        }
 
         if (Buffer_Offset+4<=Buffer_Size)//Testing if size is coherant
         {
@@ -266,6 +273,7 @@ bool File_Wvpk::Synchronize()
     }
 
     //Synched is OK
+    NotZero_Offset=(int64u)-1;
     return true;
 }
 
