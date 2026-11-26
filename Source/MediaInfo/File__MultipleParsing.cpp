@@ -602,6 +602,11 @@ File__MultipleParsing::File__MultipleParsing()
         Parser.push_back(new File_Xdcam_Clip());
     #endif
 
+    //Before the raw streams, which may synchronize on parts of its bitmap data
+    #if defined(MEDIAINFO_ICO_YES)
+        Parser.push_back(new File_Ico());
+    #endif
+
     // Video
     #if defined(MEDIAINFO_AVC_YES)
         Parser.push_back(new File_Avc());
@@ -810,9 +815,6 @@ File__MultipleParsing::File__MultipleParsing()
     #endif
     #if defined(MEDIAINFO_GIF_YES)
         Parser.push_back(new File_Gif());
-    #endif
-    #if defined(MEDIAINFO_ICO_YES)
-        Parser.push_back(new File_Ico());
     #endif
     #if defined(MEDIAINFO_JPEG_YES)
         Parser.push_back(new File_Jpeg());
