@@ -123,6 +123,8 @@ private :
     bool SearchingForEndTags;
     bool SkippingUpToEnd;
     int64u LastTag_End; //File offset after the last tag parsed
+    int64u Lyrics_Searched_Offset; //File offset of the Lyrics3 block whose end marker is not in the first Lyrics_Searched_Size bytes
+    size_t Lyrics_Searched_Size;
 
     //Helpers
     bool DetectBeginOfEndTags();        //return true if we can continue, false if want return

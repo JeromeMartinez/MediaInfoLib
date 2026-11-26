@@ -97,6 +97,8 @@ File__Tags_Helper::File__Tags_Helper()
     SearchingForEndTags=false;
     SkippingUpToEnd=false;
     LastTag_End=0;
+    Lyrics_Searched_Offset=(int64u)-1;
+    Lyrics_Searched_Size=0;
 }
 
 //---------------------------------------------------------------------------
@@ -346,18 +348,23 @@ bool File__Tags_Helper::Synched_Test()
             {
                 if (Base->Buffer_Offset+16>Base->Buffer_Size)
                     return false;
-                //Searching for "LYRICS200"
-                std::string Buf((const char*)(Base->Buffer+Base->Buffer_Offset), Base->Buffer_Size-Base->Buffer_Offset);
+                //Searching for "LYRICS200", after the bytes already searched when waiting for more data
+                size_t Search_Begin=Lyrics_Searched_Offset==Base->File_Offset+Base->Buffer_Offset && Lyrics_Searched_Size>8 && Lyrics_Searched_Size<=Base->Buffer_Size-Base->Buffer_Offset?Lyrics_Searched_Size-8:0;
+                std::string Buf((const char*)(Base->Buffer+Base->Buffer_Offset+Search_Begin), Base->Buffer_Size-Base->Buffer_Offset-Search_Begin);
                 size_t Pos2=Buf.find("LYRICS200");
                 size_t Pos1=std::string::npos;
                 if (Pos2==std::string::npos)
                     Pos1=Buf.find("LYRICSEND");
                 if (Pos2!=std::string::npos)
-                    Parser_Buffer_Size=Pos2+9;
+                    Parser_Buffer_Size=Search_Begin+Pos2+9;
                 else if (Pos1!=std::string::npos)
-                    Parser_Buffer_Size=Pos1+9;
+                    Parser_Buffer_Size=Search_Begin+Pos1+9;
                 else
+                {
+                    Lyrics_Searched_Offset=Base->File_Offset+Base->Buffer_Offset;
+                    Lyrics_Searched_Size=Base->Buffer_Size-Base->Buffer_Offset;
                     Parser_Buffer_Size=(size_t)(Base->File_Size-(Base->File_Offset+Base->Buffer_Offset));
+                }
                 if (Base->Buffer_Offset+Parser_Buffer_Size>Base->Buffer_Size)
                     return false;
                 if (!TagSizeIsFinal)
