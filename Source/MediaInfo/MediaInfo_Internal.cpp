@@ -1561,6 +1561,8 @@ void MediaInfo_Internal::Entry()
             Open_Buffer_Finalize();
             if (Cin->Wait_Exit())
                 delete Cin;
+            else
+                Cin->RequestTerminateAndDelete();
         }
     #endif //MEDIAINFO_ADVANCED && defined(MEDIAINFO_FILE_YES) && !defined(WINDOWS_UWP) && !defined(__BORLANDC__)
     #if defined(MEDIAINFO_FILE_YES)
