@@ -2764,8 +2764,9 @@ bool File__Analyze::Synchro_Manage()
     //Trying to synchronize
     if (!Synched)
     {
-        //Buffer_TotalBytes_Fill_Max
-        if (!Status[IsFilled] && Buffer_TotalBytes>=Buffer_TotalBytes_Fill_Max)
+        //Buffer_TotalBytes_Fill_Max, the ID3v2 tags at the start are not counted before the first synchronization
+        int64u TagSize=File_Offset_FirstSynched==(int64u)-1?FirstSynched_TagEnd:0;
+        if (!Status[IsFilled] && Buffer_TotalBytes>=TagSize && Buffer_TotalBytes-TagSize>=Buffer_TotalBytes_Fill_Max)
         {
             Open_Buffer_Unsynch();
             GoToFromEnd(0);
@@ -2798,8 +2799,8 @@ bool File__Analyze::Synchro_Manage()
         bool Synchro_Result=Synchronize();
         if (!Synchro_Result && Status[IsFinished])
             Finish(); //Finish
-        //Before the first synchronization, the limit is tested where the search starts: a search started before it may wait for more data after it (e.g. at a candidate), the next search is rejected if it goes further than where it starts
-        if (!IsSub && !Status[IsAccepted] && (File_Offset_FirstSynched==(int64u)-1?(Synchro_Start>=Buffer_TotalBytes_FirstSynched_Max && Buffer_TotalBytes+Buffer_Offset>Synchro_Start):(!Synchro_Result && Buffer_TotalBytes+Buffer_Offset>=Buffer_TotalBytes_FirstSynched_Max)))
+        //Before the first synchronization, the limit is tested where the search starts: a search started before it may wait for more data after it (e.g. at a candidate), the next search is rejected if it goes further than where it starts; the ID3v2 tags at the start are not counted
+        if (!IsSub && !Status[IsAccepted] && (File_Offset_FirstSynched==(int64u)-1?(Synchro_Start>=FirstSynched_TagEnd && Synchro_Start-FirstSynched_TagEnd>=Buffer_TotalBytes_FirstSynched_Max && Buffer_TotalBytes+Buffer_Offset>Synchro_Start):(!Synchro_Result && Buffer_TotalBytes+Buffer_Offset>=Buffer_TotalBytes_FirstSynched_Max)))
         {
             Reject();
             return false;
