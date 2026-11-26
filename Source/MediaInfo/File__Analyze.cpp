@@ -697,6 +697,7 @@ File__Analyze::File__Analyze ()
     Buffer_Offset_Temp=0;
     Buffer_MinimumSize=0;
     Buffer_MaximumSize=16*1024*1024;
+    SubStream_IsEnding=false;
     Buffer_TotalBytes_FirstSynched=0;
     Buffer_TotalBytes_LastSynched=0;
     Buffer_TotalBytes=0;
@@ -1249,7 +1250,11 @@ void File__Analyze::Open_Buffer_Continue (const int8u* ToAdd, size_t ToAdd_Size)
             Config->State_Set(((float)Config->File_Names_Pos)/Config->File_Names.size());
     }
     if (Buffer_Size>=Buffer_MinimumSize || File_Offset+Buffer_Size==File_Size) //Parsing only if we have enough buffer
+    {
+        SubStream_IsEnding=SubStream_IsEnding && File_Offset+Buffer_Size>=File_Size;
         while (Open_Buffer_Continue_Loop());
+        SubStream_IsEnding=false;
+    }
 
     //Hash
     #if MEDIAINFO_HASH
@@ -1503,6 +1508,7 @@ void File__Analyze::Open_Buffer_Continue (File__Analyze* Sub, const int8u* ToAdd
         return;
 
     //Sub
+    Sub->SubStream_IsEnding=!ToAdd_Size && Sub->Buffer_Size && Sub->File_Offset+Sub->Buffer_Size!=File_Offset+Buffer_Offset+Element_Offset;
     if (Sub->MustAdaptSubOffsets) {
         auto NewOffset = File_Offset + Buffer_Offset + Element_Offset;
         auto OldOffset = Sub->File_Offset + Sub->Buffer_Size;
@@ -1616,6 +1622,7 @@ void File__Analyze::Open_Buffer_Continue (File__Analyze* Sub, const int8u* ToAdd
         Config->Demux_EventWasSent=false;
     #endif //MEDIAINFO_DEMUX
     Sub->Open_Buffer_Continue(ToAdd, ToAdd_Size);
+    Sub->SubStream_IsEnding=false;
     #if MEDIAINFO_DEMUX
         if (Demux_EventWasSent_Save)
             Config->Demux_EventWasSent=true;
@@ -3011,6 +3018,11 @@ bool File__Analyze::Header_Manage()
     Header_Parse();
 
     //Testing the parser result
+    if (Elem2.UnTrusted && SubStream_IsEnding) //No more data will come, data without a valid header is left as when the container ends the stream without giving it to the parser
+    {
+        Elem2.UnTrusted=false;
+        Elem2.WaitForMoreData=true;
+    }
     if (Elem2.UnTrusted) //Problem
     {
         Elem2.UnTrusted=false;

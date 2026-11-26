@@ -425,6 +425,7 @@ protected :
     //Data - Detect EOF
     virtual void Detect_EOF ()                                                  {};
     bool EOF_AlreadyDetected;
+    bool SubStream_IsEnding; //Sub-parser given no data while the data it holds was given at earlier positions and reaches the end of the stream: its container ends the stream
 
     //Data - Helpers
     void Data_Accept        (const char* ParserName);
