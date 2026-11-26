@@ -1089,6 +1089,7 @@ int8u File_Dirac::picture_Compression_Mode()
     int64u Data_Size=Element_Size-Element_Offset;
     int64u BitPos=4*8, BitSize=Data_Size*8; //After the picture number
     bool IsComplete=Next_Parse_Offset==Header_Size+Element_Size; //Else the data unit is cut or its size is unknown, and a count bigger than its data is not malformed
+    bool IsCut=Next_Parse_Offset?(Next_Parse_Offset>Header_Size+Element_Size):(Buffer_Offset+(size_t)Element_Size+4>Buffer_Size || CC4(Buffer+Buffer_Offset+(size_t)Element_Size)!=0x42424344); //Size unknown: cut if no parse info prefix follows it
     auto GetBit=[&]() -> bool {
         if (BitPos>=BitSize)
         {
@@ -1193,7 +1194,8 @@ int8u File_Dirac::picture_Compression_Mode()
         return Dirac_CompressionMode_Unknown;
 
     //Transform data, the quantiser of a subband or a slice is its index minus the quantisation matrix value
-    //A picture whose indexes are not all read is unknown, also with a lossy index read before, which may come from data shifted by a lost packet
+    //A picture whose indexes are not all read is lossy if its data unit is cut by the end of the data and a quantiser read is not 0, else unknown:
+    //a data unit not cut but shorter than its subbands or slices may come from data shifted by a lost packet, its indexes are not trusted
     int8u Mode=Dirac_CompressionMode_None;
     auto QuantIndex=[&](int32u Value) {
         if (Value>quant_matrix_min)
@@ -1201,20 +1203,32 @@ int8u File_Dirac::picture_Compression_Mode()
         else if (Mode==Dirac_CompressionMode_None)
             Mode=Dirac_CompressionMode_Lossless;
     };
+    auto Mode_NotAllRead=[&]() -> int8u {
+        return (IsCut && Mode==Dirac_CompressionMode_Lossy)?Dirac_CompressionMode_Lossy:Dirac_CompressionMode_Unknown;
+    };
+    auto Loop_InData=[&](int64u& Count, int64u RemainingSize, int64u MinBlockSize, const char* Name) -> bool {
+        if (IsComplete)
+            return Loop_IsOK(Count, RemainingSize, MinBlockSize, Name);
+        if (Count>RemainingSize/MinBlockSize+1)
+            Count=RemainingSize/MinBlockSize+1; //The subbands or slices starting in the data, the last one may be cut, so the loop ends out of data before the count
+        return true;
+    };
     if (!IsSliced)
     {
         int64u Subbands=3*(1+3*(int64u)dwt_depth);
-        if (!Loop_IsOK(Subbands, Remain()/8, 1, "subbands"))
+        if (!Loop_InData(Subbands, Remain()/8, 1, "subbands"))
             return Dirac_CompressionMode_Unknown;
         for (int64u Pos=0; Pos<Subbands; Pos++)
         {
             int32u length=GetUInt();
             int32u quant_index=length?GetUInt():0;
             Align();
-            if ((int64u)length*8>Remain() || BitPos>BitSize)
-                return Dirac_CompressionMode_Unknown;
+            if (BitPos>BitSize)
+                return Mode_NotAllRead();
             if (length)
                 QuantIndex(quant_index);
+            if ((int64u)length*8>Remain())
+                return Mode_NotAllRead();
             BitPos+=(int64u)length*8;
         }
     }
@@ -1225,30 +1239,34 @@ int8u File_Dirac::picture_Compression_Mode()
         int64u Slices=(int64u)slices_x*slices_y;
         if (Element_Code&0x20) //High quality, prefix bytes, a quantisation index, then for each component a length of 1 byte and the data
         {
-            if (!Loop_IsOK(Slices, Data_Size, (int64u)slice_prefix_bytes+4, "slices"))
+            if (!Loop_InData(Slices, Data_Size, (int64u)slice_prefix_bytes+4, "slices"))
                 return Dirac_CompressionMode_Unknown;
             int64u Offset=0;
             for (int64u Pos=0; Pos<Slices; Pos++)
             {
                 int64u QuantIndex_Offset=Offset+slice_prefix_bytes;
+                if (QuantIndex_Offset>=Data_Size)
+                    return Mode_NotAllRead();
+                QuantIndex(Data[(size_t)QuantIndex_Offset]);
                 Offset=QuantIndex_Offset+1;
                 int8u Component=0;
                 for (; Component<3 && Offset<Data_Size; Component++)
                     Offset+=1+(int64u)slice_size_scaler*Data[(size_t)Offset];
                 if (Component<3 || Offset>Data_Size)
-                    return Dirac_CompressionMode_Unknown;
-                QuantIndex(Data[(size_t)QuantIndex_Offset]);
+                    return Mode_NotAllRead();
             }
         }
         else if (slice_bytes_denominator && slice_bytes_numerator>=slice_bytes_denominator) //Low delay, slices of 1 byte or more with a quantisation index of 7 bits at their start
         {
-            if (!Loop_IsOK(Slices, Data_Size, slice_bytes_numerator/slice_bytes_denominator, "slices"))
+            if (!Loop_InData(Slices, Data_Size, slice_bytes_numerator/slice_bytes_denominator, "slices"))
                 return Dirac_CompressionMode_Unknown;
             for (int64u Pos=0; Pos<Slices; Pos++)
             {
-                if ((Pos+1)*slice_bytes_numerator/slice_bytes_denominator>Data_Size)
-                    return Dirac_CompressionMode_Unknown;
+                if (Pos*slice_bytes_numerator/slice_bytes_denominator>=Data_Size)
+                    return Mode_NotAllRead();
                 QuantIndex(Data[(size_t)(Pos*slice_bytes_numerator/slice_bytes_denominator)]>>1);
+                if ((Pos+1)*slice_bytes_numerator/slice_bytes_denominator>Data_Size)
+                    return Mode_NotAllRead();
             }
         }
     }
