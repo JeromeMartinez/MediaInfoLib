@@ -983,8 +983,11 @@ void File__MultipleParsing::Read_Buffer_Continue()
         if (File_Offset+Buffer_Size==File_Size && Parser[Pos]->File_GoTo>=File_Size)
         {
             //Config is shared by all the candidate parsers: the finalization of one of
-            //them must not make the next ones parse as if they were finishing
+            //them must not make the next ones parse as if they were finishing, and the
+            //finalization of this parser (end of data of unknown size) must not make a
+            //candidate skip the parsing of the data it waits with
             bool IsFinishing=Config->IsFinishing;
+            Config->IsFinishing=false;
             Parser[Pos]->Open_Buffer_Finalize();
             Config->IsFinishing=IsFinishing;
         }
