@@ -1509,24 +1509,38 @@ void File__Analyze::Open_Buffer_Continue (File__Analyze* Sub, const int8u* ToAdd
 
     //Sub
     Sub->SubStream_IsEnding=!ToAdd_Size && Sub->Buffer_Size && Sub->File_Offset+Sub->Buffer_Size!=File_Offset+Buffer_Offset+Element_Offset;
-    if (Sub->MustAdaptSubOffsets) {
-        auto NewOffset = File_Offset + Buffer_Offset + Element_Offset;
-        auto OldOffset = Sub->File_Offset + Sub->Buffer_Size;
-        auto DiffOffset = NewOffset - OldOffset;
-        for (size_t i = 0; i <= Sub->Element_Level; i++)
-            Sub->Element[i].Next += DiffOffset;
-        if (Sub->File_GoTo != (int64u)-1)
-            Sub->File_GoTo += DiffOffset; //Data skipped after the end of the previous chunk (e.g. an element bigger than the chunk) continues to be skipped in this chunk
-    }
-    else
-        Sub->File_GoTo=(int64u)-1;
-    Sub->File_Offset=File_Offset+Buffer_Offset+Element_Offset;
-    if (Sub->File_Size!=File_Size)
+    const bool Sub_StreamEnds=!ToAdd_Size && Sub!=this && Sub->Buffer_Size && File_Offset+Buffer_Offset+Element_Offset>=File_Size;
+    if (Sub_StreamEnds) //The data held by the sub-parser keeps its offset, its end is the end of the stream
     {
+        int64u End=Sub->File_Offset+Sub->Buffer_Size;
         for (size_t Pos=0; Pos<=Sub->Element_Level; Pos++)
             if (Sub->Element[Pos].Next==Sub->File_Size)
-                Sub->Element[Pos].Next=File_Size;
-        Sub->File_Size=File_Size;
+                Sub->Element[Pos].Next=End;
+        Sub->File_Size=End;
+        if (!Sub->MustAdaptSubOffsets)
+            Sub->File_GoTo=(int64u)-1;
+    }
+    else
+    {
+        if (Sub->MustAdaptSubOffsets) {
+            auto NewOffset = File_Offset + Buffer_Offset + Element_Offset;
+            auto OldOffset = Sub->File_Offset + Sub->Buffer_Size;
+            auto DiffOffset = NewOffset - OldOffset;
+            for (size_t i = 0; i <= Sub->Element_Level; i++)
+                Sub->Element[i].Next += DiffOffset;
+            if (Sub->File_GoTo != (int64u)-1)
+                Sub->File_GoTo += DiffOffset; //Data skipped after the end of the previous chunk (e.g. an element bigger than the chunk) continues to be skipped in this chunk
+        }
+        else
+            Sub->File_GoTo=(int64u)-1;
+        Sub->File_Offset=File_Offset+Buffer_Offset+Element_Offset;
+        if (Sub->File_Size!=File_Size)
+        {
+            for (size_t Pos=0; Pos<=Sub->Element_Level; Pos++)
+                if (Sub->Element[Pos].Next==Sub->File_Size)
+                    Sub->Element[Pos].Next=File_Size;
+            Sub->File_Size=File_Size;
+        }
     }
     Sub->Element[0].IsComplete=Element[Element_Level].IsComplete;
     #if MEDIAINFO_TRACE
@@ -1536,7 +1550,7 @@ void File__Analyze::Open_Buffer_Continue (File__Analyze* Sub, const int8u* ToAdd
     //{File F; F.Open(Ztring(__T("d:\\direct"))+Ztring::ToZtring((size_t)this, 16), File::Access_Write_Append); F.Write(ToAdd, ToAdd_Size);}
 
     //Adaptating File_Offset
-    if (Sub!=this && Sub->Buffer_Size<=Sub->File_Offset)
+    if (!Sub_StreamEnds && Sub!=this && Sub->Buffer_Size<=Sub->File_Offset)
         Sub->File_Offset-=Sub->Buffer_Size;
 
     //Parsing
