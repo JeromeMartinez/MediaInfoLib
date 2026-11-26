@@ -655,7 +655,15 @@ bool File_Aac::Synchronize_ADTS()
     {
          while (Buffer_Offset+6<=Buffer_Size && (Buffer[Buffer_Offset  ]!=0xFF
                                               || (Buffer[Buffer_Offset+1]&0xF6)!=0xF0))
-            Buffer_Offset++;
+         {
+            //Tags
+            bool Tag_Found_Synchro;
+            size_t Buffer_Offset_BeforeTags=Buffer_Offset;
+            if (!File__Tags_Helper::Synchronize(Tag_Found_Synchro))
+                return false;
+            if (Buffer_Offset==Buffer_Offset_BeforeTags)
+                Buffer_Offset++; //Else tags were parsed, the byte after them is not tested yet
+         }
 
         if (Buffer_Offset+6<=Buffer_Size)//Testing if size is coherant
         {
