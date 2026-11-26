@@ -18,6 +18,7 @@
 
 //---------------------------------------------------------------------------
 #include "MediaInfo/Tag/File__Tags.h"
+#include "MediaInfo/MediaInfo_Config_MediaInfo.h"
 #if defined(MEDIAINFO_APETAG_YES)
     #include "MediaInfo/Tag/File_ApeTag.h"
 #endif //MEDIAINFO_APETAG_YES
@@ -217,6 +218,11 @@ bool File__Tags_Helper::Synchronize(bool &Tag_Found, size_t Synchro_Offset)
     //ID
     if (Base->Buffer_Offset+Synchro_Offset+8>Base->Buffer_Size)
         return false;
+    if (!Synchro_Offset)
+    {
+        Tag_Found=false; //The tags here were parsed by Synched_Test(), the bytes it did not take are not a tag
+        return true;
+    }
     int32u ID3=CC3(Base->Buffer+Base->Buffer_Offset+Synchro_Offset);
     int64u ID8=CC8(Base->Buffer+Base->Buffer_Offset+Synchro_Offset);
     if ((ID3==0x494433 && Id3v2_Header_IsValid(Base->Buffer+Base->Buffer_Offset+Synchro_Offset)) //"ID3"
@@ -271,6 +277,10 @@ bool File__Tags_Helper::Synched_Test()
     if (SearchingForEndTags)
         return true;
 
+    //In other data skipped by the synchronization of the parser, tag bytes whose end is after the end of the data, or would make the buffer too large, are not a tag
+    bool InOtherData=NotZero_Offset!=(int64u)-1 && NotZero_Offset<Base->File_Offset+Base->Buffer_Offset;
+    auto IsNotTag=[&](int64u Size) {return InOtherData && (Base->Config->IsFinishing || Size>Base->Buffer_MaximumSize || Base->File_Offset+Base->Buffer_Offset+Size>Base->File_Size);};
+
     for (;;)
     {
         if (!Parser)
@@ -286,17 +296,25 @@ bool File__Tags_Helper::Synched_Test()
                  if ((ID==0x494433 || ID==0x656133) && Id3v2_Header_IsValid(Base->Buffer+Base->Buffer_Offset)) //"ID3" and "ea3" (found in OpenMG)
             {
                 if (Base->Buffer_Offset+10>Base->Buffer_Size)
+                {
+                    if (IsNotTag(10))
+                        break;
                     return false;
+                }
                 Parser_Buffer_Size=Id3v2_SizeFromHeader(Base->Buffer+Base->Buffer_Offset);
                 if (ID==0x494433 && Base->Buffer[Base->Buffer_Offset+3]==4 && (Base->Buffer[Base->Buffer_Offset+5]&0x10)) //ID3v2.4 footer present, not in the tag size
                 {
-                    if (Base->Buffer_Offset+Parser_Buffer_Size+10>Base->Buffer_Size && Base->File_Offset+Base->Buffer_Offset+Parser_Buffer_Size+10<=Base->File_Size)
+                    if (Base->Buffer_Offset+Parser_Buffer_Size+10>Base->Buffer_Size && Base->File_Offset+Base->Buffer_Offset+Parser_Buffer_Size+10<=Base->File_Size && !IsNotTag(Parser_Buffer_Size+10))
                         return false;
                     if (Base->Buffer_Offset+Parser_Buffer_Size+10<=Base->Buffer_Size && CC3(Base->Buffer+Base->Buffer_Offset+Parser_Buffer_Size)==0x334449) //"3DI"
                         Parser_Buffer_Size+=10;
                 }
                 if (Base->Buffer_Offset+Parser_Buffer_Size>Base->Buffer_Size)
+                {
+                    if (IsNotTag(Parser_Buffer_Size))
+                        break;
                     return false;
+                }
                 if (!TagSizeIsFinal)
                     File_BeginTagSize+=Parser_Buffer_Size;
                 if (Base->File_Offset_FirstSynched==(int64u)-1)
@@ -312,10 +330,14 @@ bool File__Tags_Helper::Synched_Test()
             else if (ID8==0x4150455441474558LL) //"APETAGEX"
             {
                 if (Base->Buffer_Offset+32>Base->Buffer_Size)
+                {
+                    if (IsNotTag(32))
+                        break;
                     return false;
+                }
                 Parser_Buffer_Size=LittleEndian2int32u(Base->Buffer+Base->Buffer_Offset+12); //Items and footer
                 bool IsHeader=(LittleEndian2int32u(Base->Buffer+Base->Buffer_Offset+20)&0x20000000)?true:false;
-                if (!IsHeader && LittleEndian2int32u(Base->Buffer+Base->Buffer_Offset+8)!=1000 && Parser_Buffer_Size>=32 && Base->File_Offset+Base->Buffer_Offset+32+Parser_Buffer_Size<=Base->File_Size) //A header without the "is the header" flag has its footer at the end of the tag, APEv1 has no header
+                if (!IsHeader && LittleEndian2int32u(Base->Buffer+Base->Buffer_Offset+8)!=1000 && Parser_Buffer_Size>=32 && Base->File_Offset+Base->Buffer_Offset+32+Parser_Buffer_Size<=Base->File_Size && !IsNotTag((int64u)Parser_Buffer_Size+16)) //A header without the "is the header" flag has its footer at the end of the tag, APEv1 has no header
                 {
                     if ((int64u)Base->Buffer_Offset+Parser_Buffer_Size+16>Base->Buffer_Size)
                         return false;
@@ -331,7 +353,11 @@ bool File__Tags_Helper::Synched_Test()
                     Parser_Buffer_Size=32;
                 }
                 if (Base->Buffer_Offset+Parser_Buffer_Size>Base->Buffer_Size)
+                {
+                    if (IsNotTag(Parser_Buffer_Size))
+                        break;
                     return false;
+                }
                 if (!TagSizeIsFinal)
                     File_BeginTagSize+=Parser_Buffer_Size;
                 if (Base->File_Offset_FirstSynched==(int64u)-1)
@@ -347,7 +373,11 @@ bool File__Tags_Helper::Synched_Test()
             else if (ID8==0x4C59524943534245LL) //"LYRICSBE"
             {
                 if (Base->Buffer_Offset+16>Base->Buffer_Size)
+                {
+                    if (IsNotTag(16))
+                        break;
                     return false;
+                }
                 //Searching for "LYRICS200", after the bytes already searched when waiting for more data
                 size_t Search_Begin=Lyrics_Searched_Offset==Base->File_Offset+Base->Buffer_Offset && Lyrics_Searched_Size>8 && Lyrics_Searched_Size<=Base->Buffer_Size-Base->Buffer_Offset?Lyrics_Searched_Size-8:0;
                 std::string Buf((const char*)(Base->Buffer+Base->Buffer_Offset+Search_Begin), Base->Buffer_Size-Base->Buffer_Offset-Search_Begin);
@@ -361,6 +391,8 @@ bool File__Tags_Helper::Synched_Test()
                     Parser_Buffer_Size=Search_Begin+Pos1+9;
                 else
                 {
+                    if (InOtherData && (Base->Config->IsFinishing || Base->File_Offset+Base->Buffer_Size>=Base->File_Size || Base->Buffer_Size-Base->Buffer_Offset>=999999+15)) //No end marker up to the end of the data or in the largest Lyrics3v2 block (6-digit size and "LYRICS200" after the lyrics)
+                        break;
                     Lyrics_Searched_Offset=Base->File_Offset+Base->Buffer_Offset;
                     Lyrics_Searched_Size=Base->Buffer_Size-Base->Buffer_Offset;
                     Parser_Buffer_Size=(size_t)(Base->File_Size-(Base->File_Offset+Base->Buffer_Offset));
