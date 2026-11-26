@@ -415,10 +415,19 @@ bool File__Tags_Helper::Synched_Test()
                     Parser_Buffer_Size+=32;
                 else
                 {
-                    //Footer, after the items: the items are counted with the tags if they were skipped since the first non-zero byte after the last synchronization, and are not in another tag
+                    //Footer, after the items: the items are in the tag if they were skipped since the first non-zero byte after the last synchronization, and are not in another tag
                     if (Parser_Buffer_Size>32 && NotZero_Offset!=(int64u)-1 && NotZero_Offset+Parser_Buffer_Size-32<=Base->File_Offset+Base->Buffer_Offset && LastTag_End+Parser_Buffer_Size-32<=Base->File_Offset+Base->Buffer_Offset)
-                        TagsSize+=Parser_Buffer_Size-32;
-                    Parser_Buffer_Size=32;
+                    {
+                        if (Base->Buffer_Offset>=Parser_Buffer_Size-32)
+                            Base->Buffer_Offset-=Parser_Buffer_Size-32; //Items still in the buffer, parsed with the footer
+                        else
+                        {
+                            TagsSize+=Parser_Buffer_Size-32;
+                            Parser_Buffer_Size=32;
+                        }
+                    }
+                    else
+                        Parser_Buffer_Size=32;
                 }
                 if (Base->Buffer_Offset+Parser_Buffer_Size>Base->Buffer_Size)
                 {
