@@ -1941,14 +1941,14 @@ void File_Riff::AVI__hdlr_strl_strf_vids()
     {
         if (Resolution==32)
         {
-            Fill(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format), "RGBA", Unlimited, true, true);
+            if (Retrieve_Const(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format))==__T("RGB")) //Not RLE or PNG
+                Fill(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format), "RGBA", Unlimited, true, true);
             if (StreamKind_Last==Stream_Video)
                 Fill(Stream_Video, StreamPos_Last, Video_ColorSpace, "RGBA", Unlimited, true, true);
             Fill(StreamKind_Last, StreamPos_Last, "BitDepth", Resolution/4); //With Alpha
         }
         else
         {
-            Fill(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format), "RGB", Unlimited, true, true);
             if (StreamKind_Last==Stream_Video)
                 Fill(Stream_Video, StreamPos_Last, Video_ColorSpace, "RGB", Unlimited, true, true);
             Fill(StreamKind_Last, StreamPos_Last, "BitDepth", Resolution<=16?8:(Resolution/3)); //indexed or normal

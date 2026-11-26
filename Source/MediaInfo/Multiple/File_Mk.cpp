@@ -4752,7 +4752,8 @@ void File_Mk::Segment_Tracks_TrackEntry_CodecPrivate_vids()
             {
                 if (Resolution==32)
                 {
-                    Fill(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format), "RGBA", Unlimited, true, true);
+                    if (Retrieve_Const(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format))==__T("RGB")) //Not RLE or PNG
+                        Fill(StreamKind_Last, StreamPos_Last, Fill_Parameter(StreamKind_Last, Generic_Format), "RGBA", Unlimited, true, true);
                     Fill(StreamKind_Last, StreamPos_Last, "BitDepth", Resolution/4); //With Alpha
                 }
                 else
