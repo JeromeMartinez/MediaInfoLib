@@ -690,13 +690,15 @@ bool File_Aac::Synchronize_ADTS()
                 while (Buffer_Offset+aac_frame_length<Buffer_Size && Buffer[Buffer_Offset+aac_frame_length]==0x00)
                     aac_frame_length++;
 
-                if (IsSub && Buffer_Offset+aac_frame_length==Buffer_Size)
+                //After other data, a single frame with padding up to the end is likely a coincidence, also in another file (e.g. in a picture ending with zeros)
+                bool SingleFrame_IsPossible=Status[IsAccepted] || NotZero_Offset==File_Offset+Buffer_Offset;
+                if (IsSub && SingleFrame_IsPossible && Buffer_Offset+aac_frame_length==Buffer_Size)
                     break; //while()
                 if (Buffer_Offset+aac_frame_length+2>Buffer_Size)
                 {
                     if (File_Offset+Buffer_Offset+aac_frame_length!=File_Size-File_EndTagSize)
                         return false; //Need more data
-                    if (SingleFrame_IsEnough())
+                    if (SingleFrame_IsPossible)
                         break; //while(), padding up to the end of the file
                     Buffer_Offset++; //False start
                     continue;
