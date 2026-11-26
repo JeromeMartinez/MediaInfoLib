@@ -22,6 +22,7 @@
 
 //---------------------------------------------------------------------------
 #include "MediaInfo/Image/File_Ico.h"
+#include <algorithm>
 //---------------------------------------------------------------------------
 
 namespace MediaInfoLib
@@ -35,6 +36,7 @@ namespace MediaInfoLib
 File_Ico::File_Ico()
 {
     IcoDataSize=0;
+    Directory_End=0;
 }
 
 //***************************************************************************
@@ -85,6 +87,12 @@ void File_Ico::FileHeader_Parse()
     Skip_L2(                                                    "Reserved");
     Get_L2 (Type,                                               "Type");
     Get_L2 (Count,                                              "Count");
+
+    FILLING_BEGIN();
+        if (!Count)
+            Reject("ICO");
+        Directory_End=6+16*(int32u)Count;
+    FILLING_END();
 }
 
 //***************************************************************************
@@ -124,12 +132,31 @@ void File_Ico::Data_Parse()
         Streams.push_back(Stream);
 
         IcoDataSize+=Size;
-        if (Offset>File_Size || File_Offset+Buffer_Offset+Element_Size+IcoDataSize>File_Size)
+        if (Offset>File_Size || File_Offset+Buffer_Offset+Element_Size+IcoDataSize>File_Size || (File_Size==(int64u)-1 && Offset<Directory_End))
             Reject("ICO");
         Count--;
         if (Count==0)
         {
-            if (File_Offset+Buffer_Offset+Element_Size+IcoDataSize!=File_Size)
+            int64u Data_End;
+            if (File_Size==(int64u)-1)
+            {
+                //Without the file size, the bitmap data must follow the directory without gap or overlap
+                std::vector<stream> Streams_Sorted(Streams);
+                std::sort(Streams_Sorted.begin(), Streams_Sorted.end(), [](const stream& A, const stream& B) {return A.Offset<B.Offset;});
+                Data_End=Directory_End;
+                for (const auto& Stream_Sorted : Streams_Sorted)
+                {
+                    if (Stream_Sorted.Offset!=Data_End)
+                    {
+                        Data_End=(int64u)-1;
+                        break;
+                    }
+                    Data_End+=Stream_Sorted.Size;
+                }
+            }
+            else
+                Data_End=File_Size;
+            if (File_Offset+Buffer_Offset+Element_Size+IcoDataSize!=Data_End)
                 Reject("ICO");
             else
             {

@@ -46,6 +46,7 @@ private :
 
     //Temp
     int64u IcoDataSize;
+    int32u Directory_End;
     int16u Type;
     int16u Count;
     struct stream
