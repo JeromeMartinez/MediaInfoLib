@@ -1887,6 +1887,8 @@ void File__Analyze::Open_Buffer_Finalize (bool NoBufferModification)
         Config->IsFinishing=true;
         File_Size_Real=File_Size;
         File_Size=File_Offset+Buffer_Size;
+        if (Element[0].Next==(int64u)-1 && !IsSub) //Unknown end of the elements (file size unknown when the parsing started): the end of the data is the end of the elements, as with a known size
+            Element[0].Next=File_Size;
         Open_Buffer_Continue((const int8u*)NULL, 0);
         if (File_Size_Real!=(int64u)-1 || IsSub) //Unknown file size: the end of the data is kept as file size for finishing, except for a sub-parser (its container may give only a part of its stream)
             File_Size=File_Size_Real;
