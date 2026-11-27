@@ -616,6 +616,8 @@ void File_Bdmv::Read_Buffer_Continue()
     }
     else
         Skip_XX(Element_Size-Element_Offset,                    "Unknown");
+
+    ForceFinish("BDMV"); //The whole file is parsed, also when it is cut (Finish() would continue the parsing with ParseSpeed>=1)
 }
 
 //***************************************************************************
