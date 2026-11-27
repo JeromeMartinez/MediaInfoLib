@@ -65,6 +65,7 @@ public :
     std::bitset<32> Status;
     int64u          Partial_Begin;
     int64u          Partial_End;
+    int64u          Partial_Size(int64u FileSize) const; //Size of the partial window in a file of this size
     size_t          CountOfSeconds;
     std::vector<Ztring> FileNames_Others; //Files of the list after the first one
     std::vector<int64u> FileSizes_Others; //Sizes of these files, got once for all the parsers tested
