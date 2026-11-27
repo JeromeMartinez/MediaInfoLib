@@ -85,20 +85,19 @@ bool File_Xdcam_Clip::FileHeader_Begin()
             #if defined(MEDIAINFO_REFERENCES_YES)
                 if (RelatedFiles_CanBeSearched(File_Name)
                  && FileName::FullName_Get(File_Name).size()>7
-                 && File_Name[File_Name.size()-7]==__T('M')
-                 && File_Name[File_Name.size()-6]==__T('0')
-                 && File_Name[File_Name.size()-5]==__T('1')
-                 && File_Name[File_Name.size()-4]==__T('.')
-                 && File_Name[File_Name.size()-3]==__T('X')
-                 && File_Name[File_Name.size()-2]==__T('M')
-                 && File_Name[File_Name.size()-1]==__T('L'))
+                 && !File_Name.compare(File_Name.size()-7, 4, __T("M01."))
+                 && Ztring(File_Name.substr(File_Name.size()-3)).MakeLowerCase()==__T("xml"))
                 {
                     Ztring MXF_File=File_Name;
                     MXF_File.resize(MXF_File.size()-7);
                     if (File::Exists(MXF_File+__T(".MXF")))
                         MXF_File+=__T(".MXF");
-                    if (File::Exists(MXF_File+__T(".MP4")))
+                    else if (File::Exists(MXF_File+__T(".mxf")))
+                        MXF_File+=__T(".mxf");
+                    else if (File::Exists(MXF_File+__T(".MP4")))
                         MXF_File+=__T(".MP4");
+                    else if (File::Exists(MXF_File+__T(".mp4")))
+                        MXF_File+=__T(".mp4");
 
                     //int8u ReadByHuman=Ztring(MediaInfo::Option_Static(__T("ReadByHuman_Get"))).To_int8u();
                     //MediaInfo::Option_Static(__T("ReadByHuman"), __T("0"));
