@@ -680,8 +680,8 @@ void File_Mpeg4_Descriptors::Descriptor_04()
 {
     //Parsing
     int32u bufferSizeDB, MaxBitrate, AvgBitrate;
-    int8u  streamType;
-    Get_B1 (ObjectTypeId,                                       "objectTypeIndication"); Param_Info1(Mpeg4_Descriptors_ObjectTypeIndication(ObjectTypeId));
+    int8u  objectTypeIndication, streamType;
+    Get_B1 (objectTypeIndication,                               "objectTypeIndication"); Param_Info1(Mpeg4_Descriptors_ObjectTypeIndication(objectTypeIndication));
     BS_Begin();
     Get_S1 (6, streamType,                                      "streamType"); Param_Info1(Mpeg4_Descriptors_StreamType(streamType));
     Skip_SB(                                                    "upStream");
@@ -692,6 +692,7 @@ void File_Mpeg4_Descriptors::Descriptor_04()
     Get_B4 (AvgBitrate,                                         "avgBitrate");
 
     FILLING_BEGIN();
+        ObjectTypeId=objectTypeIndication; //Set with the parser creation, Descriptor_05 casts the parser depending on it
         if (KindOfStream==Stream_Max)
             switch (ObjectTypeId)
             {
