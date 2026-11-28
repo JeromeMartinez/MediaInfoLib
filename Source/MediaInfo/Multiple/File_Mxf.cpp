@@ -18153,12 +18153,9 @@ void File_Mxf::GenericStreamTextBasedSet()
 {
     ELEMENT_BEGIN()
     ELEMENT_MIDDLE()
-    ELEM____UUID_(TextDataDescription)
-    ELEM____UUID_(TextMIMEMediaType)
-    ELEM____UUID_(RFC5646TextLanguageCode)
     ELEM____UUID_(GenericStreamID)
     ELEMENT_END()
-    InterchangeObject();
+    TextBasedObjectGroup();
 }
 
 //---------------------------------------------------------------------------
@@ -18166,10 +18163,19 @@ void File_Mxf::UTF8TextBasedSet()
 {
     ELEMENT_BEGIN()
     ELEMENT_MIDDLE()
+    ELEM____UUID_(UTF8TextData)
+    ELEMENT_END()
+    TextBasedObjectGroup();
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::TextBasedObjectGroup()
+{
+    ELEMENT_BEGIN()
+    ELEMENT_MIDDLE()
     ELEM____UUID_(TextDataDescription)
     ELEM____UUID_(TextMIMEMediaType)
     ELEM____UUID_(RFC5646TextLanguageCode)
-    ELEM____UUID_(UTF8TextData)
     ELEMENT_END()
     InterchangeObject();
 }
