@@ -16086,7 +16086,7 @@ void File_Mxf::Data_Parse()
     }
     break;
     }
-    case 0x060E2B34021301LL: //Local sets with BER length, ARRI
+    case 0x060E2B34021301LL: //Local sets with BER length
         if (ManageArri()) {
         }
         else if (IsArriExperimental && Code.lo==Arri::BinaryPack) {
@@ -16126,7 +16126,10 @@ void File_Mxf::Data_Parse()
                     Pos+=(size_t)Size;
                 }
             #endif //MEDIAINFO_CONFORMANCE
-            Skip_XX(Element_Size,                               "Unknown");
+            if (Code.lo==Groups::UTF8TextBasedSet) //Text over the limit of 2-byte lengths (SMPTE RP 2057)
+                ManageGroup(&File_Mxf::UTF8TextBasedSet);
+            else
+                Skip_XX(Element_Size,                           "Unknown");
         }
         break;
     default:
@@ -16219,11 +16222,8 @@ else if ((Primer_Value->second.hi>>24)==0x060E2B3401LL \
 { \
     auto Temp = Mxf_Param_Info((int32u)Primer_Value->second.hi, Primer_Value->second.lo); \
     Element_Name(Temp ? Temp : Ztring().From_UUID(Code).To_UTF8().c_str()); \
-    int64u Element_Size_Save=Element_Size; \
-    Element_Size=Element_Offset+Length2; \
     _ELEMENT(); \
     Element_Offset=Element_Size; \
-    Element_Size=Element_Size_Save; \
 }
 
 #define ELEM____ARRI_(_CONST, _NAME, _CALL) \
