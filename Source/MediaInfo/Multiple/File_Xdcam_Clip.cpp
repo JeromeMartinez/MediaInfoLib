@@ -64,6 +64,8 @@ bool File_Xdcam_Clip::FileHeader_Begin()
             Element=Root->FirstChildElement("LastUpdate");
             if (Element)
                 Fill(Stream_General, 0, General_Tagged_Date, Element->Attribute("value"));
+            else
+                Fill(Stream_General, 0, General_Tagged_Date, Root->Attribute("lastUpdate"));
 
             //Duration
             Ztring Duration, EditUnit;
@@ -83,20 +85,19 @@ bool File_Xdcam_Clip::FileHeader_Begin()
             #if defined(MEDIAINFO_REFERENCES_YES)
                 if (RelatedFiles_CanBeSearched(File_Name)
                  && FileName::FullName_Get(File_Name).size()>7
-                 && File_Name[File_Name.size()-7]==__T('M')
-                 && File_Name[File_Name.size()-6]==__T('0')
-                 && File_Name[File_Name.size()-5]==__T('1')
-                 && File_Name[File_Name.size()-4]==__T('.')
-                 && File_Name[File_Name.size()-3]==__T('X')
-                 && File_Name[File_Name.size()-2]==__T('M')
-                 && File_Name[File_Name.size()-1]==__T('L'))
+                 && !File_Name.compare(File_Name.size()-7, 4, __T("M01."))
+                 && Ztring(File_Name.substr(File_Name.size()-3)).MakeLowerCase()==__T("xml"))
                 {
                     Ztring MXF_File=File_Name;
                     MXF_File.resize(MXF_File.size()-7);
                     if (File::Exists(MXF_File+__T(".MXF")))
                         MXF_File+=__T(".MXF");
-                    if (File::Exists(MXF_File+__T(".MP4")))
+                    else if (File::Exists(MXF_File+__T(".mxf")))
+                        MXF_File+=__T(".mxf");
+                    else if (File::Exists(MXF_File+__T(".MP4")))
                         MXF_File+=__T(".MP4");
+                    else if (File::Exists(MXF_File+__T(".mp4")))
+                        MXF_File+=__T(".mp4");
 
                     //int8u ReadByHuman=Ztring(MediaInfo::Option_Static(__T("ReadByHuman_Get"))).To_int8u();
                     //MediaInfo::Option_Static(__T("ReadByHuman"), __T("0"));
@@ -107,7 +108,13 @@ bool File_Xdcam_Clip::FileHeader_Begin()
                     if (MI.Open(MXF_File))
                     {
                         //MediaInfo::Option_Static(__T("ReadByHuman"), ReadByHuman?__T("1"):__T("0"));
+                        Ztring Recorded_Date_Temp=Retrieve(Stream_General, 0, General_Recorded_Date);
+                        Ztring Tagged_Date_Temp=Retrieve(Stream_General, 0, General_Tagged_Date);
                         Merge(MI);
+                        if (Retrieve_Const(Stream_General, 0, General_Recorded_Date).empty())
+                            Fill(Stream_General, 0, General_Recorded_Date, Recorded_Date_Temp);
+                        if (Retrieve_Const(Stream_General, 0, General_Tagged_Date).empty())
+                            Fill(Stream_General, 0, General_Tagged_Date, Tagged_Date_Temp);
                         Fill(Stream_Video, StreamPos_Last, "Source", FileName::FullName_Get(MXF_File)); //From the folder of the file, the essence is next to it
                         File_Size_Total+=Ztring(MI.Get(Stream_General, 0, General_FileSize)).To_int64u();
 
