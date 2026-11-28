@@ -2589,6 +2589,7 @@ namespace Arri
         0x0E17010208000000LL,
         0x0E17010209000000LL,
         0x0E1701020A000000LL,
+        0x0E1701020B000000LL,
         0x0E17010212000000LL,
     };
     static const char* ClipOrder[]=
@@ -2597,6 +2598,7 @@ namespace Arri
         "SensorDimensions_Width",
         "SensorDimensions_Height",
         "SensorPixelPitch",
+        "ColorFilterArrayLayout",
         "AcquisitionRect_Left",
         "AcquisitionRect_Top",
         "AcquisitionRect_Width",
@@ -17479,6 +17481,7 @@ namespace Arri
         Clip_Primaries,
         Clip_Transfer,
         Clip_B1List,
+        Clip_Checksum,
     };
     struct clipitem
     {
@@ -17489,7 +17492,7 @@ namespace Arri
     };
     static const clipitem ClipItems[]=
     {
-        { 0x0E17010101010000LL, Clip_Label,        0, "ChecksumType" },
+        { 0x0E17010101010000LL, Clip_Label,        0, "ColorFilterArrayLayout" },
         { 0x0E17010101040000LL, Clip_B4,           0, "BlackLevelOffset" },
         { 0x0E17010101050000LL, Clip_B4,           0, "MaxSampleValue" },
         { 0x0E17010301030000LL, Clip_B4,           0, "BlackLevelOffset" },
@@ -17532,6 +17535,7 @@ namespace Arri
         { 0x0E1701020A040000LL, Clip_LutRefs,      0, "Lut3D" },
         { 0x0E1701020A120000LL, Clip_B1List,       0, "TbccForwardFilterMap" },
         { 0x0E1701020A130000LL, Clip_B1List,       0, "TbccInverseFilterMap" },
+        { 0x0E1701020B030000LL, Clip_Checksum,     0, "ChecksumType" },
         { 0x0E17010208010000LL, Clip_Primaries,    0, "Primaries" },
         { 0x0E17010208020000LL, Clip_Transfer,     0, "TransferCurve" },
         { 0x0E17010209010000LL, Clip_B4,           0, "ScalingFactor" },
@@ -17551,10 +17555,26 @@ namespace Arri
     };
     static const cliplabel ClipLabels[]=
     {
-        { 0x0E17010101040000LL, "CRC32C" },
+        { 0x0E17010101010000LL, "GRBG" },
+        { 0x0E17010101020000LL, "GBRG" },
+        { 0x0E17010101030000LL, "BGGR" },
+        { 0x0E17010101040000LL, "RGGB" },
+        { 0x0E17010201010000LL, "ImageProcessingGen1" },
+        { 0x0E17010201020000LL, "ImageProcessingGen2" },
         { 0x0E17010201030000LL, "ImageProcessingGen3" },
+        { 0x0E17010202010000LL, "A3RevB" },
+        { 0x0E17010202020000LL, "A3RevB-FSND" },
+        { 0x0E17010202030000LL, "A3RevC" },
+        { 0x0E17010202040000LL, "A3RevC-FSND" },
+        { 0x0E17010202050000LL, "A2X" },
+        { 0x0E17010202060000LL, "A2X-FSND" },
+        { 0x0E17010202070000LL, "A3X" },
+        { 0x0E17010202080000LL, "A4RevA" },
         { 0x0E17010202090000LL, "A4RevA-FSND" },
+        { 0x0E170102020A0000LL, "cameraSpecific" },
+        { 0x0E17010203010000LL, "AWG3" },
         { 0x0E17010203020000LL, "AWG4" },
+        { 0x0E17010204010000LL, "LogC3" },
         { 0x0E17010204020000LL, "LogC4" },
     };
     static const char* LookIDs[]=
@@ -17677,6 +17697,16 @@ void File_Mxf::Arri_ClipSet()
                     Value+=__T(" / ");
                 Value+=Ztring().From_Number(Data);
             }
+            break;
+        }
+        case Arri::Clip_Checksum:
+        {
+            int8u Data;
+            Get_B1 (Data,                                       "Value");
+            if (Data==1) //SMPTE RDD 55
+                Value=__T("CRC32C");
+            else if (Data)
+                Value.From_Number(Data);
             break;
         }
         case Arri::Clip_Label:
