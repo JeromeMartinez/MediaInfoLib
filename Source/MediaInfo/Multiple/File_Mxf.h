@@ -193,6 +193,8 @@ protected :
     void FillerData() {Filler();}
     void TerminatingFillerData();
     void XMLDocumentText_Indirect();
+    void UTF8TextData();
+    void NonRealTimeMeta(const char* Xml, size_t Xml_Size);
     void SubDescriptors();
     void LensUnitAcquisitionMetadata();
     void CameraUnitAcquisitionMetadata();
@@ -271,6 +273,8 @@ protected :
     void ProductionFramework();
     void TextBasedFramework();
     void GenericStreamTextBasedSet();
+    void UTF8TextBasedSet();
+    void TextBasedObjectGroup();
     void MXFGenericStreamDataElementKey_09_01();
     void GenericStreamID();
     void DM_AS_11_Core_Framework();

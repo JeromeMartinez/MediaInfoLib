@@ -113,6 +113,7 @@
     #include "MediaInfo/Multiple/File__ReferenceFilesHelper.h"
 #endif //defined(MEDIAINFO_REFERENCES_YES)
 #include "ZenLib/Format/Http/Http_Utils.h"
+#include "ThirdParty/tfsxml/tfsxml.h"
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -16063,6 +16064,7 @@ void File_Mxf::Data_Parse()
     GROUP(ProductionFramework)
     GROUP(TextBasedFramework)
     GROUP(GenericStreamTextBasedSet)
+    GROUP(UTF8TextBasedSet)
     GROUP(ISXDDataEssenceDescriptor)
     GROUP(PHDRMetadataTrackSubDescriptor)
     GROUP(OmneonVideoNetworksDescriptiveMetadataLinks)
@@ -16084,7 +16086,7 @@ void File_Mxf::Data_Parse()
     }
     break;
     }
-    case 0x060E2B34021301LL: //Local sets with BER length, ARRI
+    case 0x060E2B34021301LL: //Local sets with BER length
         if (ManageArri()) {
         }
         else if (IsArriExperimental && Code.lo==Arri::BinaryPack) {
@@ -16124,7 +16126,10 @@ void File_Mxf::Data_Parse()
                     Pos+=(size_t)Size;
                 }
             #endif //MEDIAINFO_CONFORMANCE
-            Skip_XX(Element_Size,                               "Unknown");
+            if (Code.lo==Groups::UTF8TextBasedSet) //Text over the limit of 2-byte lengths (SMPTE RP 2057)
+                ManageGroup(&File_Mxf::UTF8TextBasedSet);
+            else
+                Skip_XX(Element_Size,                           "Unknown");
         }
         break;
     default:
@@ -16217,11 +16222,8 @@ else if ((Primer_Value->second.hi>>24)==0x060E2B3401LL \
 { \
     auto Temp = Mxf_Param_Info((int32u)Primer_Value->second.hi, Primer_Value->second.lo); \
     Element_Name(Temp ? Temp : Ztring().From_UUID(Code).To_UTF8().c_str()); \
-    int64u Element_Size_Save=Element_Size; \
-    Element_Size=Element_Offset+Length2; \
     _ELEMENT(); \
     Element_Offset=Element_Size; \
-    Element_Size=Element_Size_Save; \
 }
 
 #define ELEM____ARRI_(_CONST, _NAME, _CALL) \
@@ -18151,10 +18153,29 @@ void File_Mxf::GenericStreamTextBasedSet()
 {
     ELEMENT_BEGIN()
     ELEMENT_MIDDLE()
+    ELEM____UUID_(GenericStreamID)
+    ELEMENT_END()
+    TextBasedObjectGroup();
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::UTF8TextBasedSet()
+{
+    ELEMENT_BEGIN()
+    ELEMENT_MIDDLE()
+    ELEM____UUID_(UTF8TextData)
+    ELEMENT_END()
+    TextBasedObjectGroup();
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::TextBasedObjectGroup()
+{
+    ELEMENT_BEGIN()
+    ELEMENT_MIDDLE()
     ELEM____UUID_(TextDataDescription)
     ELEM____UUID_(TextMIMEMediaType)
     ELEM____UUID_(RFC5646TextLanguageCode)
-    ELEM____UUID_(GenericStreamID)
     ELEMENT_END()
     InterchangeObject();
 }
@@ -18884,7 +18905,54 @@ void File_Mxf::TerminatingFillerData()
 //---------------------------------------------------------------------------
 void File_Mxf::XMLDocumentText_Indirect()
 {
+    //Parsing
+    const char* Xml=(const char*)Buffer+Buffer_Offset+(size_t)Element_Offset;
+    size_t Xml_Size=(size_t)(Element_Size-Element_Offset);
     Skip_XX(Element_Size,                                       "XML data");
+
+    FILLING_BEGIN();
+        NonRealTimeMeta(Xml, Xml_Size);
+    FILLING_END();
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::UTF8TextData()
+{
+    //Parsing
+    const char* Xml=(const char*)Buffer+Buffer_Offset+(size_t)Element_Offset;
+    size_t Xml_Size=(size_t)(Element_Size-Element_Offset);
+    Skip_XX(Element_Size-Element_Offset,                        "Value");
+
+    FILLING_BEGIN();
+        NonRealTimeMeta(Xml, Xml_Size);
+    FILLING_END();
+}
+
+//---------------------------------------------------------------------------
+void File_Mxf::NonRealTimeMeta(const char* Xml, size_t Xml_Size)
+{
+    //Sony Non-Real Time Metadata
+    tfsxml_string p, b, n, v;
+    if (tfsxml_init(&p, Xml, (unsigned)Xml_Size, 0))
+        return;
+    bool Root_IsFound=false;
+    while (!Root_IsFound && !tfsxml_next(&p, &b))
+        Root_IsFound=!tfsxml_strcmp_charp(b, "NonRealTimeMeta");
+    if (!Root_IsFound || tfsxml_enter(&p))
+        return;
+
+    while (!tfsxml_next(&p, &b))
+        if (!tfsxml_strcmp_charp(b, "Device"))
+        {
+            while (!tfsxml_attr(&p, &n, &v))
+            {
+                if (!tfsxml_strcmp_charp(n, "manufacturer"))
+                    Fill(Stream_General, 0, General_Encoded_Hardware_CompanyName, tfsxml_decode(v), true, true);
+                else if (!tfsxml_strcmp_charp(n, "modelName"))
+                    Fill(Stream_General, 0, General_Encoded_Hardware_Model, tfsxml_decode(v), true, true);
+            }
+            break;
+        }
 }
 
 //---------------------------------------------------------------------------
