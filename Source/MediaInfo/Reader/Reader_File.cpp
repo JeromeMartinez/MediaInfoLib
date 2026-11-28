@@ -307,14 +307,12 @@ size_t Reader_File::Format_Test_PerParser(MediaInfo_Internal* MI, const String &
         Partial_Begin=0; //Wrong value
     if (Partial_Begin>Partial_End)
         Partial_Begin=0; //Wrong value
-    if (Partial_End>=MI->Config.File_Size)
-        Partial_End=(int64u)-1; //Up to the end of the file, which may grow
     if (Partial_Begin)
         F.GoTo(Partial_Begin);
     CountOfSeconds=0;
 
     //Parser
-    MI->Open_Buffer_Init((Partial_End<=MI->Config.File_Size?Partial_End:MI->Config.File_Size)-Partial_Begin, File_Name);
+    MI->Open_Buffer_Init(Partial_Size(MI->Config.File_Size), File_Name);
 
     //Buffer
     MI->Option(__T("File_Buffer_Size_Hint_Pointer"), Ztring::ToZtring((size_t)(&MI->Config.File_Buffer_Size_ToRead)));
@@ -322,6 +320,14 @@ size_t Reader_File::Format_Test_PerParser(MediaInfo_Internal* MI, const String &
 
     //Test the format with buffer
     return Format_Test_PerParser_Continue(MI);
+}
+
+//---------------------------------------------------------------------------
+int64u Reader_File::Partial_Size(int64u FileSize) const
+{
+    if (FileSize>Partial_End)
+        FileSize=Partial_End;
+    return FileSize>Partial_Begin?(FileSize-Partial_Begin):0;
 }
 
 //---------------------------------------------------------------------------
@@ -661,7 +667,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
             */
 
             //Testing growing files
-            if (MI->Config.ParseSpeed>=1.0 && !MI->Config.File_IsGrowing && MI->Config.File_Current_Offset+F.Position_Get()>=MI->Config.File_Size)
+            if (MI->Config.ParseSpeed>=1.0 && !MI->Config.File_IsGrowing && MI->Config.File_Current_Offset+F.Position_Get()-Partial_Begin>=MI->Config.File_Size)
             {
                 if (MI->Config.File_TestContinuousFileNames_Get())
                 {
@@ -673,17 +679,17 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                         MI->Config.File_IsGrowing=true;
                     */
                 }
-                if (MI->Config.File_Names.size()==1 && !Partial_Begin && Partial_End==(int64u)-1) //File_Size is not the file size with a partial window
+                if (MI->Config.File_Names.size()==1)
                 {
-                    int64u Growing_Temp=F.Size_Get();
+                    int64u Growing_Temp=Partial_Size(F.Size_Get());
                     if (MI->Config.File_Size!=Growing_Temp)
                         MI->Config.File_IsGrowing=true;
                 }
             }
             if (MI->Config.File_IsNotGrowingAnymore)
             {
-                MI->Config.File_Current_Size=MI->Config.File_Size=F.Size_Get();
-                MI->Open_Buffer_Init(MI->Config.File_Size, F.Position_Get()-MI->Config.File_Buffer_Size);
+                MI->Config.File_Current_Size=MI->Config.File_Size=Partial_Size(F.Size_Get());
+                MI->Open_Buffer_Init(MI->Config.File_Size, F.Position_Get()-Partial_Begin-MI->Config.File_Buffer_Size);
                 MI->Config.File_IsGrowing=false;
             }
             if ((MI->Config.File_IsGrowing                                                                          //Was previously detected as growing
@@ -692,7 +698,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                     && (!ThreadInstance || (!IsLooping && Buffer_Begin+MI->Config.File_Buffer_Size>=Buffer_End))    //File buffer hit the end of buffer
                 #endif //MEDIAINFO_READTHREAD
              && F.Opened_Get()                                                                                      //File must be still open
-             && MI->Config.File_Current_Offset+F.Position_Get()>=MI->Config.File_Size                               //File read hit the end of file
+             && MI->Config.File_Current_Offset+F.Position_Get()-Partial_Begin>=MI->Config.File_Size                 //File read hit the end of file
              && MI->Config.File_Names.size()==1) //TODO: fix about sequences of files
             {
                 #if MEDIAINFO_EVENTS
@@ -712,7 +718,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                     int64u LastFile_Size_Old=MI->Config.File_Sizes[MI->Config.File_Sizes.size()-1];
                     size_t Files_Count_Old=MI->Config.File_Names.size();
                     //MI->TestContinuousFileNames(); //TODO: fix about sequences of files, "MI->Config.File_Names.size()==1 && " was added "else if (MI->Config.File_TestContinuousFileNames_Get())" commented
-                    int64u LastFile_Size_New=F.Size_Get();
+                    int64u LastFile_Size_New=Partial_Size(F.Size_Get());
                     size_t Files_Count_New=MI->Config.File_Names.size();
                     MI->Open_Buffer_CheckFileModifications();
 
@@ -736,7 +742,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
                         if (!MI->Config.File_Sizes.empty())
                             MI->Config.File_Sizes[MI->Config.File_Sizes.size()-1]=LastFile_Size_New;
                         if (MI->Config.File_Names.size()==1) //if more than 1 file, file size config is already done in TestContinuousFileNames()
-                            MI->Open_Buffer_Init(MI->Config.File_Size, MI->Config.File_Current_Offset+F.Position_Get()-MI->Config.File_Buffer_Size);
+                            MI->Open_Buffer_Init(MI->Config.File_Size, MI->Config.File_Current_Offset+F.Position_Get()-Partial_Begin-MI->Config.File_Buffer_Size);
                         #if MEDIAINFO_READTHREAD
                             if (ThreadInstance)
                                 ThreadInstance->RunAgain();
@@ -770,7 +776,7 @@ size_t Reader_File::Format_Test_PerParser_Continue (MediaInfo_Internal* MI)
             }
 
             if (!MI->Config.File_Buffer_Size
-             && (MI->Config.File_Current_Offset + F.Position_Get()>=MI->Config.File_Size
+             && (MI->Config.File_Current_Offset + F.Position_Get()-Partial_Begin>=MI->Config.File_Size
               || ((MI->Config.File_Size==(int64u)-1 || MI->Config.File_Names.size()>1) && MI->Config.File_Names_Pos>=MI->Config.File_Names.size() && F.Position_Get()>=F.Size_Get()))) //With a list of files, File_Current_Offset may count less than the file sizes (e.g. without the AES padding of the previous files)
                 break; //Finished, and no other data
 
