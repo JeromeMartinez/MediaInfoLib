@@ -1697,7 +1697,7 @@ bool File_MpegTs::Synchronize()
 
     while (Buffer_Size - Buffer_Offset >= Required_Length)
     {
-        const size_t Candidate_End = Buffer_Size - Frame_Size + 1;
+        const size_t Candidate_End = Buffer_Size - Required_Length + 1;
         const size_t Search_Begin = Buffer_Offset + BDAV_Size;
         const size_t Search_End = Candidate_End + BDAV_Size;
         const int8u* Sync = (const int8u*)memchr(Buffer + Search_Begin, 0x47, Search_End - Search_Begin);
