@@ -18899,7 +18899,14 @@ void File_Mxf::TerminatingFillerData()
 //---------------------------------------------------------------------------
 void File_Mxf::XMLDocumentText_Indirect()
 {
+    //Parsing
+    const char* Xml=(const char*)Buffer+Buffer_Offset+(size_t)Element_Offset;
+    size_t Xml_Size=(size_t)(Element_Size-Element_Offset);
     Skip_XX(Element_Size,                                       "XML data");
+
+    FILLING_BEGIN();
+        NonRealTimeMeta(Xml, Xml_Size);
+    FILLING_END();
 }
 
 //---------------------------------------------------------------------------
